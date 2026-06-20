@@ -1,0 +1,6 @@
+{
+  "name": "Bihar Senior Secondary School Portal",
+  "description": "A premium, modern portal for Bihar Government Senior Secondary Schools, featuring an admin dashboard, dynamic homepage modules, a centralized media library, and an advanced notice board system with search, categories, priorities, and PDF integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

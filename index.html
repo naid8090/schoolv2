@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bihar Senior Secondary School Portal</title>
+    <script>
+      (function() {
+        try {
+          var targetGlobal = typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : self;
+          var originalFetch = targetGlobal.fetch;
+          if (originalFetch) {
+            var currentFetch = originalFetch;
+            try {
+              Object.defineProperty(targetGlobal, 'fetch', {
+                get: function() { return currentFetch; },
+                set: function(val) { currentFetch = val; },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (err1) {
+              try {
+                Object.defineProperty(targetGlobal, 'fetch', {
+                  value: originalFetch,
+                  writable: true,
+                  configurable: true,
+                  enumerable: true
+                });
+              } catch (err2) {
+                console.warn('Unable to configure fetch descriptor:', err2);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Sandbox fetch setter polyfill failed:', e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

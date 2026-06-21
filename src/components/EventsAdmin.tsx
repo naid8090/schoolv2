@@ -49,6 +49,13 @@ export const EventsAdmin: React.FC = () => {
     refreshLists();
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('gsss-data-synced', refreshLists);
+    return () => {
+      window.removeEventListener('gsss-data-synced', refreshLists);
+    };
+  }, [categoriesList, formCategory]);
+
   const refreshLists = () => {
     setEventsList(dbService.getEvents().sort((a, b) => b.event_date.localeCompare(a.event_date)));
     const categories = dbService.getEventCategories();

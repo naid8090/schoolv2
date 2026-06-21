@@ -28,6 +28,7 @@ export default function App() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [schoolSettings, setSchoolSettings] = useState<SchoolSettings>(() => dbService.getSchoolSettings());
   const [homepageModules, setHomepageModules] = useState<HomepageModule[]>(() => dbService.getHomepageModules());
+  const [dataSyncVersion, setDataSyncVersion] = useState<number>(0);
 
   // Administration Auth States
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
@@ -50,13 +51,17 @@ export default function App() {
           if (remoteSettings) {
             setSchoolSettings(remoteSettings);
             // Sync cache to local storage
-            dbService.saveSchoolSettings(remoteSettings);
+            dbService.saveSchoolSettings(remoteSettings, true);
           } else {
             // Seeding phase: Supabase is empty, read local data and seed Supabase
             const localSettings = dbService.getSchoolSettings();
-            const saved = await supabaseDbService.saveSchoolSettings(localSettings);
-            if (active && saved) {
-              setSchoolSettings(saved);
+            try {
+              const saved = await supabaseDbService.saveSchoolSettings(localSettings);
+              if (active && saved) {
+                setSchoolSettings(saved);
+              }
+            } catch (err) {
+              console.warn('[Supabase school settings seeding skipped or failed - typical for guest users]:', err);
             }
           }
         }
@@ -67,15 +72,72 @@ export default function App() {
           if (remoteModules && remoteModules.length > 0) {
             setHomepageModules(remoteModules);
             // Sync cache to local storage
-            dbService.saveHomepageModules(remoteModules);
+            dbService.saveHomepageModules(remoteModules, true);
           } else {
             // Seeding phase: Supabase is empty, read local data and seed Supabase
             const localModules = dbService.getHomepageModules();
-            await supabaseDbService.saveHomepageModules(localModules);
+            try {
+              await supabaseDbService.saveHomepageModules(localModules);
+            } catch (err) {
+              console.warn('[Supabase homepage modules seeding skipped or failed]:', err);
+            }
             if (active) {
               setHomepageModules(localModules);
             }
           }
+        }
+
+        // --- 3. NOTICES SYNC ---
+        const remoteNotices = await supabaseDbService.getNotices();
+        if (active) {
+          if (remoteNotices && remoteNotices.length > 0) {
+            dbService.saveNotices(remoteNotices, true);
+          } else {
+            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+            const localNotices = dbService.getNotices();
+            dbService.saveNotices(localNotices, true);
+          }
+        }
+
+        // --- 4. FACULTY SYNC ---
+        const remoteFaculty = await supabaseDbService.getFaculty();
+        if (active) {
+          if (remoteFaculty && remoteFaculty.length > 0) {
+            dbService.saveFaculty(remoteFaculty, true);
+          } else {
+            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+            const localFaculty = dbService.getFaculty();
+            dbService.saveFaculty(localFaculty, true);
+          }
+        }
+
+        // --- 5. EVENTS SYNC ---
+        const remoteEvents = await supabaseDbService.getEvents();
+        if (active) {
+          if (remoteEvents && remoteEvents.length > 0) {
+            dbService.saveEvents(remoteEvents, true);
+          } else {
+            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+            const localEvents = dbService.getEvents();
+            dbService.saveEvents(localEvents, true);
+          }
+        }
+
+        // --- 6. EVENT IMAGES SYNC ---
+        const remoteEventImages = await supabaseDbService.getEventImages();
+        if (active) {
+          if (remoteEventImages && remoteEventImages.length > 0) {
+            dbService.saveEventImages(remoteEventImages, true);
+          } else {
+            // Seeding phase
+            const localEventImages = dbService.getEventImages();
+            dbService.saveEventImages(localEventImages, true);
+          }
+        }
+
+        if (active) {
+          setDataSyncVersion(prev => prev + 1);
+          window.dispatchEvent(new CustomEvent('gsss-data-synced'));
         }
       } catch (err) {
         console.error('Failed to sync school settings and modules with Supabase:', err);

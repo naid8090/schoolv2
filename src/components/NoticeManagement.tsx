@@ -12,6 +12,16 @@ import { MediaSelectorModal } from './MediaLibrary';
 export const NoticeManagement: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>(() => dbService.getNotices());
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleSync = () => {
+      setNotices(dbService.getNotices());
+    };
+    window.addEventListener('gsss-data-synced', handleSync);
+    return () => {
+      window.removeEventListener('gsss-data-synced', handleSync);
+    };
+  }, []);
   const [isCreating, setIsCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 

@@ -25,6 +25,17 @@ export const NoticesPage: React.FC<NoticesPageProps> = ({
 
   const [notices, setNotices] = useState<Notice[]>(allNotices);
   const [activeNotice, setActiveNotice] = useState<Notice | null>(null);
+
+  // Auto-sync list if remote data is loaded
+  useEffect(() => {
+    const handleSync = () => {
+      setNotices(allNotices());
+    };
+    window.addEventListener('gsss-data-synced', handleSync);
+    return () => {
+      window.removeEventListener('gsss-data-synced', handleSync);
+    };
+  }, []);
   
   // Notice detail image viewer zoom states
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);

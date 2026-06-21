@@ -38,6 +38,31 @@ function ensureValidUUID(id: string): string {
   return `${padded.substring(0, 8)}-${padded.substring(8, 12)}-4${padded.substring(13, 16)}-a${padded.substring(17, 20)}-${padded.substring(20, 32)}`;
 }
 
+function sanitizeDate(dateStr: string | undefined | null): string | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // If it's a 4-digit year, e.g. "2025", convert to "2025-01-01"
+  if (/^\d{4}$/.test(trimmed)) {
+    return `${trimmed}-01-01`;
+  }
+
+  // Check if it's already a valid ISO date section (YYYY-MM-DD)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0]; // Returns 'YYYY-MM-DD'
+  }
+
+  // Try parsing with Javascript Date
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    return new Date(parsed).toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
 // Default seed data for Rajendra Prasad Government Senior Secondary School, Patna
 const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
   id: 'site-config',
@@ -809,8 +834,10 @@ class DatabaseService {
     return { ...DEFAULT_SCHOOL_SETTINGS, ...loaded };
   }
 
-  saveSchoolSettings(settings: SchoolSettings): void {
+  saveSchoolSettings(settings: SchoolSettings, localOnly = false): void {
     this.setStorageItem('gsss_school_settings', settings);
+    if (localOnly) return;
+
     // Persist to Supabase school_settings table
     const dbPayload = {
       school_name: settings.school_name,
@@ -876,12 +903,14 @@ class DatabaseService {
     return pModules.sort((a, b) => a.display_order - b.display_order);
   }
 
-  saveHomepageModules(modules: HomepageModule[]): void {
+  saveHomepageModules(modules: HomepageModule[], localOnly = false): void {
     const sanitizedModules = modules.map(m => ({
       ...m,
       id: ensureValidUUID(m.id)
     }));
     this.setStorageItem('gsss_homepage_modules', sanitizedModules);
+
+    if (localOnly) return;
 
     // Persist to Supabase homepage_modules table
     const dbPayloads = sanitizedModules.map(m => ({
@@ -1028,11 +1057,31 @@ class DatabaseService {
 
   // Notices CRM
   getNotices(): Notice[] {
-    return this.getStorageItem<Notice[]>('gsss_notices', DEFAULT_NOTICES);
+    const rawNotices = this.getStorageItem<Notice[]>('gsss_notices', DEFAULT_NOTICES);
+    return rawNotices.map(n => ({
+      ...n,
+      id: ensureValidUUID(n.id)
+    }));
   }
 
-  saveNotices(notices: Notice[]): void {
-    this.setStorageItem('gsss_notices', notices);
+  saveNotices(notices: Notice[], localOnly = false): void {
+    const sanitized = notices.map(n => ({
+      ...n,
+      id: ensureValidUUID(n.id)
+    }));
+    this.setStorageItem('gsss_notices', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('notices')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Notices Sync Error]:', error.message);
+        }
+      });
   }
 
   createNotice(noticeData: Omit<Notice, 'id' | 'created_at' | 'updated_at'>): Notice {
@@ -1040,7 +1089,7 @@ class DatabaseService {
     const now = new Date().toISOString();
     const newNotice: Notice = {
       ...noticeData,
-      id: `notice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     };
@@ -1051,12 +1100,14 @@ class DatabaseService {
 
   updateNotice(id: string, updatedFields: Partial<Notice>): Notice | null {
     const notices = this.getNotices();
-    const index = notices.findIndex(notice => notice.id === id);
+    const targetId = ensureValidUUID(id);
+    const index = notices.findIndex(notice => notice.id === targetId);
     if (index === -1) return null;
 
     const updated: Notice = {
       ...notices[index],
       ...updatedFields,
+      id: targetId,
       updated_at: new Date().toISOString()
     };
     notices[index] = updated;
@@ -1065,18 +1116,51 @@ class DatabaseService {
   }
 
   deleteNotice(id: string): void {
+    const targetId = ensureValidUUID(id);
     const notices = this.getNotices();
-    const filtered = notices.filter(n => n.id !== id);
+    const filtered = notices.filter(n => n.id !== targetId);
     this.saveNotices(filtered);
+
+    // Delete from Supabase
+    supabase
+      .from('notices')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Notice Delete Error]:', error.message);
+        }
+      });
   }
 
   // Faculty Management
   getFaculty(): Faculty[] {
-    return this.getStorageItem<Faculty[]>('gsss_faculty_members', DEFAULT_FACULTY);
+    const rawFaculty = this.getStorageItem<Faculty[]>('gsss_faculty_members', DEFAULT_FACULTY);
+    return rawFaculty.map(f => ({
+      ...f,
+      id: ensureValidUUID(f.id)
+    }));
   }
 
-  saveFaculty(faculty: Faculty[]): void {
-    this.setStorageItem('gsss_faculty_members', faculty);
+  saveFaculty(faculty: Faculty[], localOnly = false): void {
+    const sanitized = faculty.map(f => ({
+      ...f,
+      id: ensureValidUUID(f.id),
+      joined_date: sanitizeDate(f.joined_date) || undefined
+    }));
+    this.setStorageItem('gsss_faculty_members', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('faculty')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Faculty Sync Error]:', error.message);
+        }
+      });
   }
 
   createFaculty(facultyData: Omit<Faculty, 'id' | 'created_at' | 'updated_at'>): Faculty {
@@ -1093,7 +1177,7 @@ class DatabaseService {
     
     const newFac: Faculty = {
       ...facultyData,
-      id: `fac_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateUUID(),
       display_order: nextOrder,
       created_at: now,
       updated_at: now
@@ -1105,12 +1189,14 @@ class DatabaseService {
 
   updateFaculty(id: string, updatedFields: Partial<Faculty>): Faculty | null {
     const list = this.getFaculty();
-    const index = list.findIndex(f => f.id === id);
+    const targetId = ensureValidUUID(id);
+    const index = list.findIndex(f => f.id === targetId);
     if (index === -1) return null;
 
     const updated: Faculty = {
       ...list[index],
       ...updatedFields,
+      id: targetId,
       updated_at: new Date().toISOString()
     };
     list[index] = updated;
@@ -1119,8 +1205,9 @@ class DatabaseService {
   }
 
   deleteFaculty(id: string): void {
+    const targetId = ensureValidUUID(id);
     const list = this.getFaculty();
-    const filtered = list.filter(f => f.id !== id);
+    const filtered = list.filter(f => f.id !== targetId);
     
     // Sort and compact remaining list to close any gaps and keep sequence 1..N
     const sorted = [...filtered].sort((a, b) => a.display_order - b.display_order);
@@ -1129,6 +1216,17 @@ class DatabaseService {
     });
     
     this.saveFaculty(sorted);
+
+    // Delete from Supabase
+    supabase
+      .from('faculty')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Faculty Delete Error]:', error.message);
+        }
+      });
   }
 
   // Designations / Categories Management
@@ -1385,11 +1483,32 @@ class DatabaseService {
   // ==========================================
 
   getEvents(): SchoolEvent[] {
-    return this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
+    const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
+    return rawEvents.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id)
+    }));
   }
 
-  saveEvents(events: SchoolEvent[]): void {
-    this.setStorageItem('gsss_events', events);
+  saveEvents(events: SchoolEvent[], localOnly = false): void {
+    const sanitized = events.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id),
+      event_date: sanitizeDate(e.event_date) || new Date().toISOString().split('T')[0]
+    }));
+    this.setStorageItem('gsss_events', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('school_events')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Events Sync Error]:', error.message);
+        }
+      });
   }
 
   createEvent(eventData: Omit<SchoolEvent, 'id' | 'created_at' | 'updated_at'>): SchoolEvent {
@@ -1397,7 +1516,7 @@ class DatabaseService {
     const now = new Date().toISOString();
     const newEvent: SchoolEvent = {
       ...eventData,
-      id: `ev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     };
@@ -1408,12 +1527,14 @@ class DatabaseService {
 
   updateEvent(id: string, updatedFields: Partial<SchoolEvent>): SchoolEvent | null {
     const events = this.getEvents();
-    const index = events.findIndex(e => e.id === id);
+    const targetId = ensureValidUUID(id);
+    const index = events.findIndex(e => e.id === targetId);
     if (index === -1) return null;
 
     const updated: SchoolEvent = {
       ...events[index],
       ...updatedFields,
+      id: targetId,
       updated_at: new Date().toISOString()
     };
     events[index] = updated;
@@ -1422,14 +1543,25 @@ class DatabaseService {
   }
 
   deleteEvent(id: string): void {
+    const targetId = ensureValidUUID(id);
     const events = this.getEvents();
-    const filtered = events.filter(e => e.id !== id);
+    const filtered = events.filter(e => e.id !== targetId);
     this.saveEvents(filtered);
     
     // Also delete associated images
     const images = this.getEventImages();
-    const filteredImgs = images.filter(img => img.event_id !== id);
+    const filteredImgs = images.filter(img => img.event_id !== targetId);
     this.saveEventImages(filteredImgs);
+
+    supabase
+      .from('school_events')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Delete Error]:', error.message);
+        }
+      });
   }
 
   // Event Categories
@@ -1453,27 +1585,51 @@ class DatabaseService {
 
   // Event Album / Gallery Images
   getEventImages(): SchoolEventImage[] {
-    return this.getStorageItem<SchoolEventImage[]>('gsss_event_images', DEFAULT_EVENT_IMAGES);
+    const rawImages = this.getStorageItem<SchoolEventImage[]>('gsss_event_images', DEFAULT_EVENT_IMAGES);
+    return rawImages.map(img => ({
+      ...img,
+      id: ensureValidUUID(img.id),
+      event_id: ensureValidUUID(img.event_id)
+    }));
   }
 
-  saveEventImages(images: SchoolEventImage[]): void {
-    this.setStorageItem('gsss_event_images', images);
+  saveEventImages(images: SchoolEventImage[], localOnly = false): void {
+    const sanitized = images.map(img => ({
+      ...img,
+      id: ensureValidUUID(img.id),
+      event_id: ensureValidUUID(img.event_id)
+    }));
+    this.setStorageItem('gsss_event_images', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('school_event_images')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Images Sync Error]:', error.message);
+        }
+      });
   }
 
   getEventImagesByEvent(eventId: string): SchoolEventImage[] {
+    const targetEventId = ensureValidUUID(eventId);
     return this.getEventImages()
-      .filter(img => img.event_id === eventId)
+      .filter(img => img.event_id === targetEventId)
       .sort((a, b) => a.display_order - b.display_order);
   }
 
   addEventImage(eventId: string, imageUrl: string): SchoolEventImage {
+    const targetEventId = ensureValidUUID(eventId);
     const images = this.getEventImages();
-    const eventImgs = images.filter(img => img.event_id === eventId);
+    const eventImgs = images.filter(img => img.event_id === targetEventId);
     const nextOrder = eventImgs.length > 0 ? Math.max(...eventImgs.map(img => img.display_order)) + 1 : 1;
 
     const newImg: SchoolEventImage = {
-      id: `ev_img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      event_id: eventId,
+      id: generateUUID(),
+      event_id: targetEventId,
       image_url: imageUrl,
       display_order: nextOrder
     };
@@ -1483,11 +1639,12 @@ class DatabaseService {
   }
 
   deleteEventImage(imageId: string): void {
+    const targetImageId = ensureValidUUID(imageId);
     const images = this.getEventImages();
-    const target = images.find(img => img.id === imageId);
+    const target = images.find(img => img.id === targetImageId);
     if (!target) return;
     
-    const filtered = images.filter(img => img.id !== imageId);
+    const filtered = images.filter(img => img.id !== targetImageId);
     
     // Reorder remaining images for the event
     const eventImgs = filtered.filter(img => img.event_id === target.event_id)
@@ -1497,14 +1654,27 @@ class DatabaseService {
     });
 
     this.saveEventImages(filtered);
+
+    // Delete from Supabase
+    supabase
+      .from('school_event_images')
+      .delete()
+      .eq('id', targetImageId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Image Delete Error]:', error.message);
+        }
+      });
   }
 
   updateEventImagesOrder(eventId: string, imageIdsInOrder: string[]): void {
+    const targetEventId = ensureValidUUID(eventId);
+    const sanitizedIds = imageIdsInOrder.map(id => ensureValidUUID(id));
     const images = this.getEventImages();
-    const otherImgs = images.filter(img => img.event_id !== eventId);
-    const eventImgs = images.filter(img => img.event_id === eventId);
+    const otherImgs = images.filter(img => img.event_id !== targetEventId);
+    const eventImgs = images.filter(img => img.event_id === targetEventId);
 
-    imageIdsInOrder.forEach((id, idx) => {
+    sanitizedIds.forEach((id, idx) => {
       const img = eventImgs.find(i => i.id === id);
       if (img) {
         img.display_order = idx + 1;

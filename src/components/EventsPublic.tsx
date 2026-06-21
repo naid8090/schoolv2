@@ -34,6 +34,19 @@ export const EventsPublic: React.FC<EventsPublicProps> = ({
   }, []);
 
   useEffect(() => {
+    const handleSync = () => {
+      const allEvents = dbService.getEvents();
+      const publicEvents = allEvents.filter(e => e.status !== 'Draft');
+      setEvents(publicEvents);
+      setCategories(dbService.getEventCategories());
+    };
+    window.addEventListener('gsss-data-synced', handleSync);
+    return () => {
+      window.removeEventListener('gsss-data-synced', handleSync);
+    };
+  }, []);
+
+  useEffect(() => {
     if (initialSelectedEventId) {
       setSelectedEventId(initialSelectedEventId);
     }

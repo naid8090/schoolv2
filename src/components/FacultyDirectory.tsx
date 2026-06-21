@@ -9,11 +9,21 @@ import { Faculty } from '../types';
 import { dbService } from '../services/db';
 
 export const FacultyDirectory: React.FC = () => {
-  const [facultyList] = useState<Faculty[]>(() => dbService.getFaculty());
+  const [facultyList, setFacultyList] = useState<Faculty[]>(() => dbService.getFaculty());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
   const [selectedDesig, setSelectedDesig] = useState('All');
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
+
+  React.useEffect(() => {
+    const handleSync = () => {
+      setFacultyList(dbService.getFaculty());
+    };
+    window.addEventListener('gsss-data-synced', handleSync);
+    return () => {
+      window.removeEventListener('gsss-data-synced', handleSync);
+    };
+  }, []);
 
   // Derive filters from active list
   const activeFaculty = facultyList.filter(f => f.is_active);

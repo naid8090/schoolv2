@@ -129,7 +129,7 @@ export default function App() {
           if (remoteEventImages && remoteEventImages.length > 0) {
             dbService.saveEventImages(remoteEventImages, true);
           } else {
-            // Seeding phase
+            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
             const localEventImages = dbService.getEventImages();
             dbService.saveEventImages(localEventImages, true);
           }

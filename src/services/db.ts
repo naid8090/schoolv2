@@ -1536,21 +1536,7 @@ class DatabaseService {
       updated_at: now
     };
     events.push(newEvent);
-    this.saveEvents(events, true);
-
-    // Sync only the new event to Supabase
-    supabase
-      .from('school_events')
-      .insert([{
-        ...newEvent,
-        id: ensureValidUUID(newEvent.id),
-        event_date: sanitizeDate(newEvent.event_date) || new Date().toISOString().split('T')[0]
-      }])
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Event Create Error]:', error.message);
-        }
-      });
+    this.saveEvents(events); // Syncs the full updated list of events to Supabase under the hood
 
     return newEvent;
   }
@@ -1568,21 +1554,7 @@ class DatabaseService {
       updated_at: new Date().toISOString()
     };
     events[index] = updated;
-    this.saveEvents(events, true);
-
-    // Update only this event on Supabase
-    supabase
-      .from('school_events')
-      .upsert({
-        ...updated,
-        id: targetId,
-        event_date: sanitizeDate(updated.event_date) || new Date().toISOString().split('T')[0]
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Event Update Error]:', error.message);
-        }
-      });
+    this.saveEvents(events); // Syncs the full updated list of events to Supabase
 
     return updated;
   }
@@ -1591,14 +1563,9 @@ class DatabaseService {
     const targetId = ensureValidUUID(id);
     const events = this.getEvents();
     const filtered = events.filter(e => e.id !== targetId);
-    this.saveEvents(filtered, true);
-    
-    // Also delete associated images locally only
-    const images = this.getEventImages();
-    const filteredImgs = images.filter(img => img.event_id !== targetId);
-    this.saveEventImages(filteredImgs, true);
+    this.saveEvents(filtered); // Syncs remaining elements to Supabase
 
-    // Delete event from Supabase (cascade delete on images table is active in blueprint)
+    // Explicitly delete from Supabase to handle the removed item
     supabase
       .from('school_events')
       .delete()
@@ -1608,6 +1575,11 @@ class DatabaseService {
           console.error('[Supabase Event Delete Error]:', error.message);
         }
       });
+
+    // Clean up any event gallery images as well
+    const images = this.getEventImages();
+    const filteredImgs = images.filter(img => img.event_id !== targetId);
+    this.saveEventImages(filteredImgs);
   }
 
   // Event Categories
@@ -1680,22 +1652,7 @@ class DatabaseService {
       display_order: nextOrder
     };
     images.push(newImg);
-    this.saveEventImages(images, true);
-
-    // Sync only the newly added image to Supabase
-    supabase
-      .from('school_event_images')
-      .insert([{
-        id: ensureValidUUID(newImg.id),
-        event_id: ensureValidUUID(newImg.event_id),
-        image_url: newImg.image_url,
-        display_order: newImg.display_order
-      }])
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Event Image Add Error]:', error.message);
-        }
-      });
+    this.saveEventImages(images); // Syncs the full list of event images to Supabase
 
     return newImg;
   }
@@ -1715,9 +1672,9 @@ class DatabaseService {
       img.display_order = idx + 1;
     });
 
-    this.saveEventImages(filtered, true);
+    this.saveEventImages(filtered); // Syncs remaining and reordered images to Supabase
 
-    // Sync deletion and reordering of other images cleanly
+    // Explicitly delete deleted image from Supabase
     supabase
       .from('school_event_images')
       .delete()
@@ -1725,24 +1682,6 @@ class DatabaseService {
       .then(({ error }) => {
         if (error) {
           console.error('[Supabase Event Image Delete Error]:', error.message);
-        } else {
-          // If delete succeeds, upsert the reordered images for this event specifically
-          const toUpsert = eventImgs.map(img => ({
-            id: ensureValidUUID(img.id),
-            event_id: ensureValidUUID(img.event_id),
-            image_url: img.image_url,
-            display_order: img.display_order
-          }));
-          if (toUpsert.length > 0) {
-            supabase
-              .from('school_event_images')
-              .upsert(toUpsert)
-              .then(({ error: reorderErr }) => {
-                if (reorderErr) {
-                  console.error('[Supabase Event Images Reorder Sync Error]:', reorderErr.message);
-                }
-              });
-          }
         }
       });
   }
@@ -1762,26 +1701,7 @@ class DatabaseService {
     });
 
     const updatedImgs = [...otherImgs, ...eventImgs];
-    this.saveEventImages(updatedImgs, true);
-
-    // Sync only current event's reordered images
-    const toUpsert = eventImgs.map(img => ({
-      id: ensureValidUUID(img.id),
-      event_id: ensureValidUUID(img.event_id),
-      image_url: img.image_url,
-      display_order: img.display_order
-    }));
-
-    if (toUpsert.length > 0) {
-      supabase
-        .from('school_event_images')
-        .upsert(toUpsert)
-        .then(({ error }) => {
-          if (error) {
-            console.error('[Supabase Event Images Reorder Error]:', error.message);
-          }
-        });
-    }
+    this.saveEventImages(updatedImgs); // Syncs full re-ordered images to Supabase
   }
 
   getPeriodMasters(): PeriodMaster[] {

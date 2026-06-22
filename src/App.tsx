@@ -123,16 +123,7 @@ export default function App() {
         try {
           const remoteEvents = await supabaseDbService.getEvents();
           if (active && remoteEvents !== null) {
-            if (remoteEvents.length > 0) {
-              dbService.saveEvents(remoteEvents, true);
-            } else {
-              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-              const hasLocalEvents = localStorage.getItem('gsss_events');
-              if (!hasLocalEvents) {
-                const localEvents = dbService.getEvents();
-                dbService.saveEvents(localEvents, true);
-              }
-            }
+            dbService.saveEvents(remoteEvents, true);
           }
         } catch (err) {
           console.error('[Supabase events sync error]:', err);
@@ -142,16 +133,7 @@ export default function App() {
         try {
           const remoteEventImages = await supabaseDbService.getEventImages();
           if (active && remoteEventImages !== null) {
-            if (remoteEventImages.length > 0) {
-              dbService.saveEventImages(remoteEventImages, true);
-            } else {
-              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-              const hasLocalImages = localStorage.getItem('gsss_event_images');
-              if (!hasLocalImages) {
-                const localEventImages = dbService.getEventImages();
-                dbService.saveEventImages(localEventImages, true);
-              }
-            }
+            dbService.saveEventImages(remoteEventImages, true);
           }
         } catch (err) {
           console.error('[Supabase event images sync error]:', err);
@@ -241,16 +223,19 @@ export default function App() {
   // Synchronize browser URL paths with currentView for robust SPA routing
   useEffect(() => {
     const handleUrlRouting = () => {
-      const path = window.location.pathname;
+      let cleanPath = window.location.pathname.toLowerCase().trim();
+      if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
+        cleanPath = cleanPath.slice(0, -1);
+      }
       const hash = window.location.hash;
-      if (path === '/admin' || hash === '#admin') {
+      if (cleanPath === '/admin' || hash === '#admin') {
         setCurrentView('admin');
       } else {
-        const view = path.substring(1);
+        const view = cleanPath.substring(1);
         const validViews = ['notices', 'contacts', 'admissions', 'faculty', 'routine', 'exams', 'calendar', 'events', 'about'];
         if (validViews.includes(view)) {
           setCurrentView(view);
-        } else if (path === '/' || path === '') {
+        } else if (cleanPath === '/' || cleanPath === '') {
           setCurrentView('home');
         }
       }
@@ -263,7 +248,10 @@ export default function App() {
 
   // Auto-verify path routing variables and synchronize history
   useEffect(() => {
-    const currentPath = window.location.pathname;
+    let currentPath = window.location.pathname.toLowerCase().trim();
+    if (currentPath.length > 1 && currentPath.endsWith('/')) {
+      currentPath = currentPath.slice(0, -1);
+    }
     const targetPath = currentView === 'home' ? '/' : `/${currentView}`;
     if (currentPath !== targetPath) {
       window.history.pushState(null, '', targetPath);

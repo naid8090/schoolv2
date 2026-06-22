@@ -556,17 +556,22 @@ class SupabaseDbService {
   }
 
   // School Rich Events
-  async getEvents(): Promise<SchoolEvent[]> {
-    const { data, error } = await supabase
-      .from('school_events')
-      .select('*')
-      .order('event_date', { ascending: false });
+  async getEvents(): Promise<SchoolEvent[] | null> {
+    try {
+      const { data, error } = await supabase
+        .from('school_events')
+        .select('*')
+        .order('event_date', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching school events:', error.message);
-      return [];
+      if (error) {
+        console.error('Error fetching school events:', error.message);
+        return null;
+      }
+      return data as SchoolEvent[];
+    } catch (err) {
+      console.error('Error fetching school events:', err);
+      return null;
     }
-    return data as SchoolEvent[];
   }
 
   async createEvent(event: Omit<SchoolEvent, 'id' | 'created_at' | 'updated_at'>): Promise<SchoolEvent> {
@@ -602,17 +607,22 @@ class SupabaseDbService {
   }
 
   // Event Gallery Images
-  async getEventImages(): Promise<SchoolEventImage[]> {
-    const { data, error } = await supabase
-      .from('school_event_images')
-      .select('*')
-      .order('display_order', { ascending: true });
+  async getEventImages(): Promise<SchoolEventImage[] | null> {
+    try {
+      const { data, error } = await supabase
+        .from('school_event_images')
+        .select('*')
+        .order('display_order', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching event images:', error.message);
-      return [];
+      if (error) {
+        console.error('Error fetching event images:', error.message);
+        return null;
+      }
+      return data as SchoolEventImage[];
+    } catch (err) {
+      console.error('Error fetching event images:', err);
+      return null;
     }
-    return data as SchoolEventImage[];
   }
 
   async addEventImage(img: Omit<SchoolEventImage, 'id'>): Promise<SchoolEventImage> {

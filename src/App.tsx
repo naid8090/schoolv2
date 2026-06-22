@@ -88,51 +88,73 @@ export default function App() {
         }
 
         // --- 3. NOTICES SYNC ---
-        const remoteNotices = await supabaseDbService.getNotices();
-        if (active) {
-          if (remoteNotices && remoteNotices.length > 0) {
-            dbService.saveNotices(remoteNotices, true);
-          } else {
-            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-            const localNotices = dbService.getNotices();
-            dbService.saveNotices(localNotices, true);
+        try {
+          const remoteNotices = await supabaseDbService.getNotices();
+          if (active) {
+            if (remoteNotices && remoteNotices.length > 0) {
+              dbService.saveNotices(remoteNotices, true);
+            } else {
+              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+              const localNotices = dbService.getNotices();
+              dbService.saveNotices(localNotices, true);
+            }
           }
+        } catch (err) {
+          console.error('[Supabase notice sync error]:', err);
         }
 
         // --- 4. FACULTY SYNC ---
-        const remoteFaculty = await supabaseDbService.getFaculty();
-        if (active) {
-          if (remoteFaculty && remoteFaculty.length > 0) {
-            dbService.saveFaculty(remoteFaculty, true);
-          } else {
-            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-            const localFaculty = dbService.getFaculty();
-            dbService.saveFaculty(localFaculty, true);
+        try {
+          const remoteFaculty = await supabaseDbService.getFaculty();
+          if (active) {
+            if (remoteFaculty && remoteFaculty.length > 0) {
+              dbService.saveFaculty(remoteFaculty, true);
+            } else {
+              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+              const localFaculty = dbService.getFaculty();
+              dbService.saveFaculty(localFaculty, true);
+            }
           }
+        } catch (err) {
+          console.error('[Supabase faculty sync error]:', err);
         }
 
         // --- 5. EVENTS SYNC ---
-        const remoteEvents = await supabaseDbService.getEvents();
-        if (active) {
-          if (remoteEvents && remoteEvents.length > 0) {
-            dbService.saveEvents(remoteEvents, true);
-          } else {
-            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-            const localEvents = dbService.getEvents();
-            dbService.saveEvents(localEvents, true);
+        try {
+          const remoteEvents = await supabaseDbService.getEvents();
+          if (active && remoteEvents !== null) {
+            if (remoteEvents.length > 0) {
+              dbService.saveEvents(remoteEvents, true);
+            } else {
+              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+              const hasLocalEvents = localStorage.getItem('gsss_events');
+              if (!hasLocalEvents) {
+                const localEvents = dbService.getEvents();
+                dbService.saveEvents(localEvents, true);
+              }
+            }
           }
+        } catch (err) {
+          console.error('[Supabase events sync error]:', err);
         }
 
         // --- 6. EVENT IMAGES SYNC ---
-        const remoteEventImages = await supabaseDbService.getEventImages();
-        if (active) {
-          if (remoteEventImages && remoteEventImages.length > 0) {
-            dbService.saveEventImages(remoteEventImages, true);
-          } else {
-            // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-            const localEventImages = dbService.getEventImages();
-            dbService.saveEventImages(localEventImages, true);
+        try {
+          const remoteEventImages = await supabaseDbService.getEventImages();
+          if (active && remoteEventImages !== null) {
+            if (remoteEventImages.length > 0) {
+              dbService.saveEventImages(remoteEventImages, true);
+            } else {
+              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
+              const hasLocalImages = localStorage.getItem('gsss_event_images');
+              if (!hasLocalImages) {
+                const localEventImages = dbService.getEventImages();
+                dbService.saveEventImages(localEventImages, true);
+              }
+            }
           }
+        } catch (err) {
+          console.error('[Supabase event images sync error]:', err);
         }
 
         if (active) {

@@ -117,6 +117,20 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     updated_at: '2026-06-01T10:00:00Z'
   },
   {
+    id: '88888888-8888-8888-8888-888888888888',
+    module_type: 'Events Preview',
+    title: 'Latest School Events & Bulletins',
+    subtitle: 'School Life & Chronicles',
+    description: 'Stay up to date with Bihar board workshops, science exhibitions, celebrations, and special academic forums.',
+    image_url: '',
+    button_text: 'Explore Events Calendar',
+    button_url: 'events',
+    display_order: 3,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
     id: '33333333-3333-3333-3333-333333333333',
     module_type: 'About School',
     title: 'About Rajendra Prasad Government Senior Secondary School',
@@ -125,7 +139,7 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     image_url: '',
     button_text: 'Learn More',
     button_url: 'about',
-    display_order: 3,
+    display_order: 4,
     is_visible: true,
     created_at: '2026-06-01T10:00:00Z',
     updated_at: '2026-06-01T10:00:00Z'
@@ -139,7 +153,7 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     image_url: '',
     button_text: 'View Enrollment Criteria',
     button_url: 'admissions',
-    display_order: 4,
+    display_order: 5,
     is_visible: true,
     created_at: '2026-06-01T10:00:00Z',
     updated_at: '2026-06-01T10:00:00Z'
@@ -153,7 +167,7 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     image_url: '',
     button_text: 'Access Contact Desk',
     button_url: 'contact',
-    display_order: 6,
+    display_order: 7,
     is_visible: true,
     created_at: '2026-06-01T10:00:00Z',
     updated_at: '2026-06-01T10:00:00Z'
@@ -167,7 +181,7 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     image_url: '',
     button_text: '',
     button_url: '',
-    display_order: 5, // Order placement below About School/Notice board
+    display_order: 6, // Order placement below About School/Notice board
     is_visible: true,
     created_at: '2026-06-01T10:00:00Z',
     updated_at: '2026-06-01T10:00:00Z'
@@ -181,7 +195,7 @@ const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
     image_url: '',
     button_text: 'Show All Faculty Directory',
     button_url: 'faculty',
-    display_order: 7,
+    display_order: 8,
     is_visible: true,
     created_at: '2026-06-01T10:00:00Z',
     updated_at: '2026-06-01T10:00:00Z'
@@ -897,7 +911,7 @@ class DatabaseService {
     // Check if migration is needed (if storage doesn't exist or doesn't have module_type)
     const needsMigration = pModules.length === 0 || pModules.some(m => !m.module_type);
     if (needsMigration) {
-      this.saveHomepageModules(DEFAULT_HOMEPAGE_MODULES);
+      this.saveHomepageModules(DEFAULT_HOMEPAGE_MODULES, true);
       return [...DEFAULT_HOMEPAGE_MODULES].map(m => ({ ...m, id: ensureValidUUID(m.id) })).sort((a, b) => a.display_order - b.display_order);
     }
     
@@ -905,16 +919,37 @@ class DatabaseService {
     const existingTypes = new Set(pModules.map(m => m.module_type));
     const missingDefaults = DEFAULT_HOMEPAGE_MODULES.filter(d => !existingTypes.has(d.module_type));
     if (missingDefaults.length > 0) {
-      const merged = [...pModules];
+      let merged = [...pModules];
       missingDefaults.forEach(def => {
-        const maxOrder = merged.reduce((max, m) => Math.max(max, m.display_order || 0), 0);
-        merged.push({
-          ...def,
-          id: ensureValidUUID(def.id),
-          display_order: maxOrder + 1
-        });
+        if (def.module_type === 'Events Preview') {
+          // Find Notice Feed module order
+          const noticeFeed = merged.find(m => m.module_type === 'Notice Feed');
+          const noticeFeedOrder = noticeFeed ? noticeFeed.display_order : 2;
+          
+          // Increment display_order for all modules that come after Notice Feed by 1 to make a gap
+          merged = merged.map(m => {
+            if (m.display_order > noticeFeedOrder) {
+              return { ...m, display_order: m.display_order + 1 };
+            }
+            return m;
+          });
+          
+          merged.push({
+            ...def,
+            id: ensureValidUUID(def.id),
+            display_order: noticeFeedOrder + 1,
+            is_visible: true
+          });
+        } else {
+          const maxOrder = merged.reduce((max, m) => Math.max(max, m.display_order || 0), 0);
+          merged.push({
+            ...def,
+            id: ensureValidUUID(def.id),
+            display_order: maxOrder + 1
+          });
+        }
       });
-      this.saveHomepageModules(merged);
+      this.saveHomepageModules(merged, true);
       return merged.sort((a, b) => a.display_order - b.display_order);
     }
 

@@ -450,7 +450,7 @@ export default function App() {
 
     const handleButtonClick = (url: string) => {
       if (!url) return;
-      if (url === 'about' || url === 'admissions' || url === 'contact' || url === 'notices' || url === 'home') {
+      if (url === 'about' || url === 'admissions' || url === 'contact' || url === 'notices' || url === 'home' || url === 'events' || url === 'faculty' || url === 'routine' || url === 'exams' || url === 'calendar') {
         setCurrentView(url);
       } else if (url.startsWith('http')) {
         window.open(url, '_blank', 'noreferrer');
@@ -943,10 +943,16 @@ export default function App() {
                 </p>
               </div>
               <button
-                onClick={() => setCurrentView('events')}
+                onClick={() => {
+                  if (mod.button_url) {
+                    handleButtonClick(mod.button_url);
+                  } else {
+                    setCurrentView('events');
+                  }
+                }}
                 className="text-xs font-bold font-mono uppercase tracking-wider text-orange-600 hover:text-orange-700 hover:translate-x-0.5 transition shrink-0 self-start md:self-auto cursor-pointer"
               >
-                Explore Events Calendar &rarr;
+                {mod.button_text || 'Explore Events Calendar'} &rarr;
               </button>
             </div>
 

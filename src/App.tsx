@@ -926,7 +926,7 @@ export default function App() {
           dbService.getEvents().length
         );
 
-        const activePublishedEvents = dbService.getEvents()
+        const sortedEvents = dbService.getEvents()
           .filter(e => e.status !== 'Draft')
           // Prioritize featured_homepage first, then sort by event_date descending
           .sort((a, b) => {
@@ -940,8 +940,20 @@ export default function App() {
             const createdAtA = a.created_at || '';
             const createdAtB = b.created_at || '';
             return createdAtB.localeCompare(createdAtA);
-          })
-          .slice(0, 3); // top 3 events
+          });
+
+        console.log(
+          '[EVENTS PREVIEW FULL DATA]',
+          sortedEvents.map(e => ({
+            id: e.id,
+            title: e.title,
+            featured_homepage: e.featured_homepage,
+            event_date: e.event_date,
+            created_at: e.created_at
+          }))
+        );
+
+        const activePublishedEvents = sortedEvents.slice(0, 3); // top 3 events
 
         console.log(
           '[EVENTS PREVIEW] rendered events:',

@@ -68,8 +68,18 @@ export default function App() {
 
         // --- 2. HOMEPAGE MODULES SYNC ---
         const remoteModules = await supabaseDbService.getHomepageModules();
+        console.log('[SUPABASE REMOTE MODULES RECEIVED]', {
+          length: remoteModules ? remoteModules.length : 0,
+          modules: remoteModules ? remoteModules.map(m => ({
+            module_type: m.module_type,
+            title: m.title,
+            visible: m.is_visible
+          })) : []
+        });
+
         if (active) {
           if (remoteModules && remoteModules.length > 0) {
+            console.log('[HOMEPAGE MODULES BEFORE UPDATE - LENGTH]', homepageModules.length);
             console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
             console.log('[HOMEPAGE MODULES AFTER UPDATE]', remoteModules);
             setHomepageModules(remoteModules);

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Lock, ArrowRight, BookOpen, GraduationCap, Calendar, PhoneCall, HelpCircle, ShieldAlert, Key, Award, Layers, Activity, Layout, User, Clock, MapPin, Star, Image as ImageIcon } from 'lucide-react';
-import { dbService } from './services/db';
+import { dbService, DEFAULT_HOMEPAGE_MODULES, ensureValidUUID } from './services/db';
 import { supabase } from './services/supabase';
 import { supabaseDbService } from './services/supabaseDb';
 import { SchoolSettings, HomepageModule } from './types';
@@ -68,23 +68,61 @@ export default function App() {
 
         // --- 2. HOMEPAGE MODULES SYNC ---
         const remoteModules = await supabaseDbService.getHomepageModules();
-        console.log('[SUPABASE REMOTE MODULES RECEIVED]', {
-          length: remoteModules ? remoteModules.length : 0,
-          modules: remoteModules ? remoteModules.map(m => ({
-            module_type: m.module_type,
-            title: m.title,
-            visible: m.is_visible
-          })) : []
-        });
 
         if (active) {
           if (remoteModules && remoteModules.length > 0) {
-            console.log('[HOMEPAGE MODULES BEFORE UPDATE - LENGTH]', homepageModules.length);
-            console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
-            console.log('[HOMEPAGE MODULES AFTER UPDATE]', remoteModules);
-            setHomepageModules(remoteModules);
+            let finalizedModules = [...remoteModules];
+            const remoteTypes = new Set(remoteModules.map(m => m.module_type));
+            const missingDefaults = DEFAULT_HOMEPAGE_MODULES.filter(d => !remoteTypes.has(d.module_type));
+
+            if (missingDefaults.length > 0) {
+              missingDefaults.forEach(def => {
+                if (def.module_type === 'Events Preview') {
+                  const noticeFeed = finalizedModules.find(m => m.module_type === 'Notice Feed');
+                  const noticeFeedOrder = noticeFeed ? noticeFeed.display_order : 2;
+                  finalizedModules = finalizedModules.map(m => {
+                    if (m.display_order > noticeFeedOrder) {
+                      return { ...m, display_order: m.display_order + 1 };
+                    }
+                    return m;
+                  });
+                  finalizedModules.push({
+                    ...def,
+                    id: ensureValidUUID(def.id),
+                    display_order: noticeFeedOrder + 1,
+                    is_visible: true
+                  });
+                } else {
+                  const maxOrder = finalizedModules.reduce((max, m) => Math.max(max, m.display_order || 0), 0);
+                  finalizedModules.push({
+                    ...def,
+                    id: ensureValidUUID(def.id),
+                    display_order: maxOrder + 1
+                  });
+                }
+              });
+
+              // Save the repaired array back to Supabase
+              try {
+                await supabaseDbService.saveHomepageModules(finalizedModules);
+              } catch (err) {
+                console.warn('[Failed saving repaired homepage modules to Supabase]:', err);
+              }
+            }
+
+            // Sort to ensure display order sequence is respected
+            finalizedModules.sort((a, b) => a.display_order - b.display_order);
+
+            // Verification Log
+            console.log('[REMOTE MODULES VERIFICATION]', {
+              length: finalizedModules.length,
+              hasEventsPreview: finalizedModules.some(m => m.module_type === 'Events Preview'),
+              modules: finalizedModules.map(m => m.module_type)
+            });
+
+            setHomepageModules(finalizedModules);
             // Sync cache to local storage
-            dbService.saveHomepageModules(remoteModules, true);
+            dbService.saveHomepageModules(finalizedModules, true);
           } else {
             // Seeding phase: Supabase is empty, read local data and seed Supabase
             const localModules = dbService.getHomepageModules();
@@ -94,8 +132,6 @@ export default function App() {
               console.warn('[Supabase homepage modules seeding skipped or failed]:', err);
             }
             if (active) {
-              console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
-              console.log('[HOMEPAGE MODULES AFTER UPDATE]', localModules);
               setHomepageModules(localModules);
             }
           }
@@ -280,10 +316,7 @@ export default function App() {
     }
     // Scroll to the top of the viewport whenever view changes
     window.scrollTo({ top: 0, behavior: 'auto' });
-    console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
-    const incomingModules273 = dbService.getHomepageModules();
-    console.log('[HOMEPAGE MODULES AFTER UPDATE]', incomingModules273);
-    setHomepageModules(incomingModules273);
+    setHomepageModules(dbService.getHomepageModules());
     if (currentView !== 'events') {
       setSelectedEventId(null);
     }
@@ -341,10 +374,7 @@ export default function App() {
 
   const refreshGlobalSchoolSettings = () => {
     setSchoolSettings(dbService.getSchoolSettings());
-    console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
-    const incomingModules334 = dbService.getHomepageModules();
-    console.log('[HOMEPAGE MODULES AFTER UPDATE]', incomingModules334);
-    setHomepageModules(incomingModules334);
+    setHomepageModules(dbService.getHomepageModules());
   };
 
   // Helper to resolve Lucide Icon Name to React Component dynamically
@@ -464,15 +494,6 @@ export default function App() {
 
   // Helper renderer to coordinate ordering sequences on homepage
   const renderHomepageModule = (mod: HomepageModule) => {
-    console.log(
-      '[RENDER MODULE FULL]',
-      {
-        type: (mod as any).type,
-        module_type: mod.module_type,
-        title: mod.title
-      }
-    );
-
     if (!mod.is_visible) return null;
 
     const keyId = `module-block-${mod.id}`;
@@ -940,13 +961,7 @@ export default function App() {
         );
 
       case 'Events Preview': {
-        console.log('[EVENTS PREVIEW CASE REACHED]');
-        console.log(
-          '[EVENTS PREVIEW] total events:',
-          dbService.getEvents().length
-        );
-
-        const sortedEvents = dbService.getEvents()
+        const activePublishedEvents = dbService.getEvents()
           .filter(e => e.status !== 'Draft')
           // Prioritize featured_homepage first, then sort by event_date descending
           .sort((a, b) => {
@@ -960,30 +975,8 @@ export default function App() {
             const createdAtA = a.created_at || '';
             const createdAtB = b.created_at || '';
             return createdAtB.localeCompare(createdAtA);
-          });
-
-        console.log(
-          '[EVENTS PREVIEW FULL DATA]',
-          sortedEvents.map(e => ({
-            id: e.id,
-            title: e.title,
-            featured_homepage: e.featured_homepage,
-            event_date: e.event_date,
-            created_at: e.created_at
-          }))
-        );
-
-        const activePublishedEvents = sortedEvents.slice(0, 3); // top 3 events
-
-        console.log(
-          '[EVENTS PREVIEW] rendered events:',
-          activePublishedEvents.length
-        );
-
-        console.log(
-          '[EVENTS PREVIEW] titles:',
-          activePublishedEvents.map(e => e.title)
-        );
+          })
+          .slice(0, 3); // top 3 events
 
         return (
           <div key={keyId} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10" id="homepage-events-preview">
@@ -1225,19 +1218,6 @@ export default function App() {
         {currentView === 'home' && (
           <div className="space-y-4 pb-12" id="home-view-canvas">
             {(() => {
-              homepageModules.forEach(mod => {
-                console.log(
-                  '[RUNTIME HOMEPAGE MODULE]',
-                  {
-                    id: mod.id,
-                    type: (mod as any).type,
-                    module_type: mod.module_type,
-                    title: mod.title,
-                    visible: mod.is_visible,
-                    order: mod.display_order
-                  }
-                );
-              });
               return homepageModules
                 .filter(mod => mod.is_visible)
                 .map(mod => renderHomepageModule(mod));

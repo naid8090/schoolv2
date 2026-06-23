@@ -17,7 +17,7 @@ function generateUUID(): string {
   });
 }
 
-function ensureValidUUID(id: string): string {
+export function ensureValidUUID(id: string): string {
   const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
   if (isUuid) return id;
 
@@ -87,7 +87,7 @@ const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
   hero_dise_text: 'DISE: 10230501XXX'
 };
 
-const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
+export const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
   {
     id: '11111111-1111-1111-1111-111111111111',
     module_type: 'Hero Section',

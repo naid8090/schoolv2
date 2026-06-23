@@ -70,6 +70,8 @@ export default function App() {
         const remoteModules = await supabaseDbService.getHomepageModules();
         if (active) {
           if (remoteModules && remoteModules.length > 0) {
+            console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
+            console.log('[HOMEPAGE MODULES AFTER UPDATE]', remoteModules);
             setHomepageModules(remoteModules);
             // Sync cache to local storage
             dbService.saveHomepageModules(remoteModules, true);
@@ -82,6 +84,8 @@ export default function App() {
               console.warn('[Supabase homepage modules seeding skipped or failed]:', err);
             }
             if (active) {
+              console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
+              console.log('[HOMEPAGE MODULES AFTER UPDATE]', localModules);
               setHomepageModules(localModules);
             }
           }
@@ -266,7 +270,10 @@ export default function App() {
     }
     // Scroll to the top of the viewport whenever view changes
     window.scrollTo({ top: 0, behavior: 'auto' });
-    setHomepageModules(dbService.getHomepageModules());
+    console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
+    const incomingModules273 = dbService.getHomepageModules();
+    console.log('[HOMEPAGE MODULES AFTER UPDATE]', incomingModules273);
+    setHomepageModules(incomingModules273);
     if (currentView !== 'events') {
       setSelectedEventId(null);
     }
@@ -324,7 +331,10 @@ export default function App() {
 
   const refreshGlobalSchoolSettings = () => {
     setSchoolSettings(dbService.getSchoolSettings());
-    setHomepageModules(dbService.getHomepageModules());
+    console.log('[HOMEPAGE MODULES BEFORE UPDATE]', homepageModules);
+    const incomingModules334 = dbService.getHomepageModules();
+    console.log('[HOMEPAGE MODULES AFTER UPDATE]', incomingModules334);
+    setHomepageModules(incomingModules334);
   };
 
   // Helper to resolve Lucide Icon Name to React Component dynamically

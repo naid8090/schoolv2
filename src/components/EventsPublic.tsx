@@ -27,6 +27,10 @@ export const EventsPublic: React.FC<EventsPublicProps> = ({
   useEffect(() => {
     // Load published events
     const allEvents = dbService.getEvents();
+    console.log(
+      '[DEBUG] EventsPublic allEvents:',
+      allEvents.length
+    );
     // Public view only shows Published and Archived events (not drafts)
     const publicEvents = allEvents.filter(e => e.status !== 'Draft');
     setEvents(publicEvents);
@@ -35,7 +39,18 @@ export const EventsPublic: React.FC<EventsPublicProps> = ({
 
   useEffect(() => {
     const handleSync = () => {
+      console.log(
+        '[DEBUG] handleSync fired'
+      );
       const allEvents = dbService.getEvents();
+      console.log(
+        '[DEBUG] EventsPublic allEvents:',
+        allEvents.length
+      );
+      console.log(
+        '[DEBUG] handleSync events:',
+        allEvents.length
+      );
       const publicEvents = allEvents.filter(e => e.status !== 'Draft');
       setEvents(publicEvents);
       setCategories(dbService.getEventCategories());

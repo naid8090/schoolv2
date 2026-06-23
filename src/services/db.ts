@@ -1512,6 +1512,10 @@ class DatabaseService {
       event_date: sanitizeDate(e.event_date) || new Date().toISOString().split('T')[0]
     }));
     this.setStorageItem('gsss_events', sanitized);
+    console.log(
+      '[DEBUG] localStorage gsss_events count:',
+      sanitized.length
+    );
 
     if (localOnly) return;
 

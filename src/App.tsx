@@ -122,7 +122,15 @@ export default function App() {
         // --- 5. EVENTS SYNC ---
         try {
           const remoteEvents = await supabaseDbService.getEvents();
+          console.log(
+            '[DEBUG] remoteEvents count:',
+            remoteEvents?.length ?? 'null'
+          );
           if (active && remoteEvents !== null) {
+            console.log(
+              '[DEBUG] saving remoteEvents:',
+              remoteEvents.length
+            );
             dbService.saveEvents(remoteEvents, true);
           }
         } catch (err) {

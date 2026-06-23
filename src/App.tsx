@@ -911,6 +911,22 @@ export default function App() {
         );
 
       case 'Events Preview': {
+        console.log('EVENTS PREVIEW START');
+
+        const allEvents = dbService.getEvents();
+
+        console.log('ALL EVENTS COUNT:', allEvents.length);
+
+        console.log(
+          'FEATURED EVENTS COUNT:',
+          allEvents.filter(e => e.featured_homepage).length
+        );
+
+        console.log(
+          'PUBLISHED EVENTS COUNT:',
+          allEvents.filter(e => e.status !== 'Draft').length
+        );
+
         const activePublishedEvents = dbService.getEvents()
           .filter(e => e.status !== 'Draft')
           // Prioritize featured_homepage first, then sort by event_date descending
@@ -927,6 +943,16 @@ export default function App() {
             return createdAtB.localeCompare(createdAtA);
           })
           .slice(0, 3); // top 3 events
+
+        console.log(
+          'TOP 3 EVENTS:',
+          activePublishedEvents.map(e => ({
+            title: e.title,
+            featured: e.featured_homepage,
+            status: e.status,
+            date: e.event_date
+          }))
+        );
 
         return (
           <div key={keyId} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10" id="homepage-events-preview">

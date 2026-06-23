@@ -444,6 +444,12 @@ export default function App() {
 
   // Helper renderer to coordinate ordering sequences on homepage
   const renderHomepageModule = (mod: HomepageModule) => {
+    console.log(
+      '[RENDER MODULE]',
+      (mod as any).type,
+      mod.title
+    );
+
     if (!mod.is_visible) return null;
 
     const keyId = `module-block-${mod.id}`;
@@ -911,6 +917,7 @@ export default function App() {
         );
 
       case 'Events Preview': {
+        console.log('[EVENTS PREVIEW CASE REACHED]');
         console.log(
           '[EVENTS PREVIEW] total events:',
           dbService.getEvents().length
@@ -1184,9 +1191,11 @@ export default function App() {
           <div className="space-y-4 pb-12" id="home-view-canvas">
             {(() => {
               console.log(
-                '[HOMEPAGE MODULES]',
+                '[RUNTIME HOMEPAGE MODULES]',
                 homepageModules.map(m => ({
-                  type: m.type,
+                  id: m.id,
+                  type: (m as any).type,
+                  title: m.title,
                   visible: m.is_visible,
                   order: m.display_order
                 }))

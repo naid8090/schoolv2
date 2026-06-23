@@ -810,6 +810,9 @@ const DEFAULT_PERIODS: PeriodMaster[] = [
 ];
 
 class DatabaseService {
+  private cachedEvents: SchoolEvent[] | null = null;
+  private cachedEventImages: SchoolEventImage[] | null = null;
+
   private getStorageItem<T>(key: string, defaultValue: T): T {
     try {
       const item = localStorage.getItem(key);
@@ -1498,11 +1501,19 @@ class DatabaseService {
   // ==========================================
 
   getEvents(): SchoolEvent[] {
+    if (this.cachedEvents) {
+      return this.cachedEvents.map(e => ({
+        ...e,
+        id: ensureValidUUID(e.id)
+      }));
+    }
     const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
-    return rawEvents.map(e => ({
+    const loadedEvents = rawEvents.map(e => ({
       ...e,
       id: ensureValidUUID(e.id)
     }));
+    this.cachedEvents = loadedEvents;
+    return loadedEvents;
   }
 
   saveEvents(events: SchoolEvent[], localOnly = false): void {
@@ -1511,6 +1522,11 @@ class DatabaseService {
       id: ensureValidUUID(e.id),
       event_date: sanitizeDate(e.event_date) || new Date().toISOString().split('T')[0]
     }));
+    
+    // Set in-memory cache as primary source of truth
+    this.cachedEvents = sanitized;
+    
+    // Save to local storage as an optional/best-effort persistent fallback
     this.setStorageItem('gsss_events', sanitized);
     console.log(
       '[DEBUG] localStorage gsss_events count:',
@@ -1607,12 +1623,21 @@ class DatabaseService {
 
   // Event Album / Gallery Images
   getEventImages(): SchoolEventImage[] {
+    if (this.cachedEventImages) {
+      return this.cachedEventImages.map(img => ({
+        ...img,
+        id: ensureValidUUID(img.id),
+        event_id: ensureValidUUID(img.event_id)
+      }));
+    }
     const rawImages = this.getStorageItem<SchoolEventImage[]>('gsss_event_images', DEFAULT_EVENT_IMAGES);
-    return rawImages.map(img => ({
+    const loadedImages = rawImages.map(img => ({
       ...img,
       id: ensureValidUUID(img.id),
       event_id: ensureValidUUID(img.event_id)
     }));
+    this.cachedEventImages = loadedImages;
+    return loadedImages;
   }
 
   saveEventImages(images: SchoolEventImage[], localOnly = false): void {
@@ -1621,6 +1646,11 @@ class DatabaseService {
       id: ensureValidUUID(img.id),
       event_id: ensureValidUUID(img.event_id)
     }));
+    
+    // Set in-memory cache as primary source of truth
+    this.cachedEventImages = sanitized;
+    
+    // Save to local storage as best effort fallback
     this.setStorageItem('gsss_event_images', sanitized);
 
     if (localOnly) return;

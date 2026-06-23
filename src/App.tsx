@@ -917,7 +917,14 @@ export default function App() {
           .sort((a, b) => {
             if (a.featured_homepage && !b.featured_homepage) return -1;
             if (!a.featured_homepage && b.featured_homepage) return 1;
-            return b.event_date.localeCompare(a.event_date);
+            const dateA = a.event_date || '';
+            const dateB = b.event_date || '';
+            if (dateA !== dateB) {
+              return dateB.localeCompare(dateA);
+            }
+            const createdAtA = a.created_at || '';
+            const createdAtB = b.created_at || '';
+            return createdAtB.localeCompare(createdAtA);
           })
           .slice(0, 3); // top 3 events
 

@@ -1501,19 +1501,31 @@ class DatabaseService {
   // ==========================================
 
   getEvents(): SchoolEvent[] {
+    let loadedEvents: SchoolEvent[] = [];
     if (this.cachedEvents) {
-      return this.cachedEvents.map(e => ({
+      loadedEvents = this.cachedEvents.map(e => ({
         ...e,
         id: ensureValidUUID(e.id)
       }));
+    } else {
+      const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
+      loadedEvents = rawEvents.map(e => ({
+        ...e,
+        id: ensureValidUUID(e.id)
+      }));
+      this.cachedEvents = loadedEvents;
     }
-    const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
-    const loadedEvents = rawEvents.map(e => ({
-      ...e,
-      id: ensureValidUUID(e.id)
-    }));
-    this.cachedEvents = loadedEvents;
-    return loadedEvents;
+
+    return loadedEvents.sort((a, b) => {
+      const dateA = a.event_date || '';
+      const dateB = b.event_date || '';
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
+      const createdAtA = a.created_at || '';
+      const createdAtB = b.created_at || '';
+      return createdAtB.localeCompare(createdAtA);
+    });
   }
 
   saveEvents(events: SchoolEvent[], localOnly = false): void {

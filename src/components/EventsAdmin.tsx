@@ -57,7 +57,7 @@ export const EventsAdmin: React.FC = () => {
   }, [categoriesList, formCategory]);
 
   const refreshLists = () => {
-    setEventsList(dbService.getEvents().sort((a, b) => b.event_date.localeCompare(a.event_date)));
+    setEventsList(dbService.getEvents());
     const categories = dbService.getEventCategories();
     setCategoriesList(categories);
     if (!formCategory && categories.length > 0) {

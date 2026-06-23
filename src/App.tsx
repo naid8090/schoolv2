@@ -911,20 +911,9 @@ export default function App() {
         );
 
       case 'Events Preview': {
-        console.log('EVENTS PREVIEW START');
-
-        const allEvents = dbService.getEvents();
-
-        console.log('ALL EVENTS COUNT:', allEvents.length);
-
         console.log(
-          'FEATURED EVENTS COUNT:',
-          allEvents.filter(e => e.featured_homepage).length
-        );
-
-        console.log(
-          'PUBLISHED EVENTS COUNT:',
-          allEvents.filter(e => e.status !== 'Draft').length
+          '[EVENTS PREVIEW] total events:',
+          dbService.getEvents().length
         );
 
         const activePublishedEvents = dbService.getEvents()
@@ -945,13 +934,13 @@ export default function App() {
           .slice(0, 3); // top 3 events
 
         console.log(
-          'TOP 3 EVENTS:',
-          activePublishedEvents.map(e => ({
-            title: e.title,
-            featured: e.featured_homepage,
-            status: e.status,
-            date: e.event_date
-          }))
+          '[EVENTS PREVIEW] rendered events:',
+          activePublishedEvents.length
+        );
+
+        console.log(
+          '[EVENTS PREVIEW] titles:',
+          activePublishedEvents.map(e => e.title)
         );
 
         return (
@@ -1193,9 +1182,19 @@ export default function App() {
         {/* VIEW A: HOMEPAGE (DYNAMIC REORDERABLE MODULE PATTERN) */}
         {currentView === 'home' && (
           <div className="space-y-4 pb-12" id="home-view-canvas">
-            {homepageModules
-              .filter(mod => mod.is_visible)
-              .map(mod => renderHomepageModule(mod))}
+            {(() => {
+              console.log(
+                '[HOMEPAGE MODULES]',
+                homepageModules.map(m => ({
+                  type: m.type,
+                  visible: m.is_visible,
+                  order: m.display_order
+                }))
+              );
+              return homepageModules
+                .filter(mod => mod.is_visible)
+                .map(mod => renderHomepageModule(mod));
+            })()}
           </div>
         )}
 

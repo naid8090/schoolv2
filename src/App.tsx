@@ -445,9 +445,12 @@ export default function App() {
   // Helper renderer to coordinate ordering sequences on homepage
   const renderHomepageModule = (mod: HomepageModule) => {
     console.log(
-      '[RENDER MODULE]',
-      (mod as any).type,
-      mod.title
+      '[RENDER MODULE FULL]',
+      {
+        type: (mod as any).type,
+        module_type: mod.module_type,
+        title: mod.title
+      }
     );
 
     if (!mod.is_visible) return null;
@@ -1190,16 +1193,19 @@ export default function App() {
         {currentView === 'home' && (
           <div className="space-y-4 pb-12" id="home-view-canvas">
             {(() => {
-              console.log(
-                '[RUNTIME HOMEPAGE MODULES]',
-                homepageModules.map(m => ({
-                  id: m.id,
-                  type: (m as any).type,
-                  title: m.title,
-                  visible: m.is_visible,
-                  order: m.display_order
-                }))
-              );
+              homepageModules.forEach(mod => {
+                console.log(
+                  '[RUNTIME HOMEPAGE MODULE]',
+                  {
+                    id: mod.id,
+                    type: (mod as any).type,
+                    module_type: mod.module_type,
+                    title: mod.title,
+                    visible: mod.is_visible,
+                    order: mod.display_order
+                  }
+                );
+              });
               return homepageModules
                 .filter(mod => mod.is_visible)
                 .map(mod => renderHomepageModule(mod));

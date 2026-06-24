@@ -1476,19 +1476,42 @@ class DatabaseService {
 
   // Academic Calendar Events CRM
   getCalendarEvents(): CalendarEvent[] {
-    return this.getStorageItem<CalendarEvent[]>('gsss_calendar_events', DEFAULT_CALENDAR_EVENTS);
+    const raw = this.getStorageItem<CalendarEvent[]>('gsss_calendar_events', DEFAULT_CALENDAR_EVENTS);
+    return raw.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id)
+    }));
   }
 
-  saveCalendarEvents(events: CalendarEvent[]): void {
-    this.setStorageItem('gsss_calendar_events', events);
+  saveCalendarEvents(events: CalendarEvent[], localOnly = false): void {
+    const sanitized = events.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id)
+    }));
+    this.setStorageItem('gsss_calendar_events', sanitized);
+    console.log('[CALENDAR SAVE]', sanitized.length, 'events saved. localOnly =', localOnly);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('calendar_events')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Calendar Events Save Error]:', error.message);
+        }
+      });
   }
 
   createCalendarEvent(eventData: Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'>): CalendarEvent {
     const events = this.getCalendarEvents();
     const now = new Date().toISOString();
+    const tempId = `cal_ev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sanitizedId = ensureValidUUID(tempId);
     const newEvent: CalendarEvent = {
       ...eventData,
-      id: `cal_ev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: sanitizedId,
       created_at: now,
       updated_at: now
     };
@@ -1498,13 +1521,15 @@ class DatabaseService {
   }
 
   updateCalendarEvent(id: string, updatedFields: Partial<CalendarEvent>): CalendarEvent | null {
+    const targetId = ensureValidUUID(id);
     const events = this.getCalendarEvents();
-    const index = events.findIndex(e => e.id === id);
+    const index = events.findIndex(e => e.id === targetId);
     if (index === -1) return null;
 
     const updated: CalendarEvent = {
       ...events[index],
       ...updatedFields,
+      id: targetId,
       updated_at: new Date().toISOString()
     };
     events[index] = updated;
@@ -1513,9 +1538,21 @@ class DatabaseService {
   }
 
   deleteCalendarEvent(id: string): void {
+    const targetId = ensureValidUUID(id);
     const events = this.getCalendarEvents();
-    const filtered = events.filter(e => e.id !== id);
+    const filtered = events.filter(e => e.id !== targetId);
     this.saveCalendarEvents(filtered);
+
+    // Explicitly delete from Supabase to handle the removed item
+    supabase
+      .from('calendar_events')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Calendar Event Delete Error]:', error.message);
+        }
+      });
   }
 
   // Supabase dynamic configurations in case they connect their real Supabase database

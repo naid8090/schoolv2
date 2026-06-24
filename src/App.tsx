@@ -229,6 +229,38 @@ export default function App() {
           console.error('[Supabase period masters sync error]:', err);
         }
 
+        // --- 8. CALENDAR EVENTS SYNC ---
+        try {
+          console.log('[CALENDAR SYNC] Starting...');
+          const remoteCalendarEvents = await supabaseDbService.getCalendarEvents();
+          console.log('[CALENDAR REMOTE COUNT]', remoteCalendarEvents?.length ?? 0);
+
+          if (active) {
+            if (remoteCalendarEvents && remoteCalendarEvents.length > 0) {
+              // Remote has records, sync to local cache
+              dbService.saveCalendarEvents(remoteCalendarEvents, true);
+              console.log('[CALENDAR LOCAL COUNT]', dbService.getCalendarEvents().length);
+            } else {
+              // Remote table is empty, seed Supabase with local defaults
+              const localCalendarEvents = dbService.getCalendarEvents();
+              console.log('[CALENDAR SYNC] Remote empty. Seeding Supabase with local count:', localCalendarEvents.length);
+              try {
+                // Save locally first to ensure they are formatted and validated
+                dbService.saveCalendarEvents(localCalendarEvents, true);
+
+                // Then write/seed to Supabase
+                await supabaseDbService.saveCalendarEvents(localCalendarEvents);
+                console.log('[CALENDAR SEEDED] Seeding completed successfully.');
+              } catch (err) {
+                console.warn('[Supabase calendar events seeding skipped or failed]:', err);
+              }
+              console.log('[CALENDAR LOCAL COUNT]', dbService.getCalendarEvents().length);
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase calendar events sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           window.dispatchEvent(new CustomEvent('gsss-data-synced'));

@@ -523,6 +523,14 @@ class SupabaseDbService {
     return data as CalendarEvent[];
   }
 
+  async saveCalendarEvents(events: CalendarEvent[]): Promise<void> {
+    const { error } = await supabase
+      .from('calendar_events')
+      .upsert(events);
+
+    if (error) throw error;
+  }
+
   async createCalendarEvent(event: Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'>): Promise<CalendarEvent> {
     const { data, error } = await supabase
       .from('calendar_events')

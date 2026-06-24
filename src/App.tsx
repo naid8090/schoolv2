@@ -197,6 +197,38 @@ export default function App() {
           console.error('[Supabase event images sync error]:', err);
         }
 
+        // --- 7. PERIOD MASTERS SYNC ---
+        try {
+          console.log('[PERIODS SYNC] Starting period masters sync...');
+          const remotePeriods = await supabaseDbService.getPeriodMasters();
+          console.log('[PERIODS REMOTE COUNT]', remotePeriods?.length ?? 0);
+          
+          if (active) {
+            if (remotePeriods && remotePeriods.length > 0) {
+              // Remote has records, sync to local cache
+              dbService.savePeriodMasters(remotePeriods, true);
+              console.log('[PERIODS LOCAL COUNT]', dbService.getPeriodMasters().length);
+            } else {
+              // Remote table is empty, seed Supabase with local defaults
+              const localPeriods = dbService.getPeriodMasters();
+              console.log('[PERIODS SYNC] Remote empty. Seeding Supabase with local count:', localPeriods.length);
+              try {
+                // Save locally first to ensure they are formatted
+                dbService.savePeriodMasters(localPeriods, true);
+                
+                // Then write/seed to Supabase
+                await supabaseDbService.savePeriodMasters(localPeriods);
+                console.log('[PERIODS SYNC] Seeding completed successfully.');
+              } catch (err) {
+                console.warn('[Supabase period masters seeding skipped or failed]:', err);
+              }
+              console.log('[PERIODS LOCAL COUNT]', dbService.getPeriodMasters().length);
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase period masters sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           window.dispatchEvent(new CustomEvent('gsss-data-synced'));

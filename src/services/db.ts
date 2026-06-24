@@ -1786,12 +1786,32 @@ class DatabaseService {
   }
 
   getPeriodMasters(): PeriodMaster[] {
-    return this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+    const raw = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+    return raw.map(p => ({
+      ...p,
+      id: ensureValidUUID(p.id)
+    }));
   }
 
-  savePeriodMasters(periods: PeriodMaster[]): void {
-    this.setStorageItem('gsss_period_masters', periods);
+  savePeriodMasters(periods: PeriodMaster[], localOnly = false): void {
+    const sanitized = periods.map(p => ({
+      ...p,
+      id: ensureValidUUID(p.id)
+    }));
+    this.setStorageItem('gsss_period_masters', sanitized);
     this.updateTimetableTimestamp();
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('period_masters')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Period Masters Save Error]:', error.message);
+        }
+      });
   }
 }
 

@@ -261,6 +261,27 @@ export default function App() {
           console.error('[Supabase calendar events sync error]:', err);
         }
 
+        // --- 9. ROUTINES SYNC ---
+        try {
+          console.log('[ROUTINES SYNC] Starting...');
+          const remoteRoutines = await supabaseDbService.getRoutines();
+          console.log('[ROUTINES REMOTE COUNT]', remoteRoutines?.length ?? 0);
+
+          if (active) {
+            if (remoteRoutines && remoteRoutines.length > 0) {
+              // Remote has records, sync to local cache
+              dbService.saveRoutines(remoteRoutines, true);
+              console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
+            } else {
+              // Remote table is empty: DO NOT seed automatically.
+              console.log('[ROUTINES SYNC] Remote empty. Admin seeding required. No writes. No upserts. No automatic seeding.');
+              console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase routines sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           window.dispatchEvent(new CustomEvent('gsss-data-synced'));

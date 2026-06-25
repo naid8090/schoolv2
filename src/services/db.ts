@@ -1314,17 +1314,40 @@ class DatabaseService {
   }
 
   getRoutines(): Routine[] {
-    return this.getStorageItem<Routine[]>('gsss_routines', DEFAULT_ROUTINES);
+    const raw = this.getStorageItem<Routine[]>('gsss_routines', DEFAULT_ROUTINES);
+    return raw.map(r => ({
+      ...r,
+      id: ensureValidUUID(r.id)
+    }));
   }
 
-  saveRoutines(routines: Routine[]): void {
-    this.setStorageItem('gsss_routines', routines);
+  saveRoutines(routines: Routine[], localOnly = false): void {
+    const sanitized = routines.map(r => ({
+      ...r,
+      id: ensureValidUUID(r.id)
+    }));
+    this.setStorageItem('gsss_routines', sanitized);
     this.updateTimetableTimestamp();
+
+    console.log('[ROUTINES SAVE] localOnly =', localOnly);
+    console.log('[ROUTINES LOCAL COUNT]', sanitized.length);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('routines')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routines Save Error]:', error.message);
+        }
+      });
   }
 
   updateRoutine(id: string, updatedFields: Partial<Routine>): Routine | null {
     const routines = this.getRoutines();
-    const index = routines.findIndex(r => r.id === id);
+    const index = routines.findIndex(r => r.id === ensureValidUUID(id));
     if (index === -1) return null;
 
     const updated: Routine = {

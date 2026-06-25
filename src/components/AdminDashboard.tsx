@@ -42,13 +42,14 @@ import { NoticeManagement } from './NoticeManagement';
 import { CustomSchoolEmblem } from './CommonAssets';
 import { AcademicAdmin } from './AcademicAdmin';
 import { EventsAdmin } from './EventsAdmin';
+import { DatabaseHealth } from './DatabaseHealth';
 
 interface AdminDashboardProps {
   onLogout: () => void;
   onSettingsChanged: () => void;
 }
 
-type AdminTab = 'overview' | 'settings' | 'modules' | 'notices' | 'media' | 'faculty' | 'academic' | 'events';
+type AdminTab = 'overview' | 'settings' | 'modules' | 'notices' | 'media' | 'faculty' | 'academic' | 'events' | 'health';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   onLogout,
@@ -669,6 +670,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     { id: 'notices', label: 'Manage Notices', icon: <Calendar className="w-4 h-4" /> },
     { id: 'events', label: 'Events Management', icon: <Calendar className="w-4 h-4 text-orange-600" /> },
     { id: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" /> },
+    { id: 'health', label: 'Database Health', icon: <ShieldCheck className="w-4 h-4" /> },
   ] as const;
 
   return (
@@ -2574,6 +2576,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* TAB 8: ACADEMIC MANAGEMENT DESK */}
           {activeTab === 'academic' && (
             <AcademicAdmin />
+          )}
+
+          {/* TAB 9: DATABASE HEALTH DASHBOARD */}
+          {activeTab === 'health' && (
+            <DatabaseHealth />
           )}
 
         </div>

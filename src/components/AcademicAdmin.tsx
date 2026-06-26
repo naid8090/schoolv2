@@ -3,3033 +3,1975 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, 
-  Clock, 
-  BookOpen, 
-  Plus, 
-  Trash2, 
-  Edit, 
-  Save, 
-  FileText, 
-  ArrowUp, 
-  ArrowDown, 
-  Eye, 
-  EyeOff, 
-  AlertTriangle, 
-  Download, 
-  Check, 
-  X,
-  User,
-  ExternalLink,
-  Sparkles
-} from 'lucide-react';
-import { dbService } from '../services/db';
-import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty } from '../types';
-import { MediaSelectorModal } from './MediaLibrary';
-import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
+import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage } from '../types';
+import { supabase } from './supabase';
+import { supabaseDbService } from './supabaseDb';
 
-// Reusable date formats
-const formatShortDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-export const AcademicAdmin: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'routine' | 'exam' | 'calendar'>('routine');
-
-  // ==========================================
-  // MEDIA SELECTOR INTERFACE
-  // ==========================================
-  const [isMediaOpen, setIsMediaOpen] = useState(false);
-  const [mediaTitle, setMediaTitle] = useState('Select Document File');
-  const [onMediaSelectedCallback, setOnMediaSelectedCallback] = useState<((url: string) => void) | null>(null);
-
-  const triggerMediaFilePicker = (title: string, onSelect: (url: string) => void) => {
-    setMediaTitle(title);
-    setOnMediaSelectedCallback(() => onSelect);
-    setIsMediaOpen(true);
-  };
-
-  return (
-    <div className="space-y-6" id="academic-desk-central">
-      {/* Navigation Headers */}
-      <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-slate-900 text-base sm:text-lg font-bold uppercase tracking-wide">
-            Academic Desk Manager Console
-          </h2>
-          <p className="text-slate-500 text-xs mt-1 leading-relaxed font-sans font-medium">
-            Maintain daily class timings schedules, assessment circular datesheets, and student holiday calendars with BSEB guidelines.
-          </p>
-        </div>
-
-        {/* Sub tab buttons */}
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-150/40 shrink-0 w-full md:w-auto">
-          <button
-            onClick={() => setActiveSubTab('routine')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'routine'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Class Routines
-          </button>
-          <button
-            onClick={() => setActiveSubTab('exam')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'exam'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Exam Schedules
-          </button>
-          <button
-            onClick={() => setActiveSubTab('calendar')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'calendar'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            School Calendar
-          </button>
-        </div>
-      </div>
-
-      {/* Main Admin Sub workspace views */}
-      <div className="min-h-[450px]">
-        {activeSubTab === 'routine' && (
-          <RoutineAdminModule triggerMedia={triggerMediaFilePicker} />
-        )}
-        {activeSubTab === 'exam' && (
-          <ExamAdminModule triggerMedia={triggerMediaFilePicker} />
-        )}
-        {activeSubTab === 'calendar' && (
-          <CalendarAdminModule triggerMedia={triggerMediaFilePicker} />
-        )}
-      </div>
-
-      {/* Reusable file media picker modal */}
-      {isMediaOpen && onMediaSelectedCallback && (
-        <MediaSelectorModal
-          onClose={() => setIsMediaOpen(false)}
-          onSelect={(item) => {
-            onMediaSelectedCallback(item.file_url);
-            setIsMediaOpen(false);
-          }}
-          allowedType="all"
-          title={mediaTitle}
-        />
-      )}
-    </div>
-  );
-};
-
-const PeriodsMasterWorkspace: React.FC<{
-  periodMasters: PeriodMaster[];
-  setPeriodMasters: React.Dispatch<React.SetStateAction<PeriodMaster[]>>;
-  fetchLocalData: () => void;
-}> = ({ periodMasters, setPeriodMasters, fetchLocalData }) => {
-  const [name, setName] = useState('');
-  const [timeRange, setTimeRange] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleAddOrUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    if (!timeRange.trim()) return;
-
-    // Check time syntax
-    const parts = timeRange.split(/[-–—to]/i);
-    if (parts.length !== 2) {
-      setError("Please use exact timing format like '09:00 AM - 09:45 AM'");
-      return;
-    }
-
-    if (editingId) {
-      // Edit
-      const updated = periodMasters.map(pm => pm.id === editingId ? { ...pm, name: name.trim(), time_range: timeRange.trim() } : pm);
-      dbService.savePeriodMasters(updated);
-      setPeriodMasters(updated);
-      setEditingId(null);
-    } else {
-      // Create
-      if (periodMasters.some(pm => pm.name.toLowerCase().trim() === name.toLowerCase().trim())) {
-        setError(`A standard period with name "${name}" already exists.`);
-        return;
-      }
-      const newPm: PeriodMaster = {
-        id: `pm_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        name: name.trim(),
-        time_range: timeRange.trim()
-      };
-      const updated = [...periodMasters, newPm].sort((a, b) => {
-        const numA = parseInt(a.name.replace(/\D/g, '')) || 99;
-        const numB = parseInt(b.name.replace(/\D/g, '')) || 99;
-        return numA - numB;
-      });
-      dbService.savePeriodMasters(updated);
-      setPeriodMasters(updated);
-    }
-
-    setName('');
-    setTimeRange('');
-    setError(null);
-    fetchLocalData();
-  };
-
-  const handleEdit = (pm: PeriodMaster) => {
-    setEditingId(pm.id);
-    setName(pm.name);
-    setTimeRange(pm.time_range);
-    setError(null);
-  };
-
-  const handleDelete = (id: string) => {
-    const deletedPm = periodMasters.find(pm => pm.id === id);
-    const updated = periodMasters.filter(pm => pm.id !== id);
-    dbService.savePeriodMasters(updated);
-    setPeriodMasters(updated);
-    
-    // Cascading clean up of associated routine entries to prevent empty/orphaned placeholders
-    if (deletedPm) {
-      const allEntries = dbService.getRoutineEntries();
-      const cleanedEntries = allEntries.filter(
-        e => e.period.toLowerCase().trim() !== deletedPm.name.toLowerCase().trim()
-      );
-      dbService.saveRoutineEntries(cleanedEntries);
-    }
-    
-    fetchLocalData();
-  };
-
-  const handleResetDefaults = () => {
-    if (window.confirm('Are you sure you want to reset study periods to default Bihar summer timings?')) {
-      const defaults: PeriodMaster[] = [
-        { id: 'p_1', name: 'Period 1', time_range: '09:00 AM - 09:45 AM' },
-        { id: 'p_2', name: 'Period 2', time_range: '09:45 AM - 10:30 AM' },
-        { id: 'p_3', name: 'Period 3', time_range: '10:30 AM - 11:15 AM' },
-        { id: 'p_4', name: 'Period 4', time_range: '11:15 AM - 12:00 PM' },
-        { id: 'p_5', name: 'Period 5', time_range: '12:45 PM - 01:30 PM' },
-        { id: 'p_6', name: 'Period 6', time_range: '01:30 PM - 02:15 PM' },
-      ];
-      dbService.savePeriodMasters(defaults);
-      setPeriodMasters(defaults);
-      fetchLocalData();
-    }
-  };
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs space-y-6 animate-in fade-in duration-200" id="periods-master-setup">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-            <h3 className="text-slate-900 text-sm font-black uppercase tracking-wider">
-              Central Study Periods Master
-            </h3>
-          </div>
-          <p className="text-slate-500 text-[11px] font-sans mt-0.5">
-            Configure system-wide academic timetable hour frames and lecture sequences below.
-          </p>
-        </div>
-        <button
-          onClick={handleResetDefaults}
-          className="text-slate-550 hover:text-slate-900 border border-slate-200 hover:border-slate-350 bg-white px-3 py-1.5 rounded-lg text-[10.5px] font-mono font-bold tracking-tight uppercase flex items-center gap-1 cursor-pointer transition shadow-4xs"
-        >
-          Reset Defaults
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-4 h-fit">
-          <span className="text-[10px] font-mono font-bold uppercase text-slate-450 tracking-wider block">
-            {editingId ? 'Modify Timing Details' : 'Create Standard Period'}
-          </span>
-
-          <form onSubmit={handleAddOrUpdate} className="space-y-4 text-xs font-semibold text-slate-755 font-sans">
-            <div className="space-y-1">
-              <label className="text-[10.5px] uppercase font-mono font-semibold text-slate-550">Period Label Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Period 1"
-                className="w-full p-2 border border-slate-205 bg-white rounded-lg focus:outline-orange-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10.5px] uppercase font-mono font-semibold text-slate-550">Time Range Slot</label>
-              <input
-                type="text"
-                required
-                value={timeRange}
-                onChange={e => setTimeRange(e.target.value)}
-                placeholder="e.g. 09:00 AM - 09:45 AM"
-                className="w-full p-2 border border-slate-205 bg-white rounded-lg focus:outline-orange-500 font-mono text-[11px] font-bold"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-150 p-2.5 rounded-lg text-red-700 text-[10.5px] font-medium leading-relaxed">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2 border-t border-slate-200/50">
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setName('');
-                    setTimeRange('');
-                    setError(null);
-                  }}
-                  className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-750 font-bold rounded-lg cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                type="submit"
-                className="w-full py-2 bg-orange-500 hover:bg-orange-600 font-bold text-white rounded-lg cursor-pointer tracking-wide shadow-3xs"
-              >
-                {editingId ? 'Update Slot' : 'Create Slot'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div className="md:col-span-2 space-y-3">
-          <span className="text-[10px] font-mono font-bold uppercase text-slate-450 tracking-wider block">
-            Saved Hours Matrix Registry ({periodMasters.length} defined)
-          </span>
-
-          <div className="border border-slate-150 rounded-xl overflow-hidden bg-white">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wide text-slate-450">
-                  <th className="p-3 w-12 col-span-1">No.</th>
-                  <th className="p-3">Period Label</th>
-                  <th className="p-3">Standard Hour Slot</th>
-                  <th className="p-3 text-center w-28">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750 font-medium">
-                {periodMasters.map((pm, i) => (
-                  <tr key={pm.id} className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-3 font-mono text-slate-400 font-bold text-[10.5px]">{i + 1}</td>
-                    <td className="p-3 font-extrabold text-slate-900 text-sm">{pm.name}</td>
-                    <td className="p-3 font-mono text-orange-600 bg-orange-50/15 py-1 px-2 rounded-md border border-orange-100/30 font-bold w-fit text-[11px] select-all">{pm.time_range}</td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleEdit(pm)}
-                          className="px-2.5 py-1.5 text-[10.5px] bg-slate-50 border border-slate-205 hover:bg-slate-100 font-bold rounded-lg cursor-pointer transition flex items-center justify-center"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(pm.id)}
-                          className="px-2.5 py-1.5 text-[10.5px] border border-red-100 bg-red-50/20 text-red-650 hover:bg-red-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {periodMasters.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400 italic font-medium">
-                      No period master rows defined. Add some or click Reset Defaults above.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// A. ROUTINES ADMINISTRATIVE MODULE
-// ============================================================================
-interface ModuleSubProps {
-  triggerMedia: (title: string, onSelect: (url: string) => void) => void;
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
-const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
-  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix'>('Class 9');
-  const [routines, setRoutines] = useState<Routine[]>([]);
-  const [entries, setEntries] = useState<RoutineEntry[]>([]);
-  const [faculty, setFaculty] = useState<Faculty[]>([]);
-  const [periodMasters, setPeriodMasters] = useState<PeriodMaster[]>(dbService.getPeriodMasters());
-  const [isManualPeriod, setIsManualPeriod] = useState(false);
+export function ensureValidUUID(id: string): string {
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+  if (isUuid) return id;
+
+  const mapping: Record<string, string> = {
+    'm1': '11111111-1111-1111-1111-111111111111',
+    'm2': '22222222-2222-2222-2222-222222222222',
+    'm3': '33333333-3333-3333-3333-333333333333',
+    'm4': '44444444-4444-4444-4444-444444444444',
+    'm5': '55555555-5555-5555-5555-555555555555',
+    'm6': '66666666-6666-6666-6666-666666666666',
+    'm7': '77777777-7777-7777-7777-777777777777',
+  };
+
+  if (mapping[id]) return mapping[id];
+
+  const cleanId = id.replace(/[^a-f0-9]/gi, '').toLowerCase();
+  const padded = (cleanId + 'abcdef01234567891234567890abcdef').substring(0, 32);
+  return `${padded.substring(0, 8)}-${padded.substring(8, 12)}-4${padded.substring(13, 16)}-a${padded.substring(17, 20)}-${padded.substring(20, 32)}`;
+}
+
+function sanitizeDate(dateStr: string | undefined | null): string | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // If it's a 4-digit year, e.g. "2025", convert to "2025-01-01"
+  if (/^\d{4}$/.test(trimmed)) {
+    return `${trimmed}-01-01`;
+  }
+
+  // Check if it's already a valid ISO date section (YYYY-MM-DD)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0]; // Returns 'YYYY-MM-DD'
+  }
+
+  // Try parsing with Javascript Date
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    return new Date(parsed).toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
+// Default seed data for Rajendra Prasad Government Senior Secondary School, Patna
+const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
+  id: 'site-config',
+  school_name: 'Rajendra Prasad Government Senior Secondary School',
+  school_motto: 'तमसो मा ज्योतिर्गमय (Lead us from darkness to light)',
+  address: 'Boring Road, Opposite S.K. Puri Park, Chhajubagh, Patna, Bihar - 800001',
+  phone: '+91 612 254 0984',
+  email: 'rp-gsss-patna@bihar.gov.in',
+  // High-contrast beautiful abstract SVG assets to serve as logo & hero fallbacks
+  logo_url: 'school_logo_default',
+  hero_image_url: 'school_hero_default',
+  footer_subtitle: 'STATE INFRASTRUCTURE • SECTOR 3',
+  school_affiliation: 'Ministry of Education, State of Bihar Government Affiliate No: 10230501',
+  footer_description: 'Co-educational intermediate/senior secondary institution under the laws and registers of the Bihar School Examination Board.',
   
-  // Edit State variables
-  const [isAddingEntry, setIsAddingEntry] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-
-  // Form states for adding/editing Entry
-  const [entryForm, setEntryForm] = useState<Partial<RoutineEntry>>({
-    day: 'Monday',
-    period: 'Period 1',
-    time_range: '09:00 AM - 09:45 AM',
-    subject: '',
-    teacher: ''
-  });
-
-  const [isManualTeacher, setIsManualTeacher] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Strict Validation states
-  const [formError, setFormError] = useState<string | null>(null);
-  const [combinedError, setCombinedError] = useState<string | null>(null);
-  const [quickError, setQuickError] = useState<string | null>(null);
-
-  // Time & Overlap parse helper functions
-  const parseTimeToMinutes = (timeStr: string): number | null => {
-    if (!timeStr) return null;
-    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!match) return null;
-    
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const ampm = match[3]?.toUpperCase();
-
-    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
-
-    if (ampm === 'PM' && hours < 12) {
-      hours += 12;
-    } else if (ampm === 'AM' && hours === 12) {
-      hours = 0;
-    }
-    return hours * 60 + minutes;
-  };
-
-  const parseTimeRange = (timeRangeStr: string): { start: number; end: number } | null => {
-    if (!timeRangeStr) return null;
-    const parts = timeRangeStr.split(/[-–—to]/i);
-    if (parts.length !== 2) return null;
-    const startMin = parseTimeToMinutes(parts[0].trim());
-    const endMin = parseTimeToMinutes(parts[1].trim());
-    if (startMin === null || endMin === null) return null;
-    return { start: startMin, end: endMin };
-  };
-
-  const validateRoutineCollision = (
-    day: string,
-    timeRangeStr: string,
-    clsName: string,
-    teacherName: string,
-    excludeEntryId?: string
-  ): { valid: boolean; error?: string } => {
-    const parsedRange = parseTimeRange(timeRangeStr);
-    if (!parsedRange) {
-      return { 
-        valid: false, 
-        error: "Invalid Time Range syntax. Please use exact format like '09:00 AM - 09:45 AM' or '2:00 PM - 3:00 PM'." 
-      };
-    }
-    
-    const { start, end } = parsedRange;
-    if (end <= start) {
-      return { 
-        valid: false, 
-        error: `End time of slot must be strictly after the start time. (Entered: ${timeRangeStr})` 
-      };
-    }
-
-    if (end - start < 5) {
-      return { 
-        valid: false, 
-        error: "The period duration must be at least 5 minutes." 
-      };
-    }
-
-    for (const ent of entries) {
-      if (ent.id === excludeEntryId) continue;
-      if (ent.day !== day) continue;
-
-      const entRange = parseTimeRange(ent.time_range);
-      if (!entRange) continue;
-
-      const isOverlapping = start < entRange.end && entRange.start < end;
-      if (isOverlapping) {
-        if (teacherName && ent.teacher && teacherName.trim().toLowerCase() === ent.teacher.trim().toLowerCase()) {
-          const conflictRoutine = routines.find(r => r.id === ent.routine_id);
-          const conflictClass = conflictRoutine ? conflictRoutine.class_name : 'another class';
-          return {
-            valid: false,
-            error: `Conflict: Teacher "${teacherName}" is already scheduled in ${conflictClass} during the overlapping time slot ${ent.time_range} on ${day}.`
-          };
-        }
-
-        const targetRoutine = routines.find(r => r.class_name === clsName);
-        if (targetRoutine && ent.routine_id === targetRoutine.id) {
-          return {
-            valid: false,
-            error: `Conflict: ${clsName} already has another period "${ent.subject}" scheduled during the overlapping time slot ${ent.time_range} on ${day}.`
-          };
-        }
-      }
-    }
-
-    return { valid: true };
-  };
-
-  // Core warning conflict structures
-  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
-  const [forceConflict, setForceConflict] = useState(false);
-
-  // Combined Routine state management
-  const [editingCombinedCell, setEditingCombinedCell] = useState<{
-    className: AcademicClass;
-    day: string;
-    period: string;
-    entry?: RoutineEntry;
-  } | null>(null);
-  const [combinedForm, setCombinedForm] = useState({
-    subject: '',
-    teacher: '',
-    time_range: '09:00 AM - 09:45 AM',
-    isManual: false
-  });
-  const [combinedConflictWarning, setCombinedConflictWarning] = useState<string | null>(null);
-  const [combinedForceConflict, setCombinedForceConflict] = useState(false);
-
-  // Smart Analytical & Routine Optimizer states
-  const [optimizerTab, setOptimizerTab] = useState<'workload' | 'vacant'>('workload');
-  const [analyticsDayFilter, setAnalyticsDayFilter] = useState<string>('All');
-  const [analyticsClassFilter, setAnalyticsClassFilter] = useState<string>('All');
-  const [workloadTeacherFilter, setWorkloadTeacherFilter] = useState<string>('All');
-  const [quickAssignSlot, setQuickAssignSlot] = useState<{
-    className: AcademicClass;
-    day: string;
-    period: string;
-    timeRange: string;
-  } | null>(null);
-  const [quickForm, setQuickForm] = useState({
-    subject: '',
-    teacher: '',
-    isManual: false
-  });
-  const [quickConflictWarning, setQuickConflictWarning] = useState<string | null>(null);
-  const [quickForceConflict, setQuickForceConflict] = useState(false);
-
-  // Load Routines and standard configurations
-  const fetchLocalData = () => {
-    setRoutines(dbService.getRoutines());
-    setEntries(dbService.getRoutineEntries());
-    setFaculty(dbService.getFaculty());
-    setPeriodMasters(dbService.getPeriodMasters());
-  };
-
-  useEffect(() => {
-    fetchLocalData();
-  }, []);
-
-  const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix') ? routines.find(r => r.class_name === selectedClass) : undefined;
-  const classEntries = activeRoutine ? entries.filter(e => e.routine_id === activeRoutine?.id) : [];
-
-  const initClassRoutineIfMissing = () => {
-    if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix') return;
-    const list = dbService.getRoutines();
-    let current = list.find(r => r.class_name === selectedClass);
-    if (!current) {
-      const newRoutine: Routine = {
-        id: `routine-${Date.now()}`,
-        class_name: selectedClass as AcademicClass,
-        display_mode: 'online',
-        pdf_url: '',
-        override_active: false,
-        override_title: '',
-        override_start: '',
-        override_end: '',
-        override_pdf_url: '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      dbService.saveRoutines([...list, newRoutine]);
-      fetchLocalData();
-    }
-  };
-
-  useEffect(() => {
-    initClassRoutineIfMissing();
-  }, [selectedClass]);
-
-  // Check if a teacher has a conflict on standard day/period in another class
-  const checkTeacherConflict = (day: string, period: string, teacherName: string, excludeId?: string, targetClass?: string) => {
-    if (!teacherName || teacherName.trim() === '') return null;
-    
-    // Find matching records in other classes
-    const match = entries.find(e => 
-      e.day === day &&
-      e.period.toLowerCase().trim() === period.toLowerCase().trim() &&
-      e.teacher?.toLowerCase().trim() === teacherName.toLowerCase().trim() &&
-      e.id !== excludeId
-    );
-    
-    if (match) {
-      const conflictRoutine = routines.find(r => r.id === match.routine_id);
-      if (conflictRoutine && conflictRoutine.class_name !== targetClass) {
-        return conflictRoutine.class_name;
-      }
-    }
-    return null;
-  };
-
-  // Handle Display Mode Change
-  const updateDisplayMode = (mode: 'online' | 'pdf') => {
-    if (!activeRoutine) return;
-    const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, display_mode: mode, updated_at: new Date().toISOString() } : r);
-    dbService.saveRoutines(updated);
-    fetchLocalData();
-  };
-
-  // Handle Routine PDF assignment
-  const handleAssignPDF = () => {
-    if (!activeRoutine) return;
-    triggerMedia(
-      `Select PDF for ${selectedClass} Timetable`,
-      (url) => {
-        const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: url, updated_at: new Date().toISOString() } : r);
-        dbService.saveRoutines(updated);
-        fetchLocalData();
-      }
-    );
-  };
-
-  // Form Submit for Routine Grid Entry (Add & Edit)
-  const handleAddEntrySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeRoutine) return;
-
-    const teacherName = entryForm.teacher || '';
-    const dayVal = entryForm.day || 'Monday';
-    const periodVal = entryForm.period || 'Period 1';
-    const timeRangeVal = entryForm.time_range || '';
-
-    // Strict validation
-    const validation = validateRoutineCollision(
-      dayVal,
-      timeRangeVal,
-      selectedClass as string,
-      teacherName,
-      editingEntryId || undefined
-    );
-    if (!validation.valid) {
-      setFormError(validation.error || 'Conflict detected in timeslots.');
-      return;
-    }
-    setFormError(null);
-
-    // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(dayVal, periodVal, teacherName, editingEntryId || undefined, selectedClass as string);
-    if (conflictClass && !forceConflict) {
-      setConflictWarning(`Conflict detected: ${teacherName} is already assigned to lead ${conflictClass} during ${dayVal} ${periodVal}. Proceed anyway?`);
-      return;
-    }
-
-    if (editingEntryId) {
-      // Edit route
-      const updated = entries.map(ent => ent.id === editingEntryId ? {
-        ...ent,
-        day: dayVal as any,
-        period: periodVal,
-        time_range: timeRangeVal,
-        subject: entryForm.subject || '',
-        teacher: teacherName
-      } : ent);
-      dbService.saveRoutineEntries(updated);
-    } else {
-      // Add route
-      const newEntry: RoutineEntry = {
-        id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        routine_id: activeRoutine.id,
-        day: dayVal as any,
-        period: periodVal,
-        time_range: timeRangeVal,
-        subject: entryForm.subject || '',
-        teacher: teacherName
-      };
-      dbService.saveRoutineEntries([...entries, newEntry]);
-    }
-
-    // Reset forms
-    setIsAddingEntry(false);
-    setEditingEntryId(null);
-    setConflictWarning(null);
-    setForceConflict(false);
-    setEntryForm({ day: 'Monday', period: 'Period 1', time_range: '09:00 AM - 09:45 AM', subject: '', teacher: '' });
-    fetchLocalData();
-  };
-
-  const handleEditClick = (ent: RoutineEntry) => {
-    setEditingEntryId(ent.id);
-    setEntryForm({
-      day: ent.day,
-      period: ent.period,
-      time_range: ent.time_range || '',
-      subject: ent.subject,
-      teacher: ent.teacher || ''
-    });
-    setIsManualTeacher(ent.teacher ? !faculty.some(f => f.name === ent.teacher) : false);
-    setIsManualPeriod(ent.period ? !periodMasters.some(pm => pm.name.toLowerCase().trim() === ent.period.toLowerCase().trim()) : false);
-    setIsAddingEntry(true);
-    setFormError(null);
-    setConflictWarning(null);
-    window.scrollTo({ top: 320, behavior: 'smooth' });
-  };
-
-  const handleDeleteEntryInline = (entryId: string) => {
-    const filtered = entries.filter(e => e.id !== entryId);
-    dbService.saveRoutineEntries(filtered);
-    fetchLocalData();
-    setDeletingId(null);
-  };
-
-  // Consolidated helpers
-  const standardPeriods = ['Period 1', 'Period 2', 'Period 3', 'Period 4', 'Period 5', 'Period 6'];
-  const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-
-  const getCombinedEntry = (cls: AcademicClass, day: string, period: string) => {
-    const routine = routines.find(r => r.class_name === cls);
-    if (!routine) return null;
-    return entries.find(e => e.routine_id === routine.id && e.day === day && e.period === period);
-  };
-
-  const handleOpenCombinedCell = (cls: AcademicClass, day: string, period: string, matched?: RoutineEntry) => {
-    setEditingCombinedCell({
-      className: cls,
-      day,
-      period,
-      entry: matched
-    });
-    setCombinedForm({
-      subject: matched?.subject || '',
-      teacher: matched?.teacher || '',
-      time_range: matched?.time_range || (getPeriodTimeCombined(period) || '09:00 AM - 09:45 AM'),
-      isManual: matched?.teacher ? !faculty.some(f => f.name === matched.teacher) : false
-    });
-    setCombinedConflictWarning(null);
-    setCombinedForceConflict(false);
-    setCombinedError(null);
-  };
-
-  const getPeriodTimeCombined = (p: string) => {
-    const matched = entries.find(e => e.period === p && e.time_range);
-    if (matched?.time_range) return matched.time_range;
-    const master = periodMasters.find(pm => pm.name.toLowerCase().trim() === p.toLowerCase().trim());
-    return master?.time_range || '';
-  };
-
-  const handleSaveCombinedCell = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCombinedCell) return;
-
-    const { className, day, period, entry } = editingCombinedCell;
-    const { subject, teacher, time_range } = combinedForm;
-
-    // Strict validation
-    const validation = validateRoutineCollision(
-      day,
-      time_range,
-      className,
-      teacher,
-      entry?.id || undefined
-    );
-    if (!validation.valid) {
-      setCombinedError(validation.error || 'Conflict detected in timeslots.');
-      return;
-    }
-    setCombinedError(null);
-
-    // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(day, period, teacher, entry?.id || undefined, className);
-    if (conflictClass && !combinedForceConflict) {
-      setCombinedConflictWarning(`Teacher Conflict: ${teacher} is already occupying ${conflictClass} during ${day} ${period}. Bypass warning and confirm?`);
-      return;
-    }
-
-    if (entry) {
-      // Edit in place
-      const updated = entries.map(e => e.id === entry.id ? { ...e, subject, teacher, time_range } : e);
-      dbService.saveRoutineEntries(updated);
-    } else {
-      // Create fresh
-      const targetRoutine = routines.find(r => r.class_name === className);
-      if (targetRoutine) {
-        const newEntry: RoutineEntry = {
-          id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-          routine_id: targetRoutine.id,
-          day: day as any,
-          period,
-          subject,
-          teacher,
-          time_range
-        };
-        dbService.saveRoutineEntries([...entries, newEntry]);
-      }
-    }
-
-    setEditingCombinedCell(null);
-    fetchLocalData();
-  };
-
-  const handleClearCombinedCell = () => {
-    if (editingCombinedCell?.entry) {
-      const filtered = entries.filter(e => e.id !== editingCombinedCell.entry?.id);
-      dbService.saveRoutineEntries(filtered);
-      fetchLocalData();
-    }
-    setEditingCombinedCell(null);
-  };
-
-  // List of all 4 standard classes
-  const allClasses: AcademicClass[] = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
-
-  const getTeacherWorkloadData = () => {
-    const facultyNames = faculty.map(f => f.name.trim());
-    const customNames = Array.from(new Set(
-      entries
-        .map(e => e.teacher?.trim())
-        .filter((t): t is string => !!t)
-    ));
-    const unifiedTeachers = Array.from(new Set([...facultyNames, ...customNames]));
-    
-    const workloadMap = unifiedTeachers.map(teacher => {
-      const assigned = entries.filter(e => e.teacher?.toLowerCase().trim() === teacher.toLowerCase().trim());
-      
-      const details = assigned.map(e => {
-        const matchingRoutine = routines.find(r => r.id === e.routine_id);
-        const clsName = matchingRoutine ? matchingRoutine.class_name : 'N/A';
-        return {
-          id: e.id,
-          class_name: clsName,
-          day: e.day,
-          period: e.period,
-          subject: e.subject
-        };
-      });
-      
-      const facultyModel = faculty.find(f => f.name.toLowerCase().trim() === teacher.toLowerCase().trim());
-      
-      return {
-        name: teacher,
-        department: facultyModel?.department || facultyModel?.subject || 'Guest/Specialist Lectures',
-        type: facultyModel ? 'Regular' : 'Temp / Guest',
-        loadCount: assigned.length,
-        assignments: details
-      };
-    });
-    
-    return workloadMap.sort((a, b) => b.loadCount - a.loadCount);
-  };
-
-  const allTeachersFromData = () => {
-    const facultyNames = faculty.map(f => f.name.trim());
-    const customNames = Array.from(new Set(
-      entries
-        .map(e => e.teacher?.trim())
-        .filter((t): t is string => !!t)
-    ));
-    return Array.from(new Set([...facultyNames, ...customNames])).sort();
-  };
-
-  const filteredWorkloadData = () => {
-    const rawData = getTeacherWorkloadData();
-    if (workloadTeacherFilter === 'All') return rawData;
-    return rawData.filter(t => t.name.toLowerCase().trim() === workloadTeacherFilter.toLowerCase().trim());
-  };
-
-  const getVacantAndGappedSlots = () => {
-    const gapsList: {
-      key: string;
-      class_name: AcademicClass;
-      day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-      period: string;
-      time_range: string;
-      reason: 'unscheduled' | 'no_teacher';
-      entry?: RoutineEntry;
-    }[] = [];
-
-    allClasses.forEach(cls => {
-      const routine = routines.find(r => r.class_name === cls);
-      
-      weekDays.forEach(day => {
-        standardPeriods.forEach(period => {
-          const timeRange = getPeriodTimeCombined(period) || '09:00 AM - 09:45 AM';
-          
-          if (!routine) {
-            gapsList.push({
-              key: `${cls}-${day}-${period}`,
-              class_name: cls,
-              day,
-              period,
-              time_range: timeRange,
-              reason: 'unscheduled'
-            });
-            return;
-          }
-          
-          const matchedEntry = entries.find(e => e.routine_id === routine.id && e.day === day && e.period === period);
-          if (!matchedEntry) {
-            gapsList.push({
-              key: `${cls}-${day}-${period}`,
-              class_name: cls,
-              day,
-              period,
-              time_range: timeRange,
-              reason: 'unscheduled'
-            });
-          } else if (!matchedEntry.teacher || matchedEntry.teacher.trim() === '') {
-            gapsList.push({
-              key: `${cls}-${day}-${period}`,
-              class_name: cls,
-              day,
-              period,
-              time_range: matchedEntry.time_range || timeRange,
-              reason: 'no_teacher',
-              entry: matchedEntry
-            });
-          }
-        });
-      });
-    });
-
-    return gapsList;
-  };
-
-  const getAvailableTeachersForSlot = (day: string, period: string) => {
-    const workloadData = getTeacherWorkloadData();
-    return workloadData.filter(t => {
-      const isBusy = t.assignments.some(a => 
-        a.day === day && 
-        a.period.toLowerCase().trim() === period.toLowerCase().trim()
-      );
-      return !isBusy;
-    });
-  };
-
-  const handleQuickAssignSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickAssignSlot) return;
-
-    const { className, day, period, timeRange } = quickAssignSlot;
-    const { subject, teacher } = quickForm;
-
-    let targetRoutine = routines.find(r => r.class_name === className);
-    const existingEntry = targetRoutine ? entries.find(ent => 
-      ent.routine_id === targetRoutine?.id && 
-      ent.day === day && 
-      ent.period === period
-    ) : null;
-
-    // Strict validation
-    const validation = validateRoutineCollision(
-      day,
-      timeRange,
-      className,
-      teacher,
-      existingEntry?.id || undefined
-    );
-    if (!validation.valid) {
-      setQuickError(validation.error || 'Conflict detected in timeslots.');
-      return;
-    }
-    setQuickError(null);
-
-    const conflictClass = checkTeacherConflict(day, period, teacher, existingEntry?.id || undefined, className);
-    if (conflictClass && !quickForceConflict) {
-      setQuickConflictWarning(`Teacher Conflict: ${teacher} is already assigned to ${conflictClass} during ${day} ${period}. Bypass warning to assign?`);
-      return;
-    }
-    
-    if (!targetRoutine) {
-      const newRoutine: Routine = {
-        id: `routine-${Date.now()}`,
-        class_name: className,
-        display_mode: 'online',
-        pdf_url: '',
-        override_active: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      dbService.saveRoutines([...routines, newRoutine]);
-      targetRoutine = newRoutine;
-    }
-
-    const finalExistingEntry = existingEntry || (targetRoutine ? entries.find(ent => 
-      ent.routine_id === targetRoutine?.id && 
-      ent.day === day && 
-      ent.period === period
-    ) : null);
-
-    if (finalExistingEntry) {
-      const updated = entries.map(ent => 
-        ent.id === finalExistingEntry.id 
-          ? { ...ent, subject: subject.trim() || ent.subject, teacher } 
-          : ent
-      );
-      dbService.saveRoutineEntries(updated);
-    } else {
-      const newEntry: RoutineEntry = {
-        id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        routine_id: targetRoutine.id,
-        day: day as any,
-        period,
-        subject: subject.trim() || 'General Studies',
-        teacher,
-        time_range: timeRange
-      };
-      dbService.saveRoutineEntries([...entries, newEntry]);
-    }
-
-    setQuickAssignSlot(null);
-    setQuickForm({ subject: '', teacher: '', isManual: false });
-    setQuickConflictWarning(null);
-    setQuickForceConflict(false);
-    fetchLocalData();
-  };
-
-  const workloadData = getTeacherWorkloadData();
-  const vacantSlots = getVacantAndGappedSlots();
-  
-  const filteredVac_gaps = vacantSlots.filter(s => {
-    const matchDay = analyticsDayFilter === 'All' || s.day === analyticsDayFilter;
-    const matchClass = analyticsClassFilter === 'All' || s.class_name === analyticsClassFilter;
-    return matchDay && matchClass;
-  });
-
-  return (
-    <div className="space-y-8 pb-10">
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="routines-administrative-boundary">
-      {/* LEFT SIDEBAR: Selected Classes and Timetable Modes */}
-      <div className="lg:col-span-1 space-y-4">
-        {/* Class selector */}
-        <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs">
-          <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 pb-2 border-b border-slate-100 mb-3 tracking-wider">
-            Academic Grade Division
-          </span>
-          <div className="space-y-1">
-            {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => (
-              <button
-                key={cls}
-                onClick={() => {
-                  setSelectedClass(cls);
-                  setIsAddingEntry(false);
-                  setEditingEntryId(null);
-                }}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer ${
-                  selectedClass === cls
-                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-55 hover:bg-slate-50'
-                }`}
-              >
-                {cls}
-              </button>
-            ))}
-            
-            <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
-              <button
-                onClick={() => setSelectedClass('Combined')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
-                  selectedClass === 'Combined'
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <span>Combined Routine</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                  selectedClass === 'Combined' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-                }`}>9-12 VIEW</span>
-              </button>
-
-              <button
-                onClick={() => setSelectedClass('FullMatrix')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
-                  selectedClass === 'FullMatrix'
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <span>📊 Full Routine Matrix</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                  selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-                }`}>Matrix</span>
-              </button>
-
-              <button
-                onClick={() => setSelectedClass('PeriodsMaster')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
-                  selectedClass === 'PeriodsMaster'
-                    ? 'bg-orange-600 text-white shadow-sm shadow-orange-600/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <span>⏱️ Periods Master</span>
-                <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono font-bold uppercase">Setup</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Timetable Method toggle */}
-        {activeRoutine && (
-          <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
-            <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 pb-2 border-b border-slate-100 tracking-wider">
-              Display Method
-            </span>
-            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-xl font-sans text-xs">
-              <button
-                onClick={() => updateDisplayMode('online')}
-                className={`py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg transition text-center cursor-pointer ${
-                  activeRoutine.display_mode === 'online'
-                    ? 'bg-white text-orange-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Online
-              </button>
-              <button
-                onClick={() => updateDisplayMode('pdf')}
-                className={`py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg transition text-center cursor-pointer ${
-                  activeRoutine.display_mode === 'pdf'
-                    ? 'bg-white text-orange-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                PDF Flyer
-              </button>
-            </div>
-            <p className="text-[10.5px] text-slate-400 leading-normal font-medium font-sans italic p-1">
-              {activeRoutine.display_mode === 'online' 
-                ? 'Dynamic routine grid managed on website directly' 
-                : 'Upload an administrative PDF document fallback.'}
-            </p>
-          </div>
-        )}
-
-        {/* Disabled Override Section - relocated to future update safely */}
-        <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-center space-y-1">
-          <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 pb-1.5 border-b border-slate-200 mb-2 tracking-wider flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3 h-3 text-slate-400" />
-            Timetable Override
-          </span>
-          <p className="text-[10.5px] text-slate-500 font-sans leading-normal font-medium italic">
-            Override settings have been relocated to Future Updates development roadmap (v2.0 BSEB automatic sync).
-          </p>
-        </div>
-      </div>
-
-      {/* RIGHT DISPLAY WORKSPACE CONTAINER */}
-      <div className="lg:col-span-3 space-y-6">
-        
-        {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
-        {selectedClass === 'PeriodsMaster' ? (
-          <PeriodsMasterWorkspace 
-            periodMasters={periodMasters} 
-            setPeriodMasters={setPeriodMasters} 
-            fetchLocalData={fetchLocalData} 
-          />
-        ) : selectedClass === 'FullMatrix' ? (
-          <ConsolidatedRoutineMatrix isAdmin={true} />
-        ) : selectedClass === 'Combined' ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs space-y-4 animate-in fade-in duration-200">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-                <h3 className="text-slate-900 text-sm font-black uppercase tracking-wider">
-                  Consolidated 9-12 Routine Grid
-                </h3>
-              </div>
-              <p className="text-slate-500 text-[11px] font-sans mt-0.5">
-                Consolidated administrative layout. Click on any block to edit, add, or clear timetable slots immediately across any grade class.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto border border-slate-150 rounded-xl">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
-                    <th className="p-3 w-28 border-r border-slate-150">Day</th>
-                    <th className="p-3 w-32 border-r border-slate-150">Period</th>
-                    <th className="p-3 border-r border-slate-150">Class 9</th>
-                    <th className="p-3 border-r border-slate-150">Class 10</th>
-                    <th className="p-3 border-r border-slate-150">Class 11</th>
-                    <th className="p-3">Class 12</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
-                  {weekDays.map((day) => {
-                    return standardPeriods.map((period, pIndex) => (
-                      <tr key={`${day}-${period}`} className={`hover:bg-slate-50/25 ${pIndex === 5 ? 'border-b-2 border-slate-200' : ''}`}>
-                        {pIndex === 0 && (
-                          <td rowSpan={6} className="p-3 bg-slate-50/70 border-r border-slate-150 font-black text-slate-900 uppercase tracking-wide text-center alignment-middle w-28 select-none">
-                            {day}
-                          </td>
-                        )}
-                        <td className="p-3 border-r border-slate-150 font-mono font-bold text-slate-500 flex flex-col justify-center">
-                          <span className="text-orange-600 font-extrabold">{period}</span>
-                          <span className="text-[10px] text-slate-400 font-medium leading-tight">{getPeriodTimeCombined(period) || 'Timing unset'}</span>
-                        </td>
-                        
-                        {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => {
-                          const matched = getCombinedEntry(cls, day, period);
-                          return (
-                            <td 
-                              key={cls}
-                              onClick={() => handleOpenCombinedCell(cls, day, period, matched || undefined)}
-                              className="p-3 border-r border-slate-155 min-w-[130px] hover:bg-orange-500/5 cursor-pointer transition-colors duration-100 text-left group"
-                            >
-                              {matched ? (
-                                <div className="space-y-1">
-                                  <div className="font-extrabold text-slate-800 leading-tight group-hover:text-orange-600">{matched.subject}</div>
-                                  <div className="text-slate-500 flex items-center gap-1 font-mono text-[10px]">
-                                    <User className="w-3 h-3 text-slate-400" />
-                                    {matched.teacher || '—'}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-slate-300 italic text-[10px] flex items-center gap-1 select-none">
-                                  <Plus className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  Empty Slot
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ));
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* SLEEK MODAL DIALOG OVERLAY FOR COMBINED CELL EDIT */}
-            {editingCombinedCell && (
-              <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 w-full max-w-md shadow-2xl space-y-4">
-                  <div className="flex justify-between items-start pb-2 border-b border-slate-100">
-                    <div>
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-600">
-                        Quick Routine Editor
-                      </span>
-                      <h4 className="text-slate-900 font-extrabold text-sm font-sans mt-0.5">
-                        {editingCombinedCell.className} • {editingCombinedCell.day} ({editingCombinedCell.period})
-                      </h4>
-                    </div>
-                    <button 
-                      onClick={() => setEditingCombinedCell(null)} 
-                      className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveCombinedCell} className="space-y-4 text-xs font-semibold font-sans">
-                    {/* Time Frame */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Standard Period Timing</label>
-                      <input
-                        type="text"
-                        value={combinedForm.time_range}
-                        onChange={(e) => setCombinedForm({ ...combinedForm, time_range: e.target.value })}
-                        required
-                        placeholder="e.g. 09:00 AM - 09:45 AM"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                      />
-                    </div>
-
-                    {/* Teacher input */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
-                      <div className="space-y-2">
-                        <select
-                          value={combinedForm.isManual ? 'manual_option' : (combinedForm.teacher || '')}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'manual_option') {
-                              setCombinedForm(prev => ({ ...prev, isManual: true, teacher: '' }));
-                            } else {
-                              const matched = faculty.find(f => f.name === val);
-                              setCombinedForm(prev => ({ 
-                                ...prev, 
-                                isManual: false, 
-                                teacher: val,
-                                subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
-                              }));
-                            }
-                            setCombinedConflictWarning(null);
-                          }}
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg font-medium"
-                        >
-                          <option value="">Select Teacher from Faculty...</option>
-                          {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
-                              {f.name} ({f.department || f.subject})
-                            </option>
-                          ))}
-                          <option value="manual_option">-- Type manually/custom --</option>
-                        </select>
-
-                        {combinedForm.isManual && (
-                          <input
-                            type="text"
-                            value={combinedForm.teacher}
-                            onChange={(e) => {
-                              setCombinedForm({ ...combinedForm, teacher: e.target.value });
-                              setCombinedConflictWarning(null);
-                            }}
-                            required
-                            placeholder="Type teacher name..."
-                            className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Subject */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
-                      <input
-                        type="text"
-                        value={combinedForm.subject}
-                        onChange={(e) => setCombinedForm({ ...combinedForm, subject: e.target.value })}
-                        required
-                        placeholder="e.g. Social Science II"
-                        list="existing-subjects"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                      />
-                    </div>
-
-                    {/* Strict blocker validation error box */}
-                    {combinedError && (
-                      <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2.5 text-red-800 animate-pulse">
-                        <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
-                        <div className="flex-1 text-left">
-                          <p className="text-[11px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Strict Validation Blocker</p>
-                          <p className="text-[10.5px] leading-normal">{combinedError}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Conflict Warning block */}
-                    {combinedConflictWarning && (
-                      <div className="bg-amber-50 border border-amber-205 p-3 rounded-xl flex items-start gap-2 text-slate-800 font-medium leading-relaxed">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div className="space-y-1.5 flex-1 p-0.5">
-                          <p className="text-[11px] font-sans">{combinedConflictWarning}</p>
-                          <label className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-800 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={combinedForceConflict}
-                              onChange={(e) => setCombinedForceConflict(e.target.checked)}
-                              className="mr-1.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                            />
-                            Ignore collision & merge
-                          </label>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <div>
-                        {editingCombinedCell.entry && (
-                          <button
-                            type="button"
-                            onClick={handleClearCombinedCell}
-                            className="px-3.5 py-2 hover:bg-red-50 text-red-600 rounded-lg text-xs font-bold border border-red-200 hover:border-red-500 cursor-pointer transition"
-                          >
-                            Clear Slot
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingCombinedCell(null)}
-                          className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-4.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold cursor-pointer transition"
-                        >
-                          Save Slot
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* CLASS-WISE ONLINE GRID WORKSPACE */
-          activeRoutine && activeRoutine.display_mode === 'pdf' ? (
-            /* PDF SOURCING BLOCK */
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-              <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
-                PDF Document Sourcing
-              </h3>
-              <p className="text-slate-500 text-xs">
-                Upload the administrative BSEB timetable flyer template for {selectedClass}. Live frame and download links are automatically set.
-              </p>
-
-              <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-605 font-bold">Attached URL:</span>
-                  <span className="text-slate-500 truncate max-w-sm font-mono text-[10px] bg-white p-1 rounded border border-slate-200">
-                    {activeRoutine.pdf_url || 'No File Sourced Yet'}
-                  </span>
-                </div>
-
-                <div className="flex gap-2 mt-4 text-xs font-bold font-sans">
-                  <button
-                    onClick={handleAssignPDF}
-                    className="py-2 px-4 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg uppercase tracking-wide shadow-sm cursor-pointer"
-                  >
-                    Attach PDF from Media Library
-                  </button>
-                  {activeRoutine.pdf_url && (
-                    <a
-                      href={activeRoutine.pdf_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-2 border border-slate-200 hover:border-slate-350 bg-white rounded-lg flex items-center justify-center text-slate-700 hover:text-slate-950"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* ONLINE TIMETABLE GRID MATRIX */
-            <div className="space-y-4">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                  <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
-                    Online Routines Slots Matrix ({selectedClass})
-                  </h3>
-                  <p className="text-slate-500 text-[11px] font-sans">
-                    Construct period sheets by appending lectures (Monday to Saturday sequence).
-                  </p>
-                </div>
-
-                {!isAddingEntry && (
-                  <button
-                    onClick={() => {
-                      setEditingEntryId(null);
-                      setEntryForm({
-                        day: 'Monday',
-                        period: 'Period 1',
-                        time_range: '09:00 AM - 09:45 AM',
-                        subject: '',
-                        teacher: ''
-                      });
-                      setIsManualTeacher(false);
-                      setIsAddingEntry(true);
-                      setConflictWarning(null);
-                      setForceConflict(false);
-                      setFormError(null);
-                    }}
-                    className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Append Period Lecture
-                  </button>
-                )}
-              </div>
-
-              {isAddingEntry && (
-                /* ADD/EDIT ENTRY FORM PANEL */
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-2xs animate-in slide-in-from-top-3 duration-150">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-200/50 mb-4 text-xs">
-                    <span className="font-extrabold uppercase font-mono text-slate-500 text-[10px]">
-                      {editingEntryId ? 'Modify Timetable Slot Details' : 'Create Timetable Slot Entry'}
-                    </span>
-                    <button 
-                      onClick={() => {
-                        setIsAddingEntry(false);
-                        setEditingEntryId(null);
-                      }} 
-                      className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleAddEntrySubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold font-sans">
-                    {(() => {
-                      const uniqueTemplates = entries.reduce((acc, ent) => {
-                        const key = `${ent.period || ''}-${ent.subject || ''}-${ent.teacher || ''}`;
-                        if (ent.period && ent.subject && !acc.some(x => `${x.period || ''}-${x.subject || ''}-${x.teacher || ''}` === key)) {
-                          acc.push(ent);
-                        }
-                        return acc;
-                      }, [] as RoutineEntry[]);
-                      if (uniqueTemplates.length === 0) return null;
-                      return (
-                        <div className="space-y-1 sm:col-span-3 pb-2 border-b border-dashed border-slate-200">
-                          <label className="text-orange-600 block text-[10px] uppercase font-mono font-extrabold tracking-wider flex items-center gap-1 leading-none">
-                            <Sparkles className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
-                            Smart Inheritance & Clone Template (Optional)
-                          </label>
-                          <select
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val) {
-                                const selectedEnt = entries.find(ent => ent.id === val);
-                                if (selectedEnt) {
-                                  const isPM = periodMasters.some(pm => pm.name === selectedEnt.period);
-                                  setIsManualPeriod(!isPM);
-                                  const isFacultyUser = faculty.some(f => f.name === selectedEnt.teacher);
-                                  setIsManualTeacher(!isFacultyUser && !!selectedEnt.teacher);
-                                  setEntryForm(prev => ({
-                                    ...prev,
-                                    period: selectedEnt.period || '',
-                                    time_range: selectedEnt.time_range || '',
-                                    subject: selectedEnt.subject || '',
-                                    teacher: selectedEnt.teacher || ''
-                                  }));
-                                }
-                              }
-                            }}
-                            className="w-full p-2 border border-orange-200 bg-orange-50/10 hover:bg-orange-50/25 rounded-lg text-slate-800 focus:outline-orange-500 font-bold font-sans text-xs transition-all cursor-pointer"
-                          >
-                            <option value="">-- Choose existing configured slot to load & copy --</option>
-                            {uniqueTemplates.map(ent => (
-                              <option key={ent.id} value={ent.id}>
-                                {ent.period} • {ent.subject} {ent.teacher ? `(${ent.teacher})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Week Day</label>
-                      <select
-                        value={entryForm.day}
-                        onChange={(e) => setEntryForm({ ...entryForm, day: e.target.value as any })}
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500"
-                      >
-                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Period Slot Template</label>
-                      <select
-                        value={isManualPeriod ? 'manual_override' : (entryForm.period || '')}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === 'manual_override') {
-                            setIsManualPeriod(true);
-                            setEntryForm(prev => ({ ...prev, period: '', time_range: '' }));
-                          } else {
-                            setIsManualPeriod(false);
-                            const matchedMaster = periodMasters.find(pm => pm.name === val);
-                            setEntryForm(prev => ({ 
-                              ...prev, 
-                              period: val, 
-                              time_range: matchedMaster ? matchedMaster.time_range : (prev.time_range || '')
-                            }));
-                          }
-                          setConflictWarning(null);
-                        }}
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                      >
-                        <option value="">-- Choose Period Master --</option>
-                        {periodMasters.map(pm => (
-                          <option key={pm.id} value={pm.name}>
-                            {pm.name} ({pm.time_range})
-                          </option>
-                        ))}
-                        <option value="manual_override">✍️ Custom Period (Manual Override)</option>
-                      </select>
-                    </div>
-
-                    {isManualPeriod && (
-                      <div className="space-y-1">
-                        <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Custom Period Name</label>
-                        <input
-                          type="text"
-                          value={entryForm.period || ''}
-                          onChange={(e) => {
-                            setEntryForm({ ...entryForm, period: e.target.value });
-                            setConflictWarning(null);
-                          }}
-                          placeholder="e.g. Special Assembly"
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                          required
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">
-                        Time Frame {!isManualPeriod && entryForm.period && ' (Auto-populated)'}
-                      </label>
-                      <input
-                        type="text"
-                        value={entryForm.time_range || ''}
-                        onChange={(e) => setEntryForm({ ...entryForm, time_range: e.target.value })}
-                        placeholder="e.g. 09:00 AM - 09:45 AM"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1 sm:col-span-2">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
-                      <input
-                        type="text"
-                        value={entryForm.subject}
-                        onChange={(e) => setEntryForm({ ...entryForm, subject: e.target.value })}
-                        placeholder="e.g. Mathematics II"
-                        list="existing-subjects"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500"
-                        required
-                      />
-                      <datalist id="existing-subjects">
-                        {Array.from(new Set([
-                          ...entries.map(e => e.subject),
-                          ...faculty.map(f => f.subject)
-                        ].filter(Boolean))).map(subj => (
-                          <option key={subj} value={subj} />
-                        ))}
-                      </datalist>
-                    </div>
-
-                    {/* Teacher Input from Faculty list */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
-                      <div className="space-y-1.5">
-                        <select
-                          value={isManualTeacher ? 'manual_option' : (entryForm.teacher || '')}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'manual_option') {
-                              setIsManualTeacher(true);
-                              setEntryForm(prev => ({ ...prev, teacher: '' }));
-                            } else {
-                              setIsManualTeacher(false);
-                              const matched = faculty.find(f => f.name === val);
-                              setEntryForm(prev => ({ 
-                                ...prev, 
-                                teacher: val,
-                                subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
-                              }));
-                            }
-                            setConflictWarning(null);
-                          }}
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500"
-                        >
-                          <option value="">Select from Faculty List...</option>
-                          {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
-                              {f.name} ({f.department ||'General'})
-                            </option>
-                          ))}
-                          <option value="manual_option">-- Type manually/custom --</option>
-                        </select>
-                        
-                        {isManualTeacher && (
-                          <input
-                            type="text"
-                            value={entryForm.teacher || ''}
-                            onChange={(e) => {
-                              setEntryForm({ ...entryForm, teacher: e.target.value });
-                              setConflictWarning(null);
-                            }}
-                            placeholder="Type teacher name..."
-                            className="w-full p-2 border border-slate-205 bg-white rounded-lg focus:outline-orange-500"
-                            required
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Non-blocking UI override warning block */}
-                    {conflictWarning && (
-                      <div className="sm:col-span-3 bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-start gap-2.5 text-slate-800">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div className="flex-1 space-y-2">
-                          <p className="text-[11px] leading-relaxed font-bold">{conflictWarning}</p>
-                          <label className="flex items-center gap-1.5 text-[9.5px] font-mono font-bold text-amber-800 tracking-wider uppercase cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={forceConflict}
-                              onChange={(e) => setForceConflict(e.target.checked)}
-                              className="mr-1 shadow-xs rounded border-amber-300 text-amber-605"
-                            />
-                            Instruct manual merging collision schedule bypass
-                          </label>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Strict blocker validation error box */}
-                    {formError && (
-                      <div className="sm:col-span-3 bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2.5 text-red-800 animate-pulse">
-                        <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-[11px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Strict Validation Blocker</p>
-                          <p className="text-[10.5px] leading-normal">{formError}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="sm:col-span-3 pt-3 flex justify-end gap-2 border-t border-slate-200/55 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAddingEntry(false);
-                          setEditingEntryId(null);
-                        }}
-                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg inline-block font-bold cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-1.5 font-bold cursor-pointer shadow-xs"
-                      >
-                        <Save className="w-4 h-4" />
-                        {editingEntryId ? 'Update Slot Row' : 'Save To Timetable'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* List of configured entries for class */}
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[10px] uppercase text-slate-450 tracking-wider">
-                        <th className="py-3 px-4 w-32">Day</th>
-                        <th className="py-3 px-4 w-32">Period Row</th>
-                        <th className="py-3 px-4 w-44">Time Frame</th>
-                        <th className="py-3 px-4">Subject</th>
-                        <th className="py-3 px-4">Teacher</th>
-                        <th className="py-3 px-4 w-32 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
-                      {classEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="text-center py-10 text-slate-400 italic">
-                            No slot matrix entries mapped for {selectedClass}. Append some rows above.
-                          </td>
-                        </tr>
-                      ) : (
-                        classEntries
-                          .sort((a,b) => {
-                            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                            const dayDiff = days.indexOf(a.day) - days.indexOf(b.day);
-                            if (dayDiff !== 0) return dayDiff;
-                            return a.period.localeCompare(b.period);
-                          })
-                          .map((ent) => (
-                            <tr key={ent.id} className="hover:bg-slate-50/50 transition duration-150">
-                              <td className="py-3 px-4 font-bold text-slate-900">{ent.day}</td>
-                              <td className="py-3 px-4 font-mono font-bold text-orange-600">{ent.period}</td>
-                              <td className="py-3 px-4 font-mono font-medium text-slate-500">{ent.time_range}</td>
-                              <td className="py-3 px-4 font-bold text-slate-800">{ent.subject}</td>
-                              <td className="py-3 px-4 text-slate-550 font-medium">
-                                {ent.teacher ? (
-                                  <span className="flex items-center gap-1">
-                                    <User className="w-3.5 h-3.5 text-slate-400" />
-                                    {ent.teacher}
-                                  </span>
-                                ) : '—'}
-                              </td>
-                              <td className="py-3 px-4 text-center">
-                                {deletingId === ent.id ? (
-                                  <div className="flex items-center justify-center gap-1 animate-in fade-in duration-100">
-                                    <button
-                                      onClick={() => handleDeleteEntryInline(ent.id)}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                                    >
-                                      Confirm
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingId(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                      onClick={() => handleEditClick(ent)}
-                                      className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 text-slate-500 hover:text-orange-600 hover:border-orange-500/20 cursor-pointer transition-colors"
-                                      title="Edit Timing Slot"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingId(ent.id)}
-                                      className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 hover:border-red-500/20 text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
-                                      title="Delete Period Slot"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )
-        )}
-      </div>
-    </div>
-
-      {/* SMART RESOURCE INTEGRITY OPTIMIZER */}
-      <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 shadow-3xs space-y-6" id="smart-resource-optimizer-container">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-1 px-2.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75 animate-duration-1000"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-                </span>
-                Smart Companion v1.1
-              </span>
-              <span className="text-xs text-slate-400 font-medium font-sans">| School Routine Audit Intelligence</span>
-            </div>
-            <h3 className="text-slate-900 font-black text-xl tracking-tight leading-none uppercase">
-              Schedule Resource Integrity Optimizer
-            </h3>
-            <p className="text-slate-500 text-xs font-sans max-w-2xl font-medium">
-              Real-time teacher workload balance monitors and gaps detection. Automate substitute teacher suggestions to prevent unattended school lectures.
-            </p>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="flex items-center gap-3 self-start md:self-center font-mono">
-            <div className="bg-white p-3 px-4 rounded-xl border border-slate-200/75 shadow-3xs text-center min-w-[120px]">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Scheduled Load</div>
-              <div className="text-xl font-black text-sky-900">
-                {entries.length} <span className="text-xs text-slate-400 font-medium">periods</span>
-              </div>
-            </div>
-            <div className={`p-3 px-4 rounded-xl border shadow-3xs text-center min-w-[120px] ${getVacantAndGappedSlots().length > 0 ? 'bg-amber-50/50 border-amber-200 animate-pulse' : 'bg-white border-slate-200'}`}>
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Unattended Gaps</div>
-              <div className={`text-xl font-black ${getVacantAndGappedSlots().length > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
-                {getVacantAndGappedSlots().length} <span className="text-xs text-slate-400 font-medium">unassigned</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans text-xs">
-          {/* Tab Selection */}
-          <div className="flex bg-slate-200/60 p-1 rounded-xl w-fit border border-slate-250">
-            <button
-              onClick={() => setOptimizerTab('workload')}
-              className={`py-1.5 px-4 font-bold rounded-lg transition-all duration-100 uppercase text-[10.5px] cursor-pointer ${
-                optimizerTab === 'workload'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-550 hover:text-slate-900'
-              }`}
-            >
-              Faculty Workload Balance ({getTeacherWorkloadData().length})
-            </button>
-            <button
-              onClick={() => setOptimizerTab('vacant')}
-              className={`py-1.5 px-4 font-bold rounded-lg transition-all duration-100 uppercase text-[10.5px] flex items-center gap-1.5 cursor-pointer ${
-                optimizerTab === 'vacant'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-slate-550 hover:text-slate-900'
-              }`}
-            >
-              Class Gaps & Substitution Assistant
-              {getVacantAndGappedSlots().length > 0 && (
-                <span className="bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px] font-mono leading-none">
-                  {getVacantAndGappedSlots().length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Filtering for Vacancies tab */}
-          {optimizerTab === 'vacant' && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Day:</span>
-                <select
-                  value={analyticsDayFilter}
-                  onChange={(e) => setAnalyticsDayFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
-                >
-                  <option value="All">All Days</option>
-                  {weekDays.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Grade:</span>
-                <select
-                  value={analyticsClassFilter}
-                  onChange={(e) => setAnalyticsClassFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
-                >
-                  <option value="All">All Grades</option>
-                  {allClasses.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Filtering for Workload tab */}
-          {optimizerTab === 'workload' && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Filter Teacher:</span>
-                <select
-                  value={workloadTeacherFilter}
-                  onChange={(e) => setWorkloadTeacherFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer max-w-[200px]"
-                >
-                  <option value="All">All Faculty</option>
-                  {allTeachersFromData().map(teacher => (
-                    <option key={teacher} value={teacher}>{teacher}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Tab Content A: Teacher Workload Balance */}
-        {optimizerTab === 'workload' ? (
-          <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-2xs animate-in fade-in duration-200">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/75 border-b border-slate-100 text-left font-mono text-[9px] uppercase tracking-wider text-slate-450 font-bold">
-                    <th className="py-3 px-5">Instructor Name</th>
-                    <th className="py-3 px-4">Subject Specialty / Department</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4 text-center">Assigned Load / Week</th>
-                    <th className="py-3 px-4">Workload Distribution Guard</th>
-                    <th className="py-3 px-5 text-right font-sans lowercase">details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750">
-                  {filteredWorkloadData().length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400 italic">
-                        {workloadTeacherFilter === 'All'
-                          ? "No teachers scheduled yet across routine database."
-                          : `No workload data found for "${workloadTeacherFilter}".`}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredWorkloadData().map((t) => {
-                      let loadStatus = "Light Load";
-                      let maxLimit = 15;
-                      let progressPercent = Math.min((t.loadCount / maxLimit) * 100, 100);
-                      
-                      if (t.loadCount > 12) {
-                        loadStatus = "Heavy Load / Over-booked";
-                      } else if (t.loadCount >= 6) {
-                        loadStatus = "Optimal Workload";
-                      } else if (t.loadCount > 0) {
-                        loadStatus = "Under-committed";
-                      } else {
-                        loadStatus = "No active classes";
-                      }
-
-                      return (
-                        <tr key={t.name} className="hover:bg-slate-50/50 transition duration-100">
-                          <td className="py-4 px-5 font-black text-slate-900 text-xs flex items-center gap-2.5">
-                            <span className="p-1 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] text-slate-500 font-mono font-bold select-none">
-                              {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
-                            </span>
-                            <div>
-                              <div className="font-sans font-extrabold text-slate-900 text-[12.5px] leading-snug">{t.name}</div>
-                              <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">{t.type}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 font-bold text-slate-600">
-                            {t.department}
-                          </td>
-                          <td className="py-4 px-4 text-[10.5px]">
-                            <span className={`px-2 py-0.5 border text-[9px] font-mono leading-none rounded uppercase ${t.type === 'Regular' ? 'bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-150' : 'bg-slate-50 text-slate-605 border-slate-150'}`}>
-                              {t.type}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <span className="text-sm font-black font-mono text-slate-950">
-                              {t.loadCount}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-semibold pl-1">classes</span>
-                          </td>
-                          <td className="py-4 px-4 max-w-xs">
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] font-mono font-bold">
-                                <span className={`font-semibold ${t.loadCount > 12 ? 'text-red-650' : t.loadCount >= 6 ? 'text-sky-655' : 'text-amber-600'}`}>{loadStatus}</span>
-                                <span className="text-slate-500">{Math.round(progressPercent)}% limit</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-sky-500' : 'bg-amber-500'}`}
-                                  style={{ width: `${progressPercent}%` }}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-5 text-right">
-                            <div className="flex flex-wrap gap-1 justify-end max-w-sm ml-auto">
-                              {t.assignments.length === 0 ? (
-                                <span className="text-slate-350 text-[10px] italic">No active slots assigned</span>
-                              ) : (
-                                t.assignments.map(a => (
-                                  <span key={a.id} className="text-[9.5px] bg-slate-50 border border-slate-150 rounded px-1.5 py-0.5 text-slate-600 font-mono leading-none select-none hover:bg-orange-50 hover:border-orange-200 hover:text-orange-900 transition-colors" title={`${a.subject}`}>
-                                    {a.day.substring(0,3)} {a.period.replace('Period ','P')}: {a.class_name.replace('Class ','C')}
-                                  </span>
-                                ))
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          /* Tab Content B: Class Gaps / Vacancies Substitution Assistant */
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in duration-200">
-            {/* Vacancy Checklist List */}
-            <div className="xl:col-span-2 space-y-3">
-              <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h4 className="text-xs font-mono font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    Detected Routine Gaps ({filteredVac_gaps.length})
-                  </h4>
-                  <span className="text-[10px] text-slate-400 font-sans font-medium">Click on any gap to trigger the substitute advisor</span>
-                </div>
-
-                <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100/50">
-                  {filteredVac_gaps.length === 0 ? (
-                    <div className="text-center py-16 space-y-2 select-none">
-                      <div className="mx-auto w-10 h-10 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-green-600 font-bold">
-                        ✓
-                      </div>
-                      <p className="text-slate-850 font-black text-sm">Perfect Grid Integrity!</p>
-                      <p className="text-slate-400 text-[11px] font-sans max-w-xs mx-auto leading-relaxed">
-                        Every single day/period hour for Grade Classes (9-12) has custom scheduled lectures with assigned teachers. No vacant hours detected!
-                      </p>
-                    </div>
-                  ) : (
-                    filteredVac_gaps.map((gap) => {
-                      const isUnscheduled = gap.reason === 'unscheduled';
-                      const isSelected = quickAssignSlot && 
-                                         quickAssignSlot.className === gap.class_name && 
-                                         quickAssignSlot.day === gap.day && 
-                                         quickAssignSlot.period === gap.period;
-
-                      return (
-                        <div 
-                          key={gap.key}
-                          onClick={() => {
-                            setQuickAssignSlot({
-                              className: gap.class_name,
-                              day: gap.day,
-                              period: gap.period,
-                              timeRange: gap.time_range
-                            });
-                            setQuickForm({
-                              subject: gap.entry?.subject || '',
-                              teacher: gap.entry?.teacher || '',
-                              isManual: false
-                            });
-                            setQuickConflictWarning(null);
-                            setQuickForceConflict(false);
-                            setQuickError(null);
-                          }}
-                          className={`pt-3 pb-3 px-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer transition ${
-                            isSelected 
-                              ? 'bg-orange-500/10 border-orange-550/30 border-2 shadow-2xs' 
-                              : 'bg-white hover:bg-slate-50 border border-transparent'
-                          }`}
-                        >
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center flex-wrap gap-1.5">
-                              <span className="px-2.5 py-0.5 bg-slate-900 text-white rounded text-[10px] font-extrabold uppercase select-none leading-none">
-                                {gap.class_name}
-                              </span>
-                              <span className="text-xs text-slate-800 font-extrabold">
-                                {gap.day} • <span className="text-orange-600 font-extrabold font-mono">{gap.period}</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 leading-none">
-                                {gap.time_range}
-                              </span>
-                            </div>
-                            
-                            <p className="text-[10.5px] text-slate-500 font-sans leading-normal font-medium italic flex items-center gap-1">
-                              {isUnscheduled ? (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                                  <span>Unpopulated hour. Absolutely no subject/lecture allocated in database matrix yet.</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-ping" />
-                                  <span>Class scheduled (<strong>{gap.entry?.subject}</strong>) but teacher left blank. No faculty assigned.</span>
-                                </>
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                            <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase rounded border select-none ${
-                              isUnscheduled 
-                                ? 'bg-amber-50 text-amber-700 border-amber-200' 
-                                : 'bg-red-50 text-red-705 border-red-200'
-                            }`}>
-                              {isUnscheduled ? 'Silent Gap' : 'Instructor Omission'}
-                            </span>
-                            <button className={`py-1.5 px-3 rounded-lg text-[10px] uppercase font-bold transition-all ${
-                              isSelected
-                                ? 'bg-orange-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-orange-500 hover:text-white cursor-pointer'
-                            }`}>
-                              {isSelected ? 'Selected' : 'Find Substitute'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Substitution Assistant Panel */}
-            <div className="xl:col-span-1">
-              {quickAssignSlot ? (
-                <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs space-y-4 animate-in slide-in-from-right-3 duration-150">
-                  <div className="pb-2.5 border-b border-slate-100/80">
-                    <span className="text-[9px] font-mono font-bold bg-orange-100 text-orange-950 px-2 py-0.5 rounded uppercase select-none leading-none">
-                      Cover Optimizer ✨
-                    </span>
-                    <h4 className="text-slate-900 font-black text-sm font-sans mt-2">
-                      Assigning {quickAssignSlot.className}
-                    </h4>
-                    <p className="text-slate-450 text-[10.5.5px] font-mono font-black leading-tight mt-0.5 uppercase tracking-wide">
-                      {quickAssignSlot.day} • {quickAssignSlot.period}
-                    </p>
-                  </div>
-
-                  {/* Smart substitute recommendations */}
-                  <div className="space-y-2.5">
-                    <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 tracking-wider">
-                      Suggested Substitute Teachers (Totally Free now):
-                    </span>
-                    
-                    <div className="space-y-1 w-full max-h-44 overflow-y-auto pr-1">
-                      {getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).length === 0 ? (
-                        <div className="p-2 border border-dashed border-red-200 bg-red-50 text-red-800 text-[10.5px] rounded-lg leading-normal font-sans">
-                          Conflict Alert: Every single teacher in the facility is already busy teaching other classes during this specific period slot! Consider typing a custom temp teacher below.
-                        </div>
-                      ) : (
-                        getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).map(t => {
-                          const fModel = faculty.find(f => f.name.toLowerCase().trim() === t.name.toLowerCase().trim());
-                          const teacherSubject = fModel?.subject || '';
-                          return (
-                            <div 
-                              key={t.name}
-                              onClick={() => {
-                                setQuickForm(prev => ({ 
-                                  ...prev, 
-                                  teacher: t.name, 
-                                  isManual: false,
-                                  subject: teacherSubject ? teacherSubject : (prev.subject || '')
-                                }));
-                                setQuickConflictWarning(null);
-                              }}
-                              className={`p-2 border rounded-xl flex items-center justify-between text-xs cursor-pointer select-none transition duration-100 ${
-                                quickForm.teacher === t.name 
-                                  ? 'bg-orange-50 border-orange-300' 
-                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                            <div className="space-y-0.5">
-                              <div className="font-extrabold text-slate-800 leading-none">{t.name}</div>
-                              <div className="text-[9px] font-mono text-slate-450">{t.department}</div>
-                            </div>
-                            <span className="text-[9px] font-mono font-black uppercase text-orange-700 bg-white px-1.5 py-0.5 rounded border border-orange-100">
-                              Free Now ({t.loadCount}c)
-                            </span>
-                          </div>
-                        ); })
-                      )}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleQuickAssignSubmit} className="space-y-3 text-xs font-semibold font-sans">
-                    {/* Teacher Input */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
-                      <div className="space-y-1.5">
-                        <select
-                          value={quickForm.isManual ? 'manual_option' : (quickForm.teacher || '')}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'manual_option') {
-                              setQuickForm(prev => ({ ...prev, isManual: true, teacher: '' }));
-                            } else {
-                              const matched = faculty.find(f => f.name === val);
-                              setQuickForm(prev => ({ 
-                                ...prev, 
-                                isManual: false, 
-                                teacher: val,
-                                subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
-                              }));
-                            }
-                            setQuickConflictWarning(null);
-                          }}
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg font-medium font-sans focus:outline-orange-500"
-                        >
-                          <option value="">Select recommended teacher...</option>
-                          {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
-                              {f.name} ({f.department || 'General'})
-                            </option>
-                          ))}
-                          <option value="manual_option">-- Type manually/custom --</option>
-                        </select>
-
-                        {quickForm.isManual && (
-                          <input
-                            type="text"
-                            value={quickForm.teacher}
-                            onChange={(e) => {
-                              setQuickForm({ ...quickForm, teacher: e.target.value });
-                              setQuickConflictWarning(null);
-                            }}
-                            required
-                            placeholder="Type teacher name..."
-                            className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Subject field */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
-                      <input
-                        type="text"
-                        value={quickForm.subject}
-                        onChange={(e) => setQuickForm({ ...quickForm, subject: e.target.value })}
-                        required
-                        placeholder="e.g. Chemistry II, Biology Lab"
-                        list="existing-subjects"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                      />
-                    </div>
-
-                    {/* Strict blocker validation error box */}
-                    {quickError && (
-                      <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2.5 text-red-800 animate-pulse">
-                        <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
-                        <div className="flex-1 text-left">
-                          <p className="text-[11px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Strict Validation Blocker</p>
-                          <p className="text-[10.5px] leading-normal">{quickError}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Conflict Override Warn */}
-                    {quickConflictWarning && (
-                      <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg text-slate-805 space-y-1.5 font-medium border-dashed">
-                        <p className="text-[10.5px] leading-relaxed font-bold">{quickConflictWarning}</p>
-                        <label className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase text-amber-800 tracking-wider cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={quickForceConflict}
-                            onChange={(e) => setQuickForceConflict(e.target.checked)}
-                            className="rounded border-amber-300 text-amber-605 focus:ring-amber-500 mr-0.5"
-                          />
-                          Confirm override collision
-                        </label>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-2 border-t border-slate-100 font-black">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuickAssignSlot(null);
-                        }}
-                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg uppercase tracking-wider text-[9.5px] cursor-pointer text-center"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={!quickForm.teacher}
-                        className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg uppercase tracking-wider text-[9.5px] shadow-sm disabled:opacity-40 cursor-pointer text-center"
-                      >
-                        Deploy Assistant!
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              ) : (
-                <div className="bg-white border border-dashed border-slate-350 rounded-2xl p-6 text-center text-slate-400 font-sans font-medium space-y-2 select-none h-full flex flex-col justify-center items-center min-h-[300px]">
-                  <div className="w-12 h-12 rounded-full border bg-white border-slate-150 text-slate-350 shadow-3xs flex items-center justify-center text-lg">
-                    ✨
-                  </div>
-                  <h4 className="text-slate-800 font-black text-xs uppercase tracking-wider leading-none">No Slot Highlighted</h4>
-                  <p className="text-[10.5px] max-w-[220px] leading-normal italic text-slate-450">
-                    Tap any detected gap or unassigned lecture row inside the gap checklist to analyze available substitutes and auto-assign cover.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // Custom hero overlay texts
+  hero_title: 'Empowering Secondary Scholars across Bihar State',
+  hero_subtitle: 'Official Digital Corridor & Student Academic Registrar',
+  hero_description: 'A premier educational institute offering secondary coaching, moral guidance, and holistic academic development for boys and girls.',
+  hero_badge_text: 'Government Senior Secondary Institution, Bihar',
+  hero_estd_text: 'ESTD. 1947',
+  hero_dise_text: 'DISE: 10230501XXX'
 };
 
+export const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
+  {
+    id: '11111111-1111-1111-1111-111111111111',
+    module_type: 'Hero Section',
+    title: 'Empowering Secondary Scholars across Bihar State',
+    subtitle: 'Official Digital Corridor & Student Academic Registrar',
+    description: 'A premier educational institute offering secondary coaching, moral guidance, and holistic academic development for boys and girls.',
+    image_url: 'school_hero_default',
+    button_text: 'Contact Admissions',
+    button_url: 'admissions',
+    display_order: 1,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '22222222-2222-2222-2222-222222222222',
+    module_type: 'Notice Feed',
+    title: 'BSEB Directives & Circulars',
+    subtitle: 'Latest Notice Board Bulletin',
+    description: 'Review official board datesheets, public notifications, and scholarship announcements issued dynamically.',
+    image_url: '',
+    button_text: 'View Notice Board',
+    button_url: 'notices',
+    display_order: 2,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '88888888-8888-8888-8888-888888888888',
+    module_type: 'Events Preview',
+    title: 'Latest School Events & Bulletins',
+    subtitle: 'School Life & Chronicles',
+    description: 'Stay up to date with Bihar board workshops, science exhibitions, celebrations, and special academic forums.',
+    image_url: '',
+    button_text: 'Explore Events Calendar',
+    button_url: 'events',
+    display_order: 3,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '33333333-3333-3333-3333-333333333333',
+    module_type: 'About School',
+    title: 'About Rajendra Prasad Government Senior Secondary School',
+    subtitle: 'Accredited BSEB Campus',
+    description: 'Offering structured streams in Science, Commerce, and Arts with high-class state board coaching models. Rooted in disciplined moral character alignment.',
+    image_url: '',
+    button_text: 'Learn More',
+    button_url: 'about',
+    display_order: 4,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '44444444-4444-4444-4444-444444444444',
+    module_type: 'Quick Links',
+    title: 'Academic Pathways',
+    subtitle: 'Choose Your Specialization Stream',
+    description: 'Access direct seat counts, syllabus specifications, and stream criteria for Science, Arts, and Commerce lanes.',
+    image_url: '',
+    button_text: 'View Enrollment Criteria',
+    button_url: 'admissions',
+    display_order: 5,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '55555555-5555-5555-5555-555555555555',
+    module_type: 'Contact Information',
+    title: 'Physical & Digital Desk Queries',
+    subtitle: 'Connect With Us Today',
+    description: 'Have inquiries? Submit direct transcripts verification letters, check admission criteria, or call physical administrative offices.',
+    image_url: '',
+    button_text: 'Access Contact Desk',
+    button_url: 'contact',
+    display_order: 7,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '66666666-6666-6666-6666-666666666666',
+    module_type: 'Academic Quick Links',
+    title: 'Student Portals & Academic Records',
+    subtitle: 'Academics Desk',
+    description: 'Access live class timetables, download examinations sheets, and review the state holidays calendar.',
+    image_url: '',
+    button_text: '',
+    button_url: '',
+    display_order: 6, // Order placement below About School/Notice board
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: '77777777-7777-7777-7777-777777777777',
+    module_type: 'Featured Faculty',
+    title: 'Featured Faculty & Lecturers',
+    subtitle: 'Staff and Advisory Council',
+    description: 'Meet our distinguished educators leading key branches of science, mathematics, literature, and arts.',
+    image_url: '',
+    button_text: 'Show All Faculty Directory',
+    button_url: 'faculty',
+    display_order: 8,
+    is_visible: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  }
+];
 
-// ============================================================================
-// B. EXAMS ADMINISTRATIVE MODULE
-// ============================================================================
-const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
-  const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
-  const [entries, setEntries] = useState<ExamEntry[]>([]);
-  
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
-  const [isAddingSchedule, setIsAddingSchedule] = useState(false);
-  const [isAddingEntry, setIsAddingEntry] = useState(false);
+const DEFAULT_MEDIA_ITEMS: MediaItem[] = [
+  {
+    id: 'media_logo',
+    file_name: 'bseb_emblem_shashi.png',
+    bucket: 'logos',
+    file_url: 'school_logo_default',
+    file_type: 'image',
+    uploaded_at: '2026-06-01T10:00:00Z',
+    size_kb: 45
+  },
+  {
+    id: 'media_hero',
+    file_name: 'patna_campus_vintage.jpg',
+    bucket: 'hero-images',
+    file_url: 'school_hero_default',
+    file_type: 'image',
+    uploaded_at: '2026-06-01T10:05:00Z',
+    size_kb: 420
+  },
+  {
+    id: 'media_pdf1',
+    file_name: 'BSEB_Class12_Datesheet_Extension_Official.pdf',
+    bucket: 'notices',
+    file_url: 'data:application/pdf;base64,JVBERi0xLjQKJScAAQ==_sample_notice_pdf',
+    file_type: 'pdf',
+    uploaded_at: '2026-06-10T14:30:00Z',
+    size_kb: 1120
+  },
+  {
+    id: 'media_pdf2',
+    file_name: 'Bihar_PostMatric_Scholarship_2026_Guidelines.pdf',
+    bucket: 'downloads',
+    file_url: 'data:application/pdf;base64,JVBERi0xLjQKJScAAQ==_sample_scholarship_guideline',
+    file_type: 'pdf',
+    uploaded_at: '2026-06-08T09:12:00Z',
+    size_kb: 950
+  }
+];
 
-  // Confirmation safe state trackers
-  const [deletingSchId, setDeletingSchId] = useState<string | null>(null);
-  const [deletingEntId, setDeletingEntId] = useState<string | null>(null);
+const DEFAULT_NOTICES: Notice[] = [
+  {
+    id: 'notice_1',
+    title: 'BSEB Class 12 Registration Form Submission Deadline Extended',
+    summary: 'The Bihar School Examination Board (BSEB) has officially extended the deadline for online submission of registrations for the 2027 Intermediate exams.',
+    content: `All Science, Arts, and Commerce students of Class 11 and 12 are hereby notified that the Bihar School Examination Board (BSEB) has extended the deadline for submitting registration forms.\n\nThe revised schedules and critical instructions are as follows:\n\n1. **Extended Deadline:** Students can now submit their registrations with normal fees until June 25, 2026. Late submissions after this date will incur a penalty.\n2. **Verification Check:** Students must double-check spelling, gender, category, and subject titles matching their official matriculation certificates directly with their homeroom registrar before applying.\n3. **Required Documents:**\n   - Original Matriculation (Class 10) Marks Card and SLC.\n   - Passport size identity photos (clear background with name stamp).\n   - Digitally verified Caste Certificate (SC/ST/EBC for fee waivers).\n   - Aadhaar enrollment receipt.\n\nPlease contact Room 104 between 10:00 AM and 2:00 PM for registration confirmation and receipt collection. Do not wait for the final day to avoid portal traffic.`,
+    category: 'Admission Notice',
+    priority: 'Critical',
+    status: 'Published',
+    featured_image: '',
+    pdf_url: 'media_pdf1', // references media ID or external URL
+    is_pinned: true,
+    show_on_homepage: true,
+    publish_date: '2026-06-10',
+    created_at: '2026-06-10T14:30:00Z',
+    updated_at: '2026-06-10T14:30:00Z'
+  },
+  {
+    id: 'notice_2',
+    title: 'Bihar Post-Matric Scholarship Scheme 2026: Online Applications Opening',
+    summary: 'The SC/ST/OBC and Minority welfare department of Bihar announces online enrollment for the Post-Matric Scholarship (PMS) portal for Classes 11 and 12.',
+    content: `The Department of Social Welfare and Backward Classes, Government of Bihar, is opening the online portal for the Post-Matric Scholarship (PMS) Scheme for the academic year 2026-2027.\n\nCandidates belonging to eligible communities (SC, ST, EBC, BC) enrolled in Classes 11 and 12 at our institution are instructed to assemble documents for application.\n\n### Eligibility Criteria:\n- Applicant must be a permanent resident of Bihar state.\n- Candidate should belong to SC, ST, EBC, or BC categories.\n- Combined family annual income must not exceed ₹2,500,000.\n\n### Documents Required:\n- Aadhaar Card (Must be paired and active with the student's mobile number).\n- Caste Certificate issued by competent circle officer.\n- Income Certificate (Issued on or after April 1, 2026).\n- Residential/Domicile Certificate.\n- Institution Fee Receipt and Bonafide Certificate (obtainable from the office clerk desk, Counter No. 3).\n\nDetails are provided in the official scholarship circular attached below.`,
+    category: 'Scholarship Notice',
+    priority: 'High',
+    status: 'Published',
+    featured_image: '',
+    pdf_url: 'media_pdf2',
+    is_pinned: false,
+    show_on_homepage: true,
+    publish_date: '2026-06-08',
+    created_at: '2026-06-08T09:12:00Z',
+    updated_at: '2026-06-08T09:12:00Z'
+  },
+  {
+    id: 'notice_3',
+    title: 'Bihar Board Merit Student Awards: Cash Incentives & Free Tablets',
+    summary: 'The Education Department, Govt. of Bihar, has announced cash awards of ₹1 Lakh, laptops, and tablets for students securing State Ranks in board exams.',
+    content: `We proudly announce that the Government of Bihar, under the meritorious student support scheme, has authorized academic rewards for state and district school board rankers.\n\n### Award Categories:\n- **State Rank 1 to 5:** Cash incentive of ₹1,00,000, one modern study laptop, e-book reader, and official citation plaque.\n- **State Rank 6 to 10:** Cash incentive of ₹75,000, laptop, e-reader, and citation.\n- **School/District Toppers:** Tablets and study kits.\n\nA ceremonial facilitation event will be held on June 28, 2026, at the Patna Bapu Sabhagar Auditorium. Awardee forms must be collected and signed by parents-guardians by June 18 at Room 10B.`,
+    category: 'Important Announcement',
+    priority: 'High',
+    status: 'Published',
+    featured_image: '',
+    pdf_url: '',
+    is_pinned: true,
+    show_on_homepage: true,
+    publish_date: '2026-06-05',
+    created_at: '2026-06-05T11:00:00Z',
+    updated_at: '2026-06-05T11:00:00Z'
+  },
+  {
+    id: 'notice_4',
+    title: 'Quarterly Examination Schedule Released: Classes 9 to 12',
+    summary: 'The schedule and syllabus details for the First Quarterly Descriptive Tests for the Academic Year 2026-2027 are now active.',
+    content: `First terminal descriptive assessments and quarterly evaluation boards for Classes 9, 10, 11, and 12 will take place across June 22 to June 27, 2026.\n\nTests are designed following Bihar State Textbook Publishing Corporation guidelines and NCERT curriculum outlines.\n\n### Daily Exam Timings:\n- **Morning Sitting (Senior 11 & 12):** 09:30 AM to 12:45 PM\n- **Noon Sitting (Junior 09 & 10):** 01:30 PM to 04:45 PM\n\nAdmit cards and classroom seating index cards will be distributed by class teachers on June 18. Clearing pending fee collections and school council dues is required to retrieve board vouchers. Full datesheet details can be searched in the downloads archive.`,
+    category: 'Exam Notice',
+    priority: 'Normal',
+    status: 'Published',
+    featured_image: '',
+    pdf_url: '',
+    is_pinned: false,
+    show_on_homepage: true,
+    publish_date: '2026-06-04',
+    created_at: '2026-06-04T08:00:00Z',
+    updated_at: '2026-06-04T08:00:00Z'
+  },
+  {
+    id: 'notice_5',
+    title: 'School Campus Closed for Kabir Jayanti Gazette Holiday',
+    summary: 'The school premises will remain closed on June 15, 2026, in observance of Kabir Jayanti state holiday. Classes resume on June 16.',
+    content: `As per the official gazetted holidays order by the Bihar Government Cabinet Secretariats, all administrative offices, secondary blocks, laboratories, and physical education domains of Rajendra Prasad Government Senior Secondary School will remain closed on:\n\n**Monday, June 15, 2026 (Kabir Jayanti)**\n\nAll weekly board exams scheduled for Monday stand postponed to Saturday, June 20, 2026. General administrative counters, academic corridors, and admission services will resume on normal school timings from June 16, 2026 (07:30 AM to 01:30 PM summer schedule).`,
+    category: 'Holiday Notice',
+    priority: 'Normal',
+    status: 'Published',
+    featured_image: '',
+    pdf_url: '',
+    is_pinned: false,
+    show_on_homepage: true,
+    publish_date: '2026-06-02',
+    created_at: '2026-06-02T09:00:00Z',
+    updated_at: '2026-06-02T09:00:00Z'
+  },
+  {
+    id: 'notice_6',
+    title: 'Draft Notice: Summer Coaching Camp Registrations',
+    summary: 'Science & Math Remedial Camp for Class 10 and 12 Aspirants (Draft).',
+    content: `This notice is a draft copy for upcoming special coaching guidelines. Internal reviews are pending approval. Do not release yet.`,
+    category: 'General Notice',
+    priority: 'Normal',
+    status: 'Draft',
+    featured_image: '',
+    pdf_url: '',
+    is_pinned: false,
+    show_on_homepage: false,
+    publish_date: '2026-06-11',
+    created_at: '2026-06-11T08:00:00Z',
+    updated_at: '2026-06-11T08:00:00Z'
+  }
+];
 
-  // Form states
-  const [newScheduleTitle, setNewScheduleTitle] = useState('');
-  const [newEntryForm, setNewEntryForm] = useState<Partial<ExamEntry>>({
-    exam_date: '',
-    subject: '',
+const DEFAULT_DESIGNATIONS: string[] = [
+  'Principal',
+  'Vice Principal',
+  'Teacher',
+  'Guest Teacher',
+  'Clerk',
+  'Lab Assistant',
+  'Support Staff'
+];
+
+const DEFAULT_DEPARTMENTS: string[] = [
+  'Science',
+  'Commerce & Accounts',
+  'Arts & Humanities',
+  'Administration',
+  'Support & Lab'
+];
+
+const DEFAULT_FACULTY: Faculty[] = [
+  {
+    id: 'fac_1',
+    name: 'Dr. Satyendra Prasad Narain',
+    photo_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80',
+    designation: 'Principal',
+    department: 'Administration',
+    subject: 'Modern History & Governance',
+    qualification: 'Ph.D. in History (Patna University), M.A. B.Ed',
+    experience: '32 Years of Academic Administration',
+    bio: 'Dedicated to empowering secondary scholars and aligning the historical curriculum with modern ethical codes.',
+    email: 'principal@rp-gsss-patna.org',
+    phone: '+91 94310 12345',
+    display_order: 1,
+    is_active: true,
+    featured_homepage: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'fac_2',
+    name: 'Mrs. Shashi Prabha Dev',
+    photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+    designation: 'Vice Principal',
+    department: 'Science',
+    subject: 'Chemistry & Salt Analysis',
+    qualification: 'M.Sc in Applied Chemistry, B.Ed.',
+    experience: '24 Years of Teaching',
+    bio: 'Commitment to high practical labs precision, board standard answer sheets drafting, and students wellness guidelines.',
+    email: 'shashi.prabha@rp-gsss-patna.org',
+    phone: '+91 94412 34567',
+    display_order: 2,
+    is_active: true,
+    featured_homepage: true,
+    created_at: '2026-06-01T10:05:00Z',
+    updated_at: '2026-06-01T10:05:00Z'
+  },
+  {
+    id: 'fac_3',
+    name: 'Shri Manoj Kumar Sinha',
+    photo_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
+    designation: 'Teacher',
+    department: 'Science',
+    subject: 'Mathematics & Calculus',
+    qualification: 'M.Sc. in Mathematics (IIT Kharagpur), B.Ed.',
+    experience: '18 Years of Board Coaching',
+    bio: 'Experienced educator focused on algebra, integration proofs, and competitive math layouts for matriculation streams.',
+    email: 'manoj.kumar@rp-gsss-patna.org',
+    phone: '+91 94711 55667',
+    display_order: 3,
+    is_active: true,
+    featured_homepage: false,
+    created_at: '2026-06-01T10:10:00Z',
+    updated_at: '2026-06-01T10:10:00Z'
+  },
+  {
+    id: 'fac_4',
+    name: 'Dr. Rashmi Kumari Verma',
+    photo_url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80',
+    designation: 'Teacher',
+    department: 'Science',
+    subject: 'Physics & Electrostatics',
+    qualification: 'Ph.D. in Physics, M.Sc. (Patna Science College)',
+    experience: '15 Years of Academic Tenure',
+    bio: 'Specialist in semiconductor structures, electromagnetic induction, with intensive laboratory project mentoring.',
+    email: 'rashmi.kumar@rp-gsss-patna.org',
+    phone: '+91 94812 77889',
+    display_order: 4,
+    is_active: true,
+    featured_homepage: true,
+    created_at: '2026-06-01T10:12:00Z',
+    updated_at: '2026-06-01T10:12:00Z'
+  },
+  {
+    id: 'fac_5',
+    name: 'Shri Rakesh Ranjan Mishra',
+    photo_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&auto=format&fit=crop&q=80',
+    designation: 'Teacher',
+    department: 'Commerce',
+    subject: 'Accountancy & Audit',
+    qualification: 'M.Com, UGC-NET Qualified',
+    experience: '12 Years',
+    bio: 'Directing the double-entry bookkeeping ledgers and balance sheet alignment strategies for our Commerce students.',
+    email: 'rakesh.ranjan@rp-gsss-patna.org',
+    phone: '+91 95412 11223',
+    display_order: 5,
+    is_active: true,
+    featured_homepage: true,
+    created_at: '2026-06-01T10:15:00Z',
+    updated_at: '2026-06-01T10:15:00Z'
+  },
+  {
+    id: 'fac_6',
+    name: 'Mrs. Ananya Sen Roy',
+    photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+    designation: 'Teacher',
+    department: 'Arts',
+    subject: 'Political Science & Civil Rights',
+    qualification: 'M.A. in Political Science, B.Ed.',
+    experience: '10 Years',
+    bio: 'Promoting democratic literacy, constitutional framework reading, and public assembly debate skills.',
+    email: 'ananya.sen@rp-gsss-patna.org',
+    phone: '+91 96123 99887',
+    display_order: 6,
+    is_active: true,
+    featured_homepage: true,
+    created_at: '2026-06-01T10:20:00Z',
+    updated_at: '2026-06-01T10:20:00Z'
+  }
+];
+
+const DEFAULT_ROUTINES: Routine[] = [
+  {
+    id: 'routine_9',
+    class_name: 'Class 9',
+    display_mode: 'online',
+    pdf_url: '',
+    override_active: false,
+    override_title: 'Emergency Examination Schedule',
+    override_pdf_url: '',
+    override_start: '2026-06-15',
+    override_end: '2026-06-20',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'routine_10',
+    class_name: 'Class 10',
+    display_mode: 'online',
+    pdf_url: '',
+    override_active: false,
+    override_title: 'Weekly Test Drive Override',
+    override_pdf_url: '',
+    override_start: '2026-06-18',
+    override_end: '2026-06-21',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'routine_11',
+    class_name: 'Class 11',
+    display_mode: 'online',
+    pdf_url: '',
+    override_active: false,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'routine_12',
+    class_name: 'Class 12',
+    display_mode: 'online',
+    pdf_url: '',
+    override_active: false,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  }
+];
+
+const DEFAULT_ROUTINE_ENTRIES: RoutineEntry[] = [
+  // Class 9 Class timetable
+  { id: 're_9_m1', routine_id: 'routine_9', day: 'Monday', period: 'Period 1', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_m2', routine_id: 'routine_9', day: 'Monday', period: 'Period 2', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_m3', routine_id: 'routine_9', day: 'Monday', period: 'Period 3', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_m4', routine_id: 'routine_9', day: 'Monday', period: 'Period 4', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_9_m5', routine_id: 'routine_9', day: 'Monday', period: 'Period 5', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_9_m6', routine_id: 'routine_9', day: 'Monday', period: 'Period 6', subject: 'Sanskrit', teacher: 'Acharya S. Dev', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_9_t1', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 1', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_t2', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 2', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_t3', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 3', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_t4', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 4', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_9_t5', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 5', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_9_t6', routine_id: 'routine_9', day: 'Tuesday', period: 'Period 6', subject: 'Physical Education', teacher: 'Mr. D. Singh', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_9_w1', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 1', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_w2', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 2', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_w3', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 3', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_w4', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 4', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_9_w5', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 5', subject: 'Sanskrit', teacher: 'Acharya S. Dev', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_9_w6', routine_id: 'routine_9', day: 'Wednesday', period: 'Period 6', subject: 'Computer Practice', teacher: 'Miss R. Verma', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_9_th1', routine_id: 'routine_9', day: 'Thursday', period: 'Period 1', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_th2', routine_id: 'routine_9', day: 'Thursday', period: 'Period 2', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_th3', routine_id: 'routine_9', day: 'Thursday', period: 'Period 3', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_th4', routine_id: 'routine_9', day: 'Thursday', period: 'Period 4', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_9_th5', routine_id: 'routine_9', day: 'Thursday', period: 'Period 5', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_9_th6', routine_id: 'routine_9', day: 'Thursday', period: 'Period 6', subject: 'Arts & Drawing', teacher: 'Mr. K. K. Jha', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_9_f1', routine_id: 'routine_9', day: 'Friday', period: 'Period 1', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_f2', routine_id: 'routine_9', day: 'Friday', period: 'Period 2', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_f3', routine_id: 'routine_9', day: 'Friday', period: 'Period 3', subject: 'Science Lab', teacher: 'Dr. V. Anand', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_f4', routine_id: 'routine_9', day: 'Friday', period: 'Period 4', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_9_f5', routine_id: 'routine_9', day: 'Friday', period: 'Period 5', subject: 'English Guidance', teacher: 'Mrs. J. Mishra', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_9_f6', routine_id: 'routine_9', day: 'Friday', period: 'Period 6', subject: 'Library Hour', teacher: 'Mr. P. Kumar', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_9_s1', routine_id: 'routine_9', day: 'Saturday', period: 'Period 1', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_9_s2', routine_id: 'routine_9', day: 'Saturday', period: 'Period 2', subject: 'Mathematics Quiz', teacher: 'Mr. R. K. Sinha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_9_s3', routine_id: 'routine_9', day: 'Saturday', period: 'Period 3', subject: 'Science Seminar', teacher: 'Dr. V. Anand', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_9_s4', routine_id: 'routine_9', day: 'Saturday', period: 'Period 4', subject: 'Moral Education', teacher: 'Principal', time_range: '11:15 AM - 12:00 PM' },
+
+  // Class 10 Timetable
+  { id: 're_10_m1', routine_id: 'routine_10', day: 'Monday', period: 'Period 1', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_10_m2', routine_id: 'routine_10', day: 'Monday', period: 'Period 2', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_10_m3', routine_id: 'routine_10', day: 'Monday', period: 'Period 3', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_10_m4', routine_id: 'routine_10', day: 'Monday', period: 'Period 4', subject: 'Sanskrit', teacher: 'Acharya S. Dev', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_10_m5', routine_id: 'routine_10', day: 'Monday', period: 'Period 5', subject: 'Hindi', teacher: 'Mrs. S. Pathak', time_range: '12:45 PM - 01:30 PM' },
+  { id: 're_10_m6', routine_id: 'routine_10', day: 'Monday', period: 'Period 6', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '01:30 PM - 02:15 PM' },
+
+  { id: 're_10_t1', routine_id: 'routine_10', day: 'Tuesday', period: 'Period 1', subject: 'Science', teacher: 'Dr. V. Anand', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_10_t2', routine_id: 'routine_10', day: 'Tuesday', period: 'Period 2', subject: 'Mathematics', teacher: 'Mr. R. K. Sinha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_10_t3', routine_id: 'routine_10', day: 'Tuesday', period: 'Period 3', subject: 'English', teacher: 'Mrs. J. Mishra', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_10_t4', routine_id: 'routine_10', day: 'Tuesday', period: 'Period 4', subject: 'Social Science', teacher: 'Mr. A. K. Choudhary', time_range: '11:15 AM - 12:00 PM' },
+
+  // Class 12 Timetable
+  { id: 're_12_m1', routine_id: 'routine_12', day: 'Monday', period: 'Period 1', subject: 'Physics (Sci) / Accounts (Com)', teacher: 'Dr. R. Singh / Mr. M. Lal', time_range: '09:00 AM - 09:45 AM' },
+  { id: 're_12_m2', routine_id: 'routine_12', day: 'Monday', period: 'Period 2', subject: 'Chemistry (Sci) / Bis. Studies (Com)', teacher: 'Mrs. V. Sastry / Mr. S. Jha', time_range: '09:45 AM - 10:30 AM' },
+  { id: 're_12_m3', routine_id: 'routine_12', day: 'Monday', period: 'Period 3', subject: 'Mathematics (Sci) / Economics (Arts/Com)', teacher: 'Mr. R. K. Sinha / Mrs. S. Roy', time_range: '10:30 AM - 11:15 AM' },
+  { id: 're_12_m4', routine_id: 'routine_12', day: 'Monday', period: 'Period 4', subject: 'Biology (Sci) / History (Arts)', teacher: 'Miss K. Sen / Mr. G. Sharma', time_range: '11:15 AM - 12:00 PM' },
+  { id: 're_12_m5', routine_id: 'routine_12', day: 'Monday', period: 'Period 5', subject: 'English General', teacher: 'Mrs. J. Mishra', time_range: '12:45 PM - 01:30 PM' }
+];
+
+const DEFAULT_EXAM_SCHEDULES: ExamSchedule[] = [
+  {
+    id: 'exam_sch_1',
+    title: 'Class 10 & 12 Board Sent-Up Pre-Test Examination - 2026',
+    display_mode: 'online',
+    pdf_url: '',
+    is_active: true,
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'exam_sch_2',
+    title: 'Class 9 & 11 Quarterly Unit Assessment - June / July 2026',
+    display_mode: 'online',
+    pdf_url: '',
+    is_active: true,
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-05T10:00:00Z'
+  }
+];
+
+const DEFAULT_EXAM_ENTRIES: ExamEntry[] = [
+  {
+    id: 'exam_ent_1_1',
+    schedule_id: 'exam_sch_1',
+    exam_date: '2026-06-22',
+    subject: 'Physics (Class 12) / Science (Class 10)',
     time: '10:00 AM - 01:00 PM',
-    notes: ''
-  });
+    notes: 'Theory paper, carry original admit slips.'
+  },
+  {
+    id: 'exam_ent_1_2',
+    schedule_id: 'exam_sch_1',
+    exam_date: '2026-06-23',
+    subject: 'Chemistry (Class 12) / Mathematics (Class 10)',
+    time: '10:00 AM - 01:00 PM',
+    notes: 'Bring geometry materials. Extra 15 minutes boarding time.'
+  },
+  {
+    id: 'exam_ent_1_3',
+    schedule_id: 'exam_sch_1',
+    exam_date: '2026-06-24',
+    subject: 'English (Class 10 & 12)',
+    time: '10:00 AM - 01:00 PM',
+    notes: 'General Core Paper.'
+  },
+  {
+    id: 'exam_ent_2_1',
+    schedule_id: 'exam_sch_2',
+    exam_date: '2026-06-29',
+    subject: 'Mathematics (Class 9) / Physics (Class 11)',
+    time: '11:00 AM - 12:30 PM',
+    notes: 'Classroom tests, objective pattern.'
+  },
+  {
+    id: 'exam_ent_2_2',
+    schedule_id: 'exam_sch_2',
+    exam_date: '2026-06-30',
+    subject: 'Sanskrit (Class 9) / Chemistry (Class 11)',
+    time: '11:00 AM - 12:30 PM',
+    notes: 'Regular test sessions.'
+  }
+];
 
-  const fetchLocalData = () => {
-    const list = dbService.getExamSchedules();
-    setSchedules(list);
-    setEntries(dbService.getExamEntries());
-    if (list.length > 0 && !selectedScheduleId) {
-      setSelectedScheduleId(list[0].id);
-    }
-  };
-
-  useEffect(() => {
-    fetchLocalData();
-  }, []);
-
-  const activeSchedule = schedules.find(s => s.id === selectedScheduleId);
-  const activeEntries = entries.filter(e => e.schedule_id === selectedScheduleId);
-
-  // Toggle display mode between 'online' & 'pdf'
-  const toggleDisplayMethod = (mode: 'online' | 'pdf') => {
-    if (!activeSchedule) return;
-    const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, display_mode: mode } : s);
-    dbService.saveExamSchedules(updated);
-    fetchLocalData();
-  };
-
-  // Toggle status (Active / Inactive Datesheet)
-  const toggleActiveStatus = (val: boolean) => {
-    if (!activeSchedule) return;
-    const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, is_active: val } : s);
-    dbService.saveExamSchedules(updated);
-    fetchLocalData();
-  };
-
-  // Add Exam Schedule
-  const handleCreateSchedule = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newScheduleTitle) return;
-
-    const newSch: ExamSchedule = {
-      id: `exams-${Date.now()}`,
-      title: newScheduleTitle,
-      display_mode: 'online',
-      pdf_url: '',
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const updated = [...schedules, newSch];
-    dbService.saveExamSchedules(updated);
-    setIsAddingSchedule(false);
-    setNewScheduleTitle('');
-    setSelectedScheduleId(newSch.id);
-    fetchLocalData();
-  };
-
-  // Delete Exam datesheet Inline
-  const handleDeleteScheduleInline = (schId: string) => {
-    const filteredSch = schedules.filter(s => s.id !== schId);
-    const filteredEntries = entries.filter(e => e.schedule_id !== schId);
-    dbService.saveExamSchedules(filteredSch);
-    dbService.saveExamEntries(filteredEntries);
-    if (selectedScheduleId === schId) {
-      setSelectedScheduleId(filteredSch[0]?.id || '');
-    }
-    setDeletingSchId(null);
-    fetchLocalData();
-  };
-
-  // Upload/Choose PDF
-  const handlePickPDF = () => {
-    if (!activeSchedule) return;
-    triggerMedia(
-      `Attach Exam Datesheet PDF [${activeSchedule.title}]`,
-      (url) => {
-        const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, pdf_url: url } : s);
-        dbService.saveExamSchedules(updated);
-        fetchLocalData();
-      }
-    );
-  };
-
-  // Adds an entry subject paper date inside schedule
-  const handleCreateEntry = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeSchedule || !newEntryForm.exam_date || !newEntryForm.subject) return;
-
-    const ent: ExamEntry = {
-      id: `exa-ent-${Date.now()}`,
-      schedule_id: activeSchedule.id,
-      exam_date: newEntryForm.exam_date,
-      subject: newEntryForm.subject,
-      time: newEntryForm.time || '',
-      notes: newEntryForm.notes || ''
-    };
-
-    const updated = [...entries, ent];
-    dbService.saveExamEntries(updated);
-    setIsAddingEntry(false);
-    setNewEntryForm({ exam_date: '', subject: '', time: '10:00 AM - 01:00 PM', notes: '' });
-    fetchLocalData();
-  };
-
-  // Delete an assessment date column entry Inline
-  const handleDeleteEntryInline = (entId: string) => {
-    const filtered = entries.filter(e => e.id !== entId);
-    dbService.saveExamEntries(filtered);
-    setDeletingEntId(null);
-    fetchLocalData();
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      {/* SIDEBAR SELECTOR PANEL */}
-      <div className="lg:col-span-1 space-y-4">
-        <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
-          <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-450 tracking-wider block">
-              Created Datesheets
-            </span>
-            <button
-              onClick={() => setIsAddingSchedule(true)}
-              className="p-1 rounded bg-orange-50 text-orange-600 hover:bg-orange-100 transition"
-              title="Create Datesheet"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {isAddingSchedule ? (
-            <form onSubmit={handleCreateSchedule} className="space-y-2.5 animate-in slide-in-from-top-2 duration-100">
-              <input
-                type="text"
-                placeholder="Datesheet Title"
-                value={newScheduleTitle}
-                onChange={(e) => setNewScheduleTitle(e.target.value)}
-                className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-55 bg-slate-50 font-sans"
-                required
-              />
-              <div className="flex gap-2 justify-end text-[10px] font-bold font-sans">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingSchedule(false)}
-                  className="px-2.5 py-1.5 bg-slate-100 text-slate-705 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-orange-500 text-white rounded hover:bg-orange-600"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          <div className="space-y-1.5 max-h-[350px] overflow-y-auto">
-            {schedules.map((sch) => (
-              <div
-                key={sch.id}
-                className={`w-full text-left p-3 rounded-xl border flex justify-between items-start gap-2 ${
-                  selectedScheduleId === sch.id
-                    ? 'border-orange-500 bg-orange-50/20'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <div className="cursor-pointer flex-grow" onClick={() => setSelectedScheduleId(sch.id)}>
-                  <span className={`px-1.5 py-0.5 text-[8.5px] font-mono uppercase font-bold rounded-full ${
-                    sch.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-105 text-slate-500 bg-slate-50'
-                  }`}>
-                    {sch.is_active ? 'Active' : 'Draft'}
-                  </span>
-                  <p className="font-extrabold text-xs text-slate-900 mt-1 line-clamp-2 leading-tight">
-                    {sch.title}
-                  </p>
-                </div>
-
-                {deletingSchId === sch.id ? (
-                  <div className="flex flex-col gap-1 items-end animate-in fade-in duration-100">
-                    <span className="text-[9px] text-red-600 font-bold">Delete wholly?</span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => handleDeleteScheduleInline(sch.id)}
-                        className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setDeletingSchId(null)}
-                        className="px-2 py-0.5 bg-slate-200 text-slate-700 hover:bg-slate-300 font-bold text-[9px] rounded uppercase cursor-pointer"
-                      >
-                        No
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setDeletingSchId(sch.id)}
-                    className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 cursor-pointer shrink-0"
-                    title="Delete Exam Datesheet"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* DETAIL WORKSPACE DISPLAY */}
-      <div className="lg:col-span-3">
-        {activeSchedule ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
-            
-            {/* Header section toggle info */}
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-slate-100 pb-4 gap-4">
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono font-bold text-orange-600 uppercase">Assessment Configurator</span>
-                <h3 className="text-slate-900 font-extrabold text-base leading-snug">{activeSchedule.title}</h3>
-              </div>
-
-              {/* Status and Display method buttons */}
-              <div className="flex flex-wrap gap-2 text-xs font-bold font-sans">
-                {/* Active draft switcher toggle */}
-                <button
-                  onClick={() => toggleActiveStatus(!activeSchedule.is_active)}
-                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1 cursor-pointer font-sans text-[11px] ${
-                    activeSchedule.is_active
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-slate-50 text-slate-550 hover:bg-slate-100 border-slate-200/60'
-                  }`}
-                >
-                  {activeSchedule.is_active ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                  {activeSchedule.is_active ? 'Published Active' : 'Draft (Hidden)'}
-                </button>
-
-                {/* PDF Online toggle display */}
-                <div className="flex bg-slate-50 p-0.5 border border-slate-150 rounded-lg">
-                  <button
-                    onClick={() => toggleDisplayMethod('online')}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-md ${
-                      activeSchedule.display_mode === 'online' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-500'
-                    }`}
-                  >
-                    Online Grid
-                  </button>
-                  <button
-                    onClick={() => toggleDisplayMethod('pdf')}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-md ${
-                      activeSchedule.display_mode === 'pdf' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-500'
-                    }`}
-                  >
-                    PDF Flyer
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Depending on toggle: Render direct PDF attachments or Online slot configurations */}
-            {activeSchedule.display_mode === 'pdf' ? (
-              <div className="space-y-4">
-                <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block pb-1 border-b border-slate-100">
-                  Document Assignment
-                </span>
-                <p className="text-slate-500 text-xs">
-                  Attach or choose the assessment flyer layout sheet. Download portals automatically sync.
-                </p>
-
-                <div className="p-5 bg-slate-50 border border-slate-155 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-3 text-xs">
-                  <div className="space-y-1">
-                    <span className="font-bold text-slate-850 block">Assigned Document:</span>
-                    <span className="font-mono text-[10.5px] text-slate-500 bg-white p-1 border border-slate-200 rounded block max-w-sm truncate">
-                      {activeSchedule.pdf_url || 'No document sourced'}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handlePickPDF}
-                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg uppercase tracking-wider font-sans text-[10.5px]"
-                    >
-                      Pick from Media Vault
-                    </button>
-                    {activeSchedule.pdf_url && (
-                      <a href={activeSchedule.pdf_url} target="_blank" rel="noreferrer" className="px-3.5 py-2 border bg-white rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-50">
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* ONLINE ROW ENTRIES BUILDER */
-              <div className="space-y-4" id="exams-online-admin">
-                <div className="flex justify-between items-center text-xs pb-1 border-b border-slate-100">
-                  <span className="text-[10px] uppercase font-mono font-bold text-slate-450 tracking-wider">Exam Papers Slots</span>
-                  {!isAddingEntry && (
-                    <button
-                      onClick={() => setIsAddingEntry(true)}
-                      className="py-1.5 px-3 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-lg tracking-wider"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {isAddingEntry && (
-                  /* Form to append entries */
-                  <form onSubmit={handleCreateEntry} className="bg-slate-50 border border-slate-200 rounded-xl p-4.5 space-y-3.5 text-xs font-semibold font-sans">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Exam Date</label>
-                        <input
-                          type="date"
-                          value={newEntryForm.exam_date}
-                          onChange={(e) => setNewEntryForm({ ...newEntryForm, exam_date: e.target.value })}
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
-                        <input
-                          type="text"
-                          value={newEntryForm.subject}
-                          onChange={(e) => setNewEntryForm({ ...newEntryForm, subject: e.target.value })}
-                          placeholder="e.g. Mathematics Paper I"
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Exam Session Time</label>
-                        <input
-                          type="text"
-                          value={newEntryForm.time}
-                          onChange={(e) => setNewEntryForm({ ...newEntryForm, time: e.target.value })}
-                          placeholder="e.g. 10:00 AM - 01:00 PM"
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Directives / Room No / Notes</label>
-                      <input
-                        type="text"
-                        value={newEntryForm.notes}
-                        onChange={(e) => setNewEntryForm({ ...newEntryForm, notes: e.target.value })}
-                        placeholder="e.g. Room No. 12 & 14. Bring registration receipts cardboard sheets."
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/55">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingEntry(false)}
-                        className="px-3.5 py-2 bg-slate-200 text-slate-705 font-bold rounded-lg"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4.5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg"
-                      >
-                        Append Paper Row
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Grid tabular layout of datesheet entries list */}
-                <div className="border border-slate-100 rounded-xl overflow-hidden shadow-2xs">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[9.5px] uppercase text-slate-450 tracking-wider">
-                        <th className="py-2.5 px-4 w-32">Exam Date</th>
-                        <th className="py-2.5 px-4">Subject</th>
-                        <th className="py-2.5 px-4 w-44">Exam Timing</th>
-                        <th className="py-2.5 px-4">Administrative Directives</th>
-                        <th className="py-2.5 px-4 w-16 text-center">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
-                      {activeEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="text-center py-8 text-slate-405 italic">
-                            No subject paper dates mapped in datesheet. Append key assessment slots above.
-                          </td>
-                        </tr>
-                      ) : (
-                        activeEntries
-                          .sort((a,b) => new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime())
-                          .map((ent) => (
-                            <tr key={ent.id} className="hover:bg-slate-50/50 transition">
-                              <td className="py-3 px-4 font-mono font-bold text-slate-800">{formatShortDate(ent.exam_date)}</td>
-                              <td className="py-3 px-4 font-bold text-slate-950">{ent.subject}</td>
-                              <td className="py-3 px-4 text-orange-600 font-mono font-bold leading-none">{ent.time}</td>
-                              <td className="py-3 px-4 text-slate-500 leading-relaxed font-sans font-medium max-w-xs">{ent.notes || '—'}</td>
-                              <td className="py-3 px-4 text-center text-xs">
-                                {deletingEntId === ent.id ? (
-                                  <div className="flex items-center justify-center gap-1 animate-in fade-in duration-100">
-                                    <button
-                                      onClick={() => handleDeleteEntryInline(ent.id)}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                                    >
-                                      Confirm
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingEntId(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => setDeletingEntId(ent.id)}
-                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
-                                    title="Delete assessment timing slot"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="p-16 bg-white border border-slate-150 rounded-2xl text-center max-w-sm mx-auto shadow-2xs">
-            <BookOpen className="w-12 h-12 text-slate-350 mx-auto mb-4" />
-            <h4 className="text-xs font-mono font-bold uppercase text-slate-700">Assessment Desk Void</h4>
-            <p className="text-slate-400 text-xs mt-1 leading-normal font-sans">Use sidebar plus actions to spawn complete board date leaflets.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-
-// ============================================================================
-// C. ACADEMIC CALENDAR ADMINISTRATIVE MODULE
-// ============================================================================
-const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isAddingEvent, setIsAddingEvent] = useState(false);
-  const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>({
-    event_date: '',
-    title: '',
+const DEFAULT_CALENDAR_EVENTS: CalendarEvent[] = [
+  {
+    id: 'cal_ev_1',
+    title: 'BSEB Board Sent-Up Exams Commences',
+    event_type: 'Examination',
+    event_date: '2026-06-22',
+    description: 'Sent-up assessments for Class 10 and 12 matric aspirants.',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'cal_ev_2',
+    title: 'Kabir Jayanti State holiday',
     event_type: 'Holiday',
-    description: ''
-  });
+    event_date: '2026-06-18',
+    description: 'Bihar Government official holiday. Administrative sections remains closed.',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'cal_ev_3',
+    title: 'Parent-Teacher Council Meet',
+    event_type: 'Parent Meeting',
+    event_date: '2026-06-27',
+    description: 'Discussion regarding BSEB results, registration profiles check, and scholarship disbursements.',
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-05T10:00:00Z'
+  },
+  {
+    id: 'cal_ev_4',
+    title: 'Intermediate Admission Form Submission Starts',
+    event_type: 'Admission Date',
+    event_date: '2026-07-01',
+    description: 'Enrollment process launches online via OFSS portal of BSEB Bihar.',
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-05T10:00:00Z'
+  },
+  {
+    id: 'cal_ev_5',
+    title: 'Dr. Rajendra Prasad Birth Commemoration Debate',
+    event_type: 'School Event',
+    event_date: '2026-07-05',
+    description: 'State level inter-school debate competition at principal auditorium hall.',
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-05T10:00:00Z'
+  }
+];
 
-  const fetchLocalData = () => {
-    setEvents(dbService.getCalendarEvents());
-  };
+const DEFAULT_EVENT_CATEGORIES: string[] = [
+  'Academic Event',
+  'Sports Event',
+  'Cultural Event',
+  'National Celebration',
+  'Parent Meeting',
+  'Competition',
+  'Workshop',
+  'Seminar'
+];
 
-  useEffect(() => {
-    fetchLocalData();
-  }, []);
+const DEFAULT_EVENTS: SchoolEvent[] = [
+  {
+    id: 'ev_1',
+    title: 'Annual Sports Championship 2026',
+    category: 'Sports Event',
+    event_date: '2026-06-25',
+    short_description: 'The annual track, field, and indoor sports matches across classes 9 to 12.',
+    full_description: 'Join us for the Annual Sports Day at our central Patna playground. Events include 100m, 200m track races, long jump, volleyball tournaments, and badminton finals. Awards will be facilitated by the Principal in the closing ceremony. This tournament is an integral assessment of physical fitness and discipline standard coefficients.',
+    featured_image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=600&auto=format&fit=crop',
+    venue: 'Main Sports Ground, RP GSSS Campus',
+    organizer: 'Physical Education Dept',
+    status: 'Published',
+    featured_homepage: true,
+    pdf_url: '',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-01T10:00:00Z'
+  },
+  {
+    id: 'ev_2',
+    title: 'Inter-School Science Exhibition',
+    category: 'Academic Event',
+    event_date: '2026-07-02',
+    short_description: 'A showcase of innovative projects, working models, and biological cell setups.',
+    full_description: 'Students from high schools in Patna will gather to present scientific research models. This year\'s focus is on sustainable energy devices and agricultural water purification designs. Chief guest will address the science assembly at Room 10B. Over 300 scholars from BSEB schools are verified to attend.',
+    featured_image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop',
+    venue: 'Science Assembly Block (Auditorium)',
+    organizer: 'Science & Technology Club',
+    status: 'Published',
+    featured_homepage: true,
+    pdf_url: '',
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-05T10:00:00Z'
+  },
+  {
+    id: 'ev_3',
+    title: 'Independence Day Celebration',
+    category: 'National Celebration',
+    event_date: '2026-08-15',
+    short_description: 'Flag hoisting ceremony, patriotic singing, and classical parade presentation.',
+    full_description: 'Annual celebration of Independence Day with flag hoisting at 8:00 AM by the Cabinet representative and Principal. Patriotic choral hymns, parade presentations by the NCC cadets, and classical dances performed by Class 10 humanities cohorts. Sweets distribution to follow for all scholars and parents.',
+    featured_image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop',
+    venue: 'Main Tricolor Courtyard',
+    organizer: 'NCC & Cultural Committee',
+    status: 'Published',
+    featured_homepage: true,
+    pdf_url: '',
+    created_at: '2026-06-10T10:00:00Z',
+    updated_at: '2026-06-10T10:00:00Z'
+  },
+  {
+    id: 'ev_4',
+    title: 'Quarterly Parent-Teacher Meeting',
+    category: 'Parent Meeting',
+    event_date: '2026-06-20',
+    short_description: 'Discussion of unit test reports, term grades, and student behavior indexes.',
+    full_description: 'Mandatory meeting for all parents. Discussion of board exam eligibility, quarterly test marksheets, and standard BSEB guidance protocols. Parents can meet individual subject lecturers in their dedicated classrooms to discuss child performance standards.',
+    featured_image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=600&auto=format&fit=crop',
+    venue: 'Respective Classrooms (Science 10A-Arts 12B)',
+    organizer: 'Academic Dean Council',
+    status: 'Published',
+    featured_homepage: false,
+    pdf_url: '',
+    created_at: '2026-06-12T10:00:00Z',
+    updated_at: '2026-06-12T10:00:00Z'
+  }
+];
 
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!eventForm.event_date || !eventForm.title) return;
+const DEFAULT_EVENT_IMAGES: SchoolEventImage[] = [
+  {
+    id: 'ev_img_1_1',
+    event_id: 'ev_1',
+    image_url: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=600&auto=format&fit=crop',
+    display_order: 1
+  },
+  {
+    id: 'ev_img_1_2',
+    event_id: 'ev_1',
+    image_url: 'https://images.unsplash.com/photo-1502014822147-1aedfb0676e0?w=600&auto=format&fit=crop',
+    display_order: 2
+  },
+  {
+    id: 'ev_img_1_3',
+    event_id: 'ev_1',
+    image_url: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=600&auto=format&fit=crop',
+    display_order: 3
+  },
+  {
+    id: 'ev_img_2_1',
+    event_id: 'ev_2',
+    image_url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop',
+    display_order: 1
+  },
+  {
+    id: 'ev_img_2_2',
+    event_id: 'ev_2',
+    image_url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&auto=format&fit=crop',
+    display_order: 2
+  },
+  {
+    id: 'ev_img_3_1',
+    event_id: 'ev_3',
+    image_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop',
+    display_order: 1
+  },
+  {
+    id: 'ev_img_4_1',
+    event_id: 'ev_4',
+    image_url: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=600&auto=format&fit=crop',
+    display_order: 1
+  }
+];
 
-    const newEv: CalendarEvent = {
-      id: `ev-${Date.now()}`,
-      event_date: eventForm.event_date,
-      title: eventForm.title,
-      event_type: (eventForm.event_type || 'Holiday') as CalendarEventType,
-      description: eventForm.description || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+const DEFAULT_PERIODS: PeriodMaster[] = [
+  { id: 'p_1', name: 'Period 1', time_range: '09:00 AM - 09:45 AM' },
+  { id: 'p_2', name: 'Period 2', time_range: '09:45 AM - 10:30 AM' },
+  { id: 'p_3', name: 'Period 3', time_range: '10:30 AM - 11:15 AM' },
+  { id: 'p_4', name: 'Period 4', time_range: '11:15 AM - 12:00 PM' },
+  { id: 'p_5', name: 'Period 5', time_range: '12:45 PM - 01:30 PM' },
+  { id: 'p_6', name: 'Period 6', time_range: '01:30 PM - 02:15 PM' },
+];
+
+class DatabaseService {
+  private cachedEvents: SchoolEvent[] | null = null;
+  private cachedEventImages: SchoolEventImage[] | null = null;
+
+  private getStorageItem<T>(key: string, defaultValue: T): T {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (e) {
+      console.warn(`Local storage reading failed for key: ${key}. Using fallbacks.`, e);
+      return defaultValue;
+    }
+  }
+
+  private setStorageItem<T>(key: string, value: T): void {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e: any) {
+      const isQuotaError = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || (e.message && e.message.includes('quota')));
+      if (isQuotaError) {
+        console.warn(`Local storage quota exceeded while writing key ${key}. Clearing transient media and event image caches, then retrying.`);
+        try {
+          // Clear non-critical caches to free up space
+          localStorage.removeItem('gsss_media_items');
+          localStorage.removeItem('gsss_event_images');
+          // Try writing again
+          localStorage.setItem(key, JSON.stringify(value));
+          return;
+        } catch (retryErr) {
+          console.warn(`Retrying local storage save for key: ${key} failed even after clearing transient cache. Notifying backup system.`, retryErr);
+        }
+      } else {
+        console.warn(`Local storage writing failed for key: ${key}.`, e);
+      }
+    }
+  }
+
+  // School Settings
+  getSchoolSettings(): SchoolSettings {
+    const loaded = this.getStorageItem<SchoolSettings>('gsss_school_settings', DEFAULT_SCHOOL_SETTINGS);
+    return { ...DEFAULT_SCHOOL_SETTINGS, ...loaded };
+  }
+
+  saveSchoolSettings(settings: SchoolSettings, localOnly = false): void {
+    this.setStorageItem('gsss_school_settings', settings);
+    if (localOnly) return;
+
+    // Persist to Supabase school_settings table
+    const dbPayload = {
+      school_name: settings.school_name,
+      school_motto: settings.school_motto,
+      address: settings.address,
+      phone: settings.phone,
+      email: settings.email,
+      logo_url: settings.logo_url || null,
+      hero_image_url: settings.hero_image_url || null,
+      footer_subtitle: settings.footer_subtitle || null,
+      footer_description: settings.footer_description || null,
+      school_affiliation: settings.school_affiliation || null,
+      hero_title: settings.hero_title || null,
+      hero_subtitle: settings.hero_subtitle || null,
+      hero_description: settings.hero_description || null,
+      hero_badge_text: settings.hero_badge_text || null,
+      hero_estd_text: settings.hero_estd_text || null,
+      hero_dise_text: settings.hero_dise_text || null,
     };
 
-    const updated = [...events, newEv];
-    dbService.saveCalendarEvents(updated);
-    setIsAddingEvent(false);
-    setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
-    fetchLocalData();
-  };
+    supabase
+      .from('school_settings')
+      .upsert({ id: settings.id === 'site-config' ? undefined : settings.id, ...dbPayload })
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Settings Sync Error]:', error.message);
+        }
+      });
+  }
 
-  const handleDeleteEvent = (evId: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove school calendar event "${name}"?`)) return;
-    const filtered = events.filter(e => e.id !== evId);
-    dbService.saveCalendarEvents(filtered);
-    fetchLocalData();
-  };
+  // Homepage Modules
+  getHomepageModules(): HomepageModule[] {
+    const rawModules = this.getStorageItem<any[]>('gsss_homepage_modules', DEFAULT_HOMEPAGE_MODULES);
+    const pModules = rawModules.map(m => ({
+      ...m,
+      id: ensureValidUUID(m.id)
+    }));
 
-  const getBadgeStyle = (type: CalendarEventType) => {
-    switch (type) {
-      case 'Holiday': return 'bg-emerald-50 text-emerald-700 border-emerald-200/55';
-      case 'Examination': return 'bg-rose-50 text-rose-700 border-rose-200/55';
-      case 'Parent Meeting': return 'bg-indigo-50 text-indigo-700 border-indigo-200/55';
-      case 'Admission Date': return 'bg-sky-50 text-sky-700 border-sky-200/55';
-      case 'School Event': return 'bg-violet-50 text-violet-700 border-violet-200/55';
-      default: return 'bg-slate-55 bg-slate-50 text-slate-705 border-slate-200/55';
+    // Check if migration is needed (if storage doesn't exist or doesn't have module_type)
+    const needsMigration = pModules.length === 0 || pModules.some(m => !m.module_type);
+    if (needsMigration) {
+      this.saveHomepageModules(DEFAULT_HOMEPAGE_MODULES, true);
+      return [...DEFAULT_HOMEPAGE_MODULES].map(m => ({ ...m, id: ensureValidUUID(m.id) })).sort((a, b) => a.display_order - b.display_order);
     }
-  };
+    
+    // Auto-inject missing default modules (including Featured Faculty) to preserve older setups
+    const existingTypes = new Set(pModules.map(m => m.module_type));
+    const missingDefaults = DEFAULT_HOMEPAGE_MODULES.filter(d => !existingTypes.has(d.module_type));
+    if (missingDefaults.length > 0) {
+      let merged = [...pModules];
+      missingDefaults.forEach(def => {
+        if (def.module_type === 'Events Preview') {
+          // Find Notice Feed module order
+          const noticeFeed = merged.find(m => m.module_type === 'Notice Feed');
+          const noticeFeedOrder = noticeFeed ? noticeFeed.display_order : 2;
+          
+          // Increment display_order for all modules that come after Notice Feed by 1 to make a gap
+          merged = merged.map(m => {
+            if (m.display_order > noticeFeedOrder) {
+              return { ...m, display_order: m.display_order + 1 };
+            }
+            return m;
+          });
+          
+          merged.push({
+            ...def,
+            id: ensureValidUUID(def.id),
+            display_order: noticeFeedOrder + 1,
+            is_visible: true
+          });
+        } else {
+          const maxOrder = merged.reduce((max, m) => Math.max(max, m.display_order || 0), 0);
+          merged.push({
+            ...def,
+            id: ensureValidUUID(def.id),
+            display_order: maxOrder + 1
+          });
+        }
+      });
+      this.saveHomepageModules(merged, true);
+      return merged.sort((a, b) => a.display_order - b.display_order);
+    }
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
-            School Calendar Registry Matrix
-          </h3>
-          <p className="text-slate-500 text-[11px] font-sans">
-            Add BSEB registrations schedules, holiday files lists, inter-school cultural contests, and parental board meets.
-          </p>
-        </div>
+    return pModules.sort((a, b) => a.display_order - b.display_order);
+  }
 
-        {!isAddingEvent && (
-          <button
-            onClick={() => setIsAddingEvent(true)}
-            className="py-2 px-4.5 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10.5px] uppercase rounded-xl tracking-wider flex items-center gap-1 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create Calendar Event
-          </button>
-        )}
-      </div>
+  saveHomepageModules(modules: HomepageModule[], localOnly = false): void {
+    const sanitizedModules = modules.map(m => ({
+      ...m,
+      id: ensureValidUUID(m.id)
+    }));
+    this.setStorageItem('gsss_homepage_modules', sanitizedModules);
 
-      {isAddingEvent && (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm animate-in zoom-in-95 duration-100">
-          <div className="flex justify-between items-center text-xs pb-2.5 border-b border-slate-200/50 mb-4 font-mono font-bold uppercase text-slate-500 select-none">
-            <span>Register New Calendar Agenda</span>
-            <button onClick={() => setIsAddingEvent(false)} className="text-slate-400 hover:text-slate-700">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+    if (localOnly) return;
 
-          <form onSubmit={handleCreateEvent} className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-semibold font-sans">
-            <div className="space-y-1">
-              <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Event Date</label>
-              <input
-                type="date"
-                value={eventForm.event_date}
-                onChange={(e) => setEventForm({ ...eventForm, event_date: e.target.value })}
-                className="w-full p-2 border border-slate-250 bg-white rounded-lg"
-                required
-              />
-            </div>
+    // Persist to Supabase homepage_modules table
+    const dbPayloads = sanitizedModules.map(m => ({
+      id: m.id,
+      module_type: m.module_type,
+      title: m.title || '',
+      subtitle: m.subtitle || '',
+      description: m.description || '',
+      image_url: m.image_url || '',
+      button_text: m.button_text || '',
+      button_url: m.button_url || '',
+      display_order: m.display_order || 0,
+      is_visible: m.is_visible !== false,
+      items_json: m.items_json || null
+    }));
 
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Agenda Title</label>
-              <input
-                type="text"
-                value={eventForm.title}
-                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                placeholder="e.g. Independence Day Patriotic Exhibition"
-                className="w-full p-2 border border-slate-250 bg-white rounded-lg"
-                required
-              />
-            </div>
+    supabase
+      .from('homepage_modules')
+      .upsert(dbPayloads)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Modules Sync Error]:', error.message);
+        }
+      });
+  }
 
-            <div className="space-y-1">
-              <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Activity Category</label>
-              <select
-                value={eventForm.event_type}
-                onChange={(e) => setEventForm({ ...eventForm, event_type: e.target.value as any })}
-                className="w-full p-2 border border-slate-250 bg-white rounded-lg"
-              >
-                {['Holiday', 'Examination', 'Parent Meeting', 'Admission Date', 'School Event'].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
+  createHomepageModule(moduleData: Omit<HomepageModule, 'id' | 'created_at' | 'updated_at'>): HomepageModule {
+    const modules = this.getHomepageModules();
+    const now = new Date().toISOString();
+    const newModule: HomepageModule = {
+      ...moduleData,
+      id: generateUUID(),
+      created_at: now,
+      updated_at: now
+    };
+    modules.push(newModule);
+    this.saveHomepageModules(modules);
+    return newModule;
+  }
 
-            <div className="space-y-1 sm:col-span-4">
-              <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Event Circular Description / Directives</label>
-              <input
-                type="text"
-                value={eventForm.description}
-                onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                placeholder="Details of school circular timings or off-class orders..."
-                className="w-full p-2 border border-slate-250 bg-white rounded-lg"
-              />
-            </div>
+  updateHomepageModule(id: string, updatedFields: Partial<HomepageModule>): HomepageModule | null {
+    const modules = this.getHomepageModules();
+    const index = modules.findIndex(m => m.id === ensureValidUUID(id));
+    if (index === -1) return null;
 
-            <div className="sm:col-span-4 pt-3 border-t border-slate-205 flex justify-end gap-2 border-slate-200/50 mt-2">
-              <button
-                type="button"
-                onClick={() => setIsAddingEvent(false)}
-                className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold"
-              >
-                Save Agenda
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+    const updated: HomepageModule = {
+      ...modules[index],
+      ...updatedFields,
+      id: ensureValidUUID(modules[index].id),
+      updated_at: new Date().toISOString()
+    };
+    modules[index] = updated;
+    this.saveHomepageModules(modules);
+    return updated;
+  }
 
-      {/* List of Calendar items chronologically */}
-      <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-3xs">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[9.5px] uppercase text-slate-450 tracking-wider">
-                <th className="py-2.5 px-4 w-36">Scheduled Date</th>
-                <th className="py-2.5 px-4 w-40">Agenda Category</th>
-                <th className="py-2.5 px-4">Circular Title</th>
-                <th className="py-2.5 px-4">Remarks / Notes</th>
-                <th className="py-2.5 px-4 w-20 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
-              {events.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-10 italic text-slate-400 font-medium">
-                    No academic calendar events loaded. Create one using the action button above.
-                  </td>
-                </tr>
-              ) : (
-                events
-                  .sort((a,b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
-                  .map((ev) => (
-                    <tr key={ev.id} className="hover:bg-slate-50/50 transition">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                        {formatShortDate(ev.event_date)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 border rounded-full uppercase tracking-wider font-sans text-[9px] font-bold ${getBadgeStyle(ev.event_type)}`}>
-                          {ev.event_type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-900">
-                        {ev.title}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 leading-normal max-w-sm font-sans font-medium">
-                        {ev.description || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => handleDeleteEvent(ev.id, ev.title)}
-                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
-                          title="Remove Event Agenda"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+  deleteHomepageModule(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const modules = this.getHomepageModules();
+    const filtered = modules.filter(m => m.id !== targetId);
+    // Reindex display orders to maintain clean continuous indexes
+    const reindexed = filtered.map((mod, idx) => ({ ...mod, display_order: idx + 1 }));
+    this.saveHomepageModules(reindexed);
+
+    // Explicitly delete from Supabase so the deleted row is not resurrected on next fetch/sync
+    supabase
+      .from('homepage_modules')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Module Delete Error]:', error.message);
+        }
+      });
+  }
+
+  // Media Library
+  getMediaItems(bucket?: MediaBucket): MediaItem[] {
+    const items = this.getStorageItem<MediaItem[]>('gsss_media_items', DEFAULT_MEDIA_ITEMS);
+    if (bucket) {
+      return items.filter(item => item.bucket === bucket);
+    }
+    return items;
+  }
+
+  uploadMediaItem(fileName: string, bucket: MediaBucket, fileUrl: string, fileType: 'image' | 'pdf', sizeKb: number): MediaItem {
+    const items = this.getMediaItems();
+    const newItem: MediaItem = {
+      id: `media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      file_name: fileName,
+      bucket,
+      file_url: fileUrl,
+      file_type: fileType,
+      uploaded_at: new Date().toISOString(),
+      size_kb: sizeKb
+    };
+    items.unshift(newItem);
+    this.setStorageItem('gsss_media_items', items);
+    return newItem;
+  }
+
+  deleteMediaItem(id: string): void {
+    const items = this.getMediaItems();
+    const updated = items.filter(item => item.id !== id);
+    this.setStorageItem('gsss_media_items', updated);
+
+    // Clean up notices referencing this media ID
+    const notices = this.getNotices();
+    let noticedChanged = false;
+    const cleanNotices = notices.map(notice => {
+      let changed = false;
+      let img = notice.featured_image;
+      let pdf = notice.pdf_url;
+      if (notice.featured_image === id) {
+        img = '';
+        changed = true;
+      }
+      if (notice.pdf_url === id) {
+        pdf = '';
+        changed = true;
+      }
+      if (changed) noticedChanged = true;
+      return { ...notice, featured_image: img, pdf_url: pdf };
+    });
+    if (noticedChanged) {
+      this.saveNotices(cleanNotices);
+    }
+  }
+
+  replaceMediaItem(id: string, fileUrl: string, sizeKb: number): MediaItem | null {
+    const items = this.getMediaItems();
+    const index = items.findIndex(item => item.id === id);
+    if (index === -1) return null;
+
+    items[index] = {
+      ...items[index],
+      file_url: fileUrl,
+      size_kb: sizeKb,
+      uploaded_at: new Date().toISOString()
+    };
+    this.setStorageItem('gsss_media_items', items);
+    return items[index];
+  }
+
+  // Notices CRM
+  getNotices(): Notice[] {
+    const rawNotices = this.getStorageItem<Notice[]>('gsss_notices', DEFAULT_NOTICES);
+    return rawNotices.map(n => ({
+      ...n,
+      id: ensureValidUUID(n.id)
+    }));
+  }
+
+  saveNotices(notices: Notice[], localOnly = false): void {
+    const sanitized = notices.map(n => ({
+      ...n,
+      id: ensureValidUUID(n.id)
+    }));
+    this.setStorageItem('gsss_notices', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('notices')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Notices Sync Error]:', error.message);
+        }
+      });
+  }
+
+  createNotice(noticeData: Omit<Notice, 'id' | 'created_at' | 'updated_at'>): Notice {
+    const notices = this.getNotices();
+    const now = new Date().toISOString();
+    const newNotice: Notice = {
+      ...noticeData,
+      id: generateUUID(),
+      created_at: now,
+      updated_at: now
+    };
+    notices.unshift(newNotice);
+    this.saveNotices(notices);
+    return newNotice;
+  }
+
+  updateNotice(id: string, updatedFields: Partial<Notice>): Notice | null {
+    const notices = this.getNotices();
+    const targetId = ensureValidUUID(id);
+    const index = notices.findIndex(notice => notice.id === targetId);
+    if (index === -1) return null;
+
+    const updated: Notice = {
+      ...notices[index],
+      ...updatedFields,
+      id: targetId,
+      updated_at: new Date().toISOString()
+    };
+    notices[index] = updated;
+    this.saveNotices(notices);
+    return updated;
+  }
+
+  deleteNotice(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const notices = this.getNotices();
+    const filtered = notices.filter(n => n.id !== targetId);
+    this.saveNotices(filtered);
+
+    // Delete from Supabase
+    supabase
+      .from('notices')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Notice Delete Error]:', error.message);
+        }
+      });
+  }
+
+  // Faculty Management
+  getFaculty(): Faculty[] {
+    const rawFaculty = this.getStorageItem<Faculty[]>('gsss_faculty_members', DEFAULT_FACULTY);
+    return rawFaculty.map(f => ({
+      ...f,
+      id: ensureValidUUID(f.id)
+    }));
+  }
+
+  saveFaculty(faculty: Faculty[], localOnly = false): void {
+    const sanitized = faculty.map(f => ({
+      ...f,
+      id: ensureValidUUID(f.id),
+      joined_date: sanitizeDate(f.joined_date) || undefined
+    }));
+    this.setStorageItem('gsss_faculty_members', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('faculty')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Faculty Sync Error]:', error.message);
+        }
+      });
+  }
+
+  createFaculty(facultyData: Omit<Faculty, 'id' | 'created_at' | 'updated_at'>): Faculty {
+    const list = this.getFaculty();
+    const now = new Date().toISOString();
+    
+    // Sort and compact existing list first to guarantee no gaps
+    const sorted = [...list].sort((a, b) => a.display_order - b.display_order);
+    sorted.forEach((fac, idx) => {
+      fac.display_order = idx + 1;
+    });
+    
+    const nextOrder = sorted.length + 1;
+    
+    const newFac: Faculty = {
+      ...facultyData,
+      id: generateUUID(),
+      display_order: nextOrder,
+      created_at: now,
+      updated_at: now
+    };
+    sorted.push(newFac);
+    this.saveFaculty(sorted);
+    return newFac;
+  }
+
+  updateFaculty(id: string, updatedFields: Partial<Faculty>): Faculty | null {
+    const list = this.getFaculty();
+    const targetId = ensureValidUUID(id);
+    const index = list.findIndex(f => f.id === targetId);
+    if (index === -1) return null;
+
+    const updated: Faculty = {
+      ...list[index],
+      ...updatedFields,
+      id: targetId,
+      updated_at: new Date().toISOString()
+    };
+    list[index] = updated;
+    this.saveFaculty(list);
+    return updated;
+  }
+
+  deleteFaculty(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const list = this.getFaculty();
+    const filtered = list.filter(f => f.id !== targetId);
+    
+    // Sort and compact remaining list to close any gaps and keep sequence 1..N
+    const sorted = [...filtered].sort((a, b) => a.display_order - b.display_order);
+    sorted.forEach((fac, idx) => {
+      fac.display_order = idx + 1;
+    });
+    
+    this.saveFaculty(sorted);
+
+    // Delete from Supabase
+    supabase
+      .from('faculty')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Faculty Delete Error]:', error.message);
+        }
+      });
+  }
+
+  // Designations / Categories Management
+  getFacultyDesignations(): string[] {
+    return this.getStorageItem<string[]>('gsss_faculty_designations', DEFAULT_DESIGNATIONS);
+  }
+
+  saveFacultyDesignations(designations: string[]): void {
+    this.setStorageItem('gsss_faculty_designations', designations);
+  }
+
+  getFacultyDepartments(): string[] {
+    return this.getStorageItem<string[]>('gsss_faculty_departments', DEFAULT_DEPARTMENTS);
+  }
+
+  saveFacultyDepartments(departments: string[]): void {
+    this.setStorageItem('gsss_faculty_departments', departments);
+  }
+
+  // ==========================================
+  // ACADEMIC MANAGEMENT METHODS
+  // ==========================================
+
+  getTimetableLastUpdated(): string {
+    return this.getStorageItem<string>('gsss_timetable_last_updated', '2026-06-19T11:47:00.000Z');
+  }
+
+  updateTimetableTimestamp(): string {
+    const now = new Date().toISOString();
+    this.setStorageItem('gsss_timetable_last_updated', now);
+    return now;
+  }
+
+  getRoutines(): Routine[] {
+    const raw = this.getStorageItem<Routine[]>('gsss_routines', DEFAULT_ROUTINES);
+    return raw.map(r => ({
+      ...r,
+      id: ensureValidUUID(r.id)
+    }));
+  }
+
+  saveRoutines(routines: Routine[], localOnly = false): void {
+    const sanitized = routines.map(r => ({
+      ...r,
+      id: ensureValidUUID(r.id)
+    }));
+    this.setStorageItem('gsss_routines', sanitized);
+    this.updateTimetableTimestamp();
+
+    console.log('[ROUTINES SAVE] localOnly =', localOnly);
+    console.log('[ROUTINES LOCAL COUNT]', sanitized.length);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('routines')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routines Save Error]:', error.message);
+        }
+      });
+  }
+
+  updateRoutine(id: string, updatedFields: Partial<Routine>): Routine | null {
+    const routines = this.getRoutines();
+    const index = routines.findIndex(r => r.id === ensureValidUUID(id));
+    if (index === -1) return null;
+
+    const updated: Routine = {
+      ...routines[index],
+      ...updatedFields,
+      updated_at: new Date().toISOString()
+    };
+    routines[index] = updated;
+    this.saveRoutines(routines);
+    return updated;
+  }
+
+  getRoutineEntries(): RoutineEntry[] {
+    const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', DEFAULT_ROUTINE_ENTRIES);
+    const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+    
+    let changed = false;
+    const mapped = entries.map(ent => {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
+      let entId = ent.id;
+      if (!isUuid) {
+        entId = generateUUID();
+        changed = true;
+      }
+      const routine_id = ensureValidUUID(ent.routine_id);
+      if (routine_id !== ent.routine_id) {
+        changed = true;
+      }
+      
+      const pm = masters.find(m => m.name === ent.period);
+      if (pm) {
+        return {
+          ...ent,
+          id: entId,
+          routine_id,
+          time_range: pm.time_range
+        };
+      }
+      return {
+        ...ent,
+        id: entId,
+        routine_id
+      };
+    });
+
+    if (changed) {
+      // Save mapped entries back to local storage
+      const localDataToSave = mapped.map(ent => ({
+        id: ent.id,
+        routine_id: ent.routine_id,
+        day: ent.day,
+        period: ent.period,
+        subject: ent.subject,
+        teacher: ent.teacher || null,
+        time_range: ent.time_range || null
+      }));
+      this.setStorageItem('gsss_routine_entries', localDataToSave);
+    }
+
+    return mapped;
+  }
+
+  saveRoutineEntries(entries: RoutineEntry[], localOnly = false): void {
+    const sanitized = entries.map(ent => {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
+      return {
+        ...ent,
+        id: isUuid ? ent.id : generateUUID(),
+        routine_id: ensureValidUUID(ent.routine_id)
+      };
+    });
+    this.setStorageItem('gsss_routine_entries', sanitized);
+    this.updateTimetableTimestamp();
+
+    console.log('[ROUTINE ENTRIES SAVE] localOnly =', localOnly);
+    console.log('[ROUTINE ENTRIES LOCAL COUNT]', sanitized.length);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('routine_entries')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routine Entries Save Error]:', error.message);
+        }
+      });
+  }
+
+  getRoutineEntriesByRoutine(routineId: string): RoutineEntry[] {
+    const targetRoutineId = ensureValidUUID(routineId);
+    return this.getRoutineEntries().filter(e => e.routine_id === targetRoutineId);
+  }
+
+  createRoutineEntry(entryData: Omit<RoutineEntry, 'id'>): RoutineEntry {
+    const entries = this.getRoutineEntries();
+    const id = generateUUID();
+    const routine_id = ensureValidUUID(entryData.routine_id);
+    const newEntry: RoutineEntry = {
+      ...entryData,
+      id,
+      routine_id
+    };
+    entries.push(newEntry);
+    this.saveRoutineEntries(entries);
+    return newEntry;
+  }
+
+  updateRoutineEntry(id: string, updatedFields: Partial<RoutineEntry>): RoutineEntry | null {
+    const entries = this.getRoutineEntries();
+    const targetId = id;
+    const index = entries.findIndex(e => e.id === targetId);
+    if (index === -1) return null;
+
+    const updated: RoutineEntry = {
+      ...entries[index],
+      ...updatedFields,
+      id: targetId
+    };
+    if (updatedFields.routine_id) {
+      updated.routine_id = ensureValidUUID(updatedFields.routine_id);
+    }
+    entries[index] = updated;
+    this.saveRoutineEntries(entries);
+    return updated;
+  }
+
+  deleteRoutineEntry(id: string): void {
+    const targetId = id;
+    const entries = this.getRoutineEntries();
+    const filtered = entries.filter(e => e.id !== targetId);
+    this.saveRoutineEntries(filtered);
+
+    // Explicitly delete from Supabase to handle the removed item
+    supabase
+      .from('routine_entries')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routine Entries Delete Error]:', error.message);
+        }
+      });
+  }
+
+  // Exam Schedules CRM
+  getExamSchedules(): ExamSchedule[] {
+    return this.getStorageItem<ExamSchedule[]>('gsss_exam_schedules', DEFAULT_EXAM_SCHEDULES);
+  }
+
+  saveExamSchedules(schedules: ExamSchedule[]): void {
+    this.setStorageItem('gsss_exam_schedules', schedules);
+  }
+
+  createExamSchedule(scheduleData: Omit<ExamSchedule, 'id' | 'created_at' | 'updated_at'>): ExamSchedule {
+    const schedules = this.getExamSchedules();
+    const now = new Date().toISOString();
+    const newSchedule: ExamSchedule = {
+      ...scheduleData,
+      id: `exam_sch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      created_at: now,
+      updated_at: now
+    };
+    schedules.push(newSchedule);
+    this.saveExamSchedules(schedules);
+    return newSchedule;
+  }
+
+  updateExamSchedule(id: string, updatedFields: Partial<ExamSchedule>): ExamSchedule | null {
+    const schedules = this.getExamSchedules();
+    const index = schedules.findIndex(s => s.id === id);
+    if (index === -1) return null;
+
+    const updated: ExamSchedule = {
+      ...schedules[index],
+      ...updatedFields,
+      updated_at: new Date().toISOString()
+    };
+    schedules[index] = updated;
+    this.saveExamSchedules(schedules);
+    return updated;
+  }
+
+  deleteExamSchedule(id: string): void {
+    const schedules = this.getExamSchedules();
+    const filtered = schedules.filter(s => s.id !== id);
+    this.saveExamSchedules(filtered);
+
+    // Also remove respective exam entries for sanity
+    const entries = this.getExamEntries();
+    const cleaned = entries.filter(e => e.schedule_id !== id);
+    this.saveExamEntries(cleaned);
+  }
+
+  getExamEntries(): ExamEntry[] {
+    return this.getStorageItem<ExamEntry[]>('gsss_exam_entries', DEFAULT_EXAM_ENTRIES);
+  }
+
+  saveExamEntries(entries: ExamEntry[]): void {
+    this.setStorageItem('gsss_exam_entries', entries);
+  }
+
+  getExamEntriesBySchedule(scheduleId: string): ExamEntry[] {
+    return this.getExamEntries().filter(e => e.schedule_id === scheduleId);
+  }
+
+  createExamEntry(entryData: Omit<ExamEntry, 'id'>): ExamEntry {
+    const entries = this.getExamEntries();
+    const id = `exam_ent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const newEntry: ExamEntry = { id, ...entryData };
+    entries.push(newEntry);
+    this.saveExamEntries(entries);
+    return newEntry;
+  }
+
+  updateExamEntry(id: string, updatedFields: Partial<ExamEntry>): ExamEntry | null {
+    const entries = this.getExamEntries();
+    const index = entries.findIndex(e => e.id === id);
+    if (index === -1) return null;
+
+    const updated: ExamEntry = { ...entries[index], ...updatedFields };
+    entries[index] = updated;
+    this.saveExamEntries(entries);
+    return updated;
+  }
+
+  deleteExamEntry(id: string): void {
+    const entries = this.getExamEntries();
+    const filtered = entries.filter(e => e.id !== id);
+    this.saveExamEntries(filtered);
+  }
+
+  // Academic Calendar Events CRM
+  getCalendarEvents(): CalendarEvent[] {
+    const raw = this.getStorageItem<CalendarEvent[]>('gsss_calendar_events', DEFAULT_CALENDAR_EVENTS);
+    return raw.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id)
+    }));
+  }
+
+  saveCalendarEvents(events: CalendarEvent[], localOnly = false): void {
+    const sanitized = events.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id)
+    }));
+    this.setStorageItem('gsss_calendar_events', sanitized);
+    console.log('[CALENDAR SAVE]', sanitized.length, 'events saved. localOnly =', localOnly);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('calendar_events')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Calendar Events Save Error]:', error.message);
+        }
+      });
+  }
+
+  createCalendarEvent(eventData: Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'>): CalendarEvent {
+    const events = this.getCalendarEvents();
+    const now = new Date().toISOString();
+    const tempId = `cal_ev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sanitizedId = ensureValidUUID(tempId);
+    const newEvent: CalendarEvent = {
+      ...eventData,
+      id: sanitizedId,
+      created_at: now,
+      updated_at: now
+    };
+    events.push(newEvent);
+    this.saveCalendarEvents(events);
+    return newEvent;
+  }
+
+  updateCalendarEvent(id: string, updatedFields: Partial<CalendarEvent>): CalendarEvent | null {
+    const targetId = ensureValidUUID(id);
+    const events = this.getCalendarEvents();
+    const index = events.findIndex(e => e.id === targetId);
+    if (index === -1) return null;
+
+    const updated: CalendarEvent = {
+      ...events[index],
+      ...updatedFields,
+      id: targetId,
+      updated_at: new Date().toISOString()
+    };
+    events[index] = updated;
+    this.saveCalendarEvents(events);
+    return updated;
+  }
+
+  deleteCalendarEvent(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const events = this.getCalendarEvents();
+    const filtered = events.filter(e => e.id !== targetId);
+    this.saveCalendarEvents(filtered);
+
+    // Explicitly delete from Supabase to handle the removed item
+    supabase
+      .from('calendar_events')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Calendar Event Delete Error]:', error.message);
+        }
+      });
+  }
+
+  // Supabase dynamic configurations in case they connect their real Supabase database
+  getSupabaseConfig(): SupabaseConfig {
+    return this.getStorageItem<SupabaseConfig>('gsss_supabase_config', {
+      supabase_url: '',
+      supabase_anon_key: '',
+      is_active: false
+    });
+  }
+
+  saveSupabaseConfig(config: SupabaseConfig): void {
+    this.setStorageItem('gsss_supabase_config', config);
+  }
+
+  // ==========================================
+  // EVENTS MANAGEMENT METHODS
+  // ==========================================
+
+  getEvents(): SchoolEvent[] {
+    let loadedEvents: SchoolEvent[] = [];
+    if (this.cachedEvents) {
+      loadedEvents = this.cachedEvents.map(e => ({
+        ...e,
+        id: ensureValidUUID(e.id)
+      }));
+    } else {
+      const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
+      loadedEvents = rawEvents.map(e => ({
+        ...e,
+        id: ensureValidUUID(e.id)
+      }));
+      this.cachedEvents = loadedEvents;
+    }
+
+    return loadedEvents.sort((a, b) => {
+      const dateA = a.event_date || '';
+      const dateB = b.event_date || '';
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
+      const createdAtA = a.created_at || '';
+      const createdAtB = b.created_at || '';
+      return createdAtB.localeCompare(createdAtA);
+    });
+  }
+
+  saveEvents(events: SchoolEvent[], localOnly = false): void {
+    const sanitized = events.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id),
+      event_date: sanitizeDate(e.event_date) || new Date().toISOString().split('T')[0]
+    }));
+    
+    // Set in-memory cache as primary source of truth
+    this.cachedEvents = sanitized;
+    
+    // Save to local storage as an optional/best-effort persistent fallback
+    this.setStorageItem('gsss_events', sanitized);
+    console.log(
+      '[DEBUG] localStorage gsss_events count:',
+      sanitized.length
+    );
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('school_events')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Events Sync Error]:', error.message);
+        }
+      });
+  }
+
+  createEvent(eventData: Omit<SchoolEvent, 'id' | 'created_at' | 'updated_at'>): SchoolEvent {
+    const events = this.getEvents();
+    const now = new Date().toISOString();
+    const newEvent: SchoolEvent = {
+      ...eventData,
+      id: generateUUID(),
+      created_at: now,
+      updated_at: now
+    };
+    events.push(newEvent);
+    this.saveEvents(events); // Syncs the full updated list of events to Supabase under the hood
+
+    return newEvent;
+  }
+
+  updateEvent(id: string, updatedFields: Partial<SchoolEvent>): SchoolEvent | null {
+    const events = this.getEvents();
+    const targetId = ensureValidUUID(id);
+    const index = events.findIndex(e => e.id === targetId);
+    if (index === -1) return null;
+
+    const updated: SchoolEvent = {
+      ...events[index],
+      ...updatedFields,
+      id: targetId,
+      updated_at: new Date().toISOString()
+    };
+    events[index] = updated;
+    this.saveEvents(events); // Syncs the full updated list of events to Supabase
+
+    return updated;
+  }
+
+  deleteEvent(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const events = this.getEvents();
+    const filtered = events.filter(e => e.id !== targetId);
+    this.saveEvents(filtered); // Syncs remaining elements to Supabase
+
+    // Explicitly delete from Supabase to handle the removed item
+    supabase
+      .from('school_events')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Delete Error]:', error.message);
+        }
+      });
+
+    // Clean up any event gallery images as well
+    const images = this.getEventImages();
+    const filteredImgs = images.filter(img => img.event_id !== targetId);
+    this.saveEventImages(filteredImgs);
+  }
+
+  // Event Categories
+  getEventCategories(): string[] {
+    return this.getStorageItem<string[]>('gsss_event_categories', DEFAULT_EVENT_CATEGORIES);
+  }
+
+  saveEventCategories(categories: string[]): void {
+    this.setStorageItem('gsss_event_categories', categories);
+  }
+
+  createEventCategory(category: string): string[] {
+    const categories = this.getEventCategories();
+    const cleanCat = category.trim();
+    if (cleanCat && !categories.some(c => c.toLowerCase() === cleanCat.toLowerCase())) {
+      categories.push(cleanCat);
+      this.saveEventCategories(categories);
+    }
+    return categories;
+  }
+
+  // Event Album / Gallery Images
+  getEventImages(): SchoolEventImage[] {
+    if (this.cachedEventImages) {
+      return this.cachedEventImages.map(img => ({
+        ...img,
+        id: ensureValidUUID(img.id),
+        event_id: ensureValidUUID(img.event_id)
+      }));
+    }
+    const rawImages = this.getStorageItem<SchoolEventImage[]>('gsss_event_images', DEFAULT_EVENT_IMAGES);
+    const loadedImages = rawImages.map(img => ({
+      ...img,
+      id: ensureValidUUID(img.id),
+      event_id: ensureValidUUID(img.event_id)
+    }));
+    this.cachedEventImages = loadedImages;
+    return loadedImages;
+  }
+
+  saveEventImages(images: SchoolEventImage[], localOnly = false): void {
+    const sanitized = images.map(img => ({
+      ...img,
+      id: ensureValidUUID(img.id),
+      event_id: ensureValidUUID(img.event_id)
+    }));
+    
+    // Set in-memory cache as primary source of truth
+    this.cachedEventImages = sanitized;
+    
+    // Save to local storage as best effort fallback
+    this.setStorageItem('gsss_event_images', sanitized);
+
+    if (localOnly) return;
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('school_event_images')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Images Sync Error]:', error.message);
+        }
+      });
+  }
+
+  getEventImagesByEvent(eventId: string): SchoolEventImage[] {
+    const targetEventId = ensureValidUUID(eventId);
+    return this.getEventImages()
+      .filter(img => img.event_id === targetEventId)
+      .sort((a, b) => a.display_order - b.display_order);
+  }
+
+  addEventImage(eventId: string, imageUrl: string): SchoolEventImage {
+    const targetEventId = ensureValidUUID(eventId);
+    const images = this.getEventImages();
+    const eventImgs = images.filter(img => img.event_id === targetEventId);
+    const nextOrder = eventImgs.length > 0 ? Math.max(...eventImgs.map(img => img.display_order)) + 1 : 1;
+
+    const newImg: SchoolEventImage = {
+      id: generateUUID(),
+      event_id: targetEventId,
+      image_url: imageUrl,
+      display_order: nextOrder
+    };
+    images.push(newImg);
+    this.saveEventImages(images); // Syncs the full list of event images to Supabase
+
+    return newImg;
+  }
+
+  deleteEventImage(imageId: string): void {
+    const targetImageId = ensureValidUUID(imageId);
+    const images = this.getEventImages();
+    const target = images.find(img => img.id === targetImageId);
+    if (!target) return;
+    
+    const filtered = images.filter(img => img.id !== targetImageId);
+    
+    // Reorder remaining images for the event
+    const eventImgs = filtered.filter(img => img.event_id === target.event_id)
+      .sort((a, b) => a.display_order - b.display_order);
+    eventImgs.forEach((img, idx) => {
+      img.display_order = idx + 1;
+    });
+
+    this.saveEventImages(filtered); // Syncs remaining and reordered images to Supabase
+
+    // Explicitly delete deleted image from Supabase
+    supabase
+      .from('school_event_images')
+      .delete()
+      .eq('id', targetImageId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Event Image Delete Error]:', error.message);
+        }
+      });
+  }
+
+  updateEventImagesOrder(eventId: string, imageIdsInOrder: string[]): void {
+    const targetEventId = ensureValidUUID(eventId);
+    const sanitizedIds = imageIdsInOrder.map(id => ensureValidUUID(id));
+    const images = this.getEventImages();
+    const otherImgs = images.filter(img => img.event_id !== targetEventId);
+    const eventImgs = images.filter(img => img.event_id === targetEventId);
+
+    sanitizedIds.forEach((id, idx) => {
+      const img = eventImgs.find(i => i.id === id);
+      if (img) {
+        img.display_order = idx + 1;
+      }
+    });
+
+    const updatedImgs = [...otherImgs, ...eventImgs];
+    this.saveEventImages(updatedImgs); // Syncs full re-ordered images to Supabase
+  }
+
+  getPeriodMasters(): PeriodMaster[] {
+    const raw = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+    return raw.map(p => ({
+      ...p,
+      id: ensureValidUUID(p.id)
+    }));
+  }
+
+  savePeriodMasters(periods: PeriodMaster[], localOnly = false): void {
+    const sanitized = periods.map(p => ({
+      ...p,
+      id: ensureValidUUID(p.id)
+    }));
+    this.setStorageItem('gsss_period_masters', sanitized);
+    this.updateTimetableTimestamp();
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('period_masters')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Period Masters Save Error]:', error.message);
+        }
+      });
+  }
+
+  deletePeriodMaster(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const periods = this.getPeriodMasters();
+    const filtered = periods.filter(p => p.id !== targetId);
+    
+    // Save filtered list locally without uploading to Supabase as an upsert
+    this.savePeriodMasters(filtered, true);
+
+    // Call supabaseDbService delete method
+    supabaseDbService.deletePeriodMaster(targetId).catch(error => {
+      console.error('[Supabase Period Masters Delete Error]:', error.message);
+    });
+  }
+}
+
+export const dbService = new DatabaseService();

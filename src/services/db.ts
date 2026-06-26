@@ -5,6 +5,7 @@
 
 import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage } from '../types';
 import { supabase } from './supabase';
+import { supabaseDbService } from './supabaseDb';
 
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1956,6 +1957,20 @@ class DatabaseService {
           console.error('[Supabase Period Masters Save Error]:', error.message);
         }
       });
+  }
+
+  deletePeriodMaster(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const periods = this.getPeriodMasters();
+    const filtered = periods.filter(p => p.id !== targetId);
+    
+    // Save filtered list locally without uploading to Supabase as an upsert
+    this.savePeriodMasters(filtered, true);
+
+    // Call supabaseDbService delete method
+    supabaseDbService.deletePeriodMaster(targetId).catch(error => {
+      console.error('[Supabase Period Masters Delete Error]:', error.message);
+    });
   }
 }
 

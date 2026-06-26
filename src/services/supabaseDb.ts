@@ -391,6 +391,15 @@ class SupabaseDbService {
     if (error) throw error;
   }
 
+  async deletePeriodMaster(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('period_masters')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
   async getTimetableLastUpdated(): Promise<string> {
     const { data, error } = await supabase
       .from('timetable_metadata')

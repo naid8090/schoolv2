@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { dbService } from '../services/db';
 import { supabaseDbService } from '../services/supabaseDb';
+import { databaseSeeder } from '../services/databaseSeeder';
 
 interface ModuleHealthData {
   id: string;
@@ -159,6 +160,11 @@ export const DatabaseHealth: React.FC = () => {
   ]);
 
   const [isLoadingAll, setIsLoadingAll] = useState(true);
+  const [seedingId, setSeedingId] = useState<string | null>(null);
+  const [operationResult, setOperationResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   const runDatabaseDiagnostics = async () => {
     setIsLoadingAll(true);
@@ -306,6 +312,174 @@ export const DatabaseHealth: React.FC = () => {
     setIsLoadingAll(false);
   };
 
+  const refreshModule = async (moduleId: string) => {
+    // Find metadata config
+    const targetModule = healthModules.find(m => m.id === moduleId);
+    if (!targetModule) return;
+
+    // Set specific module row to loading state
+    setHealthModules(prev => prev.map(m => m.id === moduleId ? { ...m, loading: true, errorMsg: undefined } : m));
+
+    try {
+      let localCount = 0;
+      let remoteCount: number | null = null;
+      let status: 'Healthy' | 'Needs Seeding' | 'Local Only' | 'Out of Sync' | 'Error' = 'Healthy';
+      let errorMsg: string | undefined = undefined;
+
+      // 1. Local count read
+      try {
+        switch (moduleId) {
+          case 'school_settings':
+            localCount = dbService.getSchoolSettings() ? 1 : 0;
+            break;
+          case 'homepage_modules':
+            localCount = dbService.getHomepageModules().length;
+            break;
+          case 'notices':
+            localCount = dbService.getNotices().length;
+            break;
+          case 'faculty':
+            localCount = dbService.getFaculty().length;
+            break;
+          case 'events':
+            localCount = (dbService.getEvents() || []).length;
+            break;
+          case 'event_images':
+            localCount = (dbService.getEventImages() || []).length;
+            break;
+          case 'period_masters':
+            localCount = dbService.getPeriodMasters().length;
+            break;
+          case 'calendar_events':
+            localCount = dbService.getCalendarEvents().length;
+            break;
+          case 'routines':
+            localCount = dbService.getRoutines().length;
+            break;
+          case 'routine_entries':
+            localCount = dbService.getRoutineEntries().length;
+            break;
+          case 'media_library':
+            localCount = dbService.getMediaItems().length;
+            break;
+        }
+      } catch (err: any) {
+        localCount = 0;
+      }
+
+      // 2. Remote count read
+      try {
+        switch (moduleId) {
+          case 'school_settings': {
+            const res = await supabaseDbService.getSchoolSettings();
+            remoteCount = res ? 1 : 0;
+            break;
+          }
+          case 'homepage_modules': {
+            const res = await supabaseDbService.getHomepageModules();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'notices': {
+            const res = await supabaseDbService.getNotices();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'faculty': {
+            const res = await supabaseDbService.getFaculty();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'events': {
+            const res = await supabaseDbService.getEvents();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'event_images': {
+            const res = await supabaseDbService.getEventImages();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'period_masters': {
+            const res = await supabaseDbService.getPeriodMasters();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'calendar_events': {
+            const res = await supabaseDbService.getCalendarEvents();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'routines': {
+            const res = await supabaseDbService.getRoutines();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'routine_entries': {
+            const res = await supabaseDbService.getRoutineEntries();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'media_library': {
+            const res = await supabaseDbService.getMediaItems();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+        }
+      } catch (err: any) {
+        remoteCount = null;
+        errorMsg = err.message || 'Supabase Connection Error';
+      }
+
+      // 3. Compute status
+      if (remoteCount === null) {
+        status = 'Error';
+      } else if (remoteCount === 0 && localCount > 0) {
+        status = targetModule.isDefault ? 'Needs Seeding' : 'Local Only';
+      } else if (remoteCount !== localCount) {
+        status = 'Out of Sync';
+      } else {
+        status = 'Healthy';
+      }
+
+      setHealthModules(prev => prev.map(m => m.id === moduleId ? {
+        ...m,
+        localCount,
+        remoteCount,
+        status,
+        loading: false,
+        errorMsg
+      } : m));
+
+    } catch (err: any) {
+      console.error(`Error refreshing health state for ${moduleId}:`, err);
+    }
+  };
+
+  const handleSeed = async (moduleId: string) => {
+    if (moduleId !== 'routines') return;
+
+    setSeedingId(moduleId);
+    setOperationResult(null);
+
+    try {
+      const result = await databaseSeeder.seedRoutines();
+      setOperationResult({
+        success: result.success,
+        message: result.message
+      });
+      // Refresh database diagnostics immediately after success
+      await refreshModule(moduleId);
+    } catch (err: any) {
+      setOperationResult({
+        success: false,
+        message: err.message || 'An unexpected error occurred during seeding.'
+      });
+    } finally {
+      setSeedingId(null);
+    }
+  };
+
   useEffect(() => {
     runDatabaseDiagnostics();
   }, []);
@@ -370,6 +544,33 @@ export const DatabaseHealth: React.FC = () => {
         </div>
       </div>
 
+      {/* Operation Results Banner */}
+      {operationResult && (
+        <div className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
+          operationResult.success 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`} id="seeder-feedback-banner">
+          <div className="flex items-center gap-2.5">
+            {operationResult.success ? (
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            )}
+            <div className="text-xs sm:text-sm font-medium">
+              <span className="font-bold">{operationResult.success ? 'Success: ' : 'Abort/Error: '}</span>
+              {operationResult.message}
+            </div>
+          </div>
+          <button 
+            onClick={() => setOperationResult(null)}
+            className="text-slate-400 hover:text-slate-600 text-xs font-mono font-bold tracking-wider cursor-pointer ml-4 hover:underline"
+          >
+            DISMISS
+          </button>
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" id="health-dashboard-kpis">
         {/* Total Modules */}
@@ -425,9 +626,14 @@ export const DatabaseHealth: React.FC = () => {
             <span className="w-1.5 h-3.5 bg-orange-500 rounded-sm" />
             Integrity Check Registry
           </h3>
-          <div className="text-[10px] font-mono font-bold text-slate-400 bg-white border border-slate-200 px-2.5 py-1 rounded-full uppercase tracking-wider">
-            {isLoadingAll ? 'Re-Running Diagnostics...' : 'Live Read-Only Console'}
-          </div>
+          <button
+            onClick={runDatabaseDiagnostics}
+            disabled={isLoadingAll}
+            className="text-[10px] font-mono font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-full uppercase tracking-wider hover:bg-slate-50 transition flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3 h-3 ${isLoadingAll ? 'animate-spin text-orange-500' : ''}`} />
+            {isLoadingAll ? 'Refreshing Diagnostics...' : 'Re-Run Diagnostics'}
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -438,7 +644,7 @@ export const DatabaseHealth: React.FC = () => {
                 <th className="px-5 py-3 text-center">Local Cache</th>
                 <th className="px-5 py-3 text-center">Cloud Supabase</th>
                 <th className="px-5 py-3 text-center">Health Status</th>
-                <th className="px-5 py-3">Future Operations Desk (Locked)</th>
+                <th className="px-5 py-3">Operations Desk</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
@@ -491,19 +697,39 @@ export const DatabaseHealth: React.FC = () => {
                     </div>
                   </td>
 
-                  {/* Future Operations Desk (Fully styled but disabled placeholder) */}
+                  {/* Future Operations Desk */}
                   <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-60">
-                        SEED
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-60">
-                        REFRESH
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-60">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
+                      {m.id === 'routines' ? (
+                        <button
+                          onClick={() => handleSeed(m.id)}
+                          disabled={seedingId !== null || m.loading}
+                          className={`px-2 py-0.5 rounded border select-none transition ${
+                            seedingId === m.id
+                              ? 'bg-orange-100 text-orange-700 border-orange-300 cursor-wait'
+                              : 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600 hover:border-orange-700 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {seedingId === m.id ? 'SEEDING...' : 'SEED'}
+                        </button>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
+                          SEED
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => refreshModule(m.id)}
+                        disabled={m.loading || seedingId !== null}
+                        className="px-2 py-0.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded border border-slate-200 select-none cursor-pointer transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {m.loading ? '...' : 'REFRESH'}
+                      </button>
+
+                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
                         REPAIR
                       </span>
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-60">
+                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
                         VALIDATE
                       </span>
                     </div>

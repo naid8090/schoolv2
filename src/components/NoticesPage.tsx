@@ -8,6 +8,7 @@ import { Search, Calendar, Tag, AlertOctagon, Download, X, Pin, ArrowRight, Exte
 import { Notice, NoticeCategory, NoticePriority, MediaItem } from '../types';
 import { dbService } from '../services/db';
 import { CustomPDFIcon, CustomSchoolEmblem } from './CommonAssets';
+import { useDataSync } from '../hooks/useDataSync';
 
 interface NoticesPageProps {
   onBackToHome?: () => void;
@@ -27,15 +28,9 @@ export const NoticesPage: React.FC<NoticesPageProps> = ({
   const [activeNotice, setActiveNotice] = useState<Notice | null>(null);
 
   // Auto-sync list if remote data is loaded
-  useEffect(() => {
-    const handleSync = () => {
-      setNotices(allNotices());
-    };
-    window.addEventListener('gsss-data-synced', handleSync);
-    return () => {
-      window.removeEventListener('gsss-data-synced', handleSync);
-    };
-  }, []);
+  useDataSync(() => {
+    setNotices(allNotices());
+  });
   
   // Notice detail image viewer zoom states
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);

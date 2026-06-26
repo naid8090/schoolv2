@@ -26,6 +26,7 @@ import {
 import { dbService } from '../services/db';
 import { Routine, RoutineEntry, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass } from '../types';
 import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
+import { useDataSync } from '../hooks/useDataSync';
 
 // ==========================================
 // UTILS
@@ -82,10 +83,16 @@ export const ClassRoutinePage: React.FC = () => {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
 
-  useEffect(() => {
+  const loadRoutines = () => {
     setRoutines(dbService.getRoutines());
     setEntries(dbService.getRoutineEntries());
+  };
+
+  useEffect(() => {
+    loadRoutines();
   }, []);
+
+  useDataSync(loadRoutines);
 
   const activeRoutine = routines.find(r => r.class_name === selectedClass);
   const classEntries = entries.filter(e => e.routine_id === activeRoutine?.id);
@@ -349,15 +356,21 @@ export const ExamSchedulePage: React.FC = () => {
   const [entries, setEntries] = useState<ExamEntry[]>([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
 
-  useEffect(() => {
+  const loadExamData = () => {
     const list = dbService.getExamSchedules();
     const active = list.filter(s => s.is_active);
     setSchedules(active);
     setEntries(dbService.getExamEntries());
-    if (active.length > 0) {
+    if (active.length > 0 && !selectedScheduleId) {
       setSelectedScheduleId(active[0].id);
     }
+  };
+
+  useEffect(() => {
+    loadExamData();
   }, []);
+
+  useDataSync(loadExamData);
 
   const activeSchedule = schedules.find(s => s.id === selectedScheduleId);
   const activeEntries = entries.filter(e => e.schedule_id === selectedScheduleId)
@@ -536,11 +549,17 @@ export const AcademicCalendarPage: React.FC = () => {
   // Date states for the Grid Calendar
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  useEffect(() => {
+  const loadCalendarEvents = () => {
     const list = dbService.getCalendarEvents()
       .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
     setEvents(list);
+  };
+
+  useEffect(() => {
+    loadCalendarEvents();
   }, []);
+
+  useDataSync(loadCalendarEvents);
 
   useEffect(() => {
     if (selectedCategory === 'All') {

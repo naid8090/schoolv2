@@ -13,6 +13,7 @@ import {
 import { dbService } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, AcademicClass, SchoolSettings } from '../types';
 import * as XLSX from 'xlsx';
+import { useDataSync } from '../hooks/useDataSync';
 
 interface ConsolidatedRoutineMatrixProps {
   isAdmin?: boolean;
@@ -46,6 +47,8 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
   useEffect(() => {
     loadData();
   }, []);
+
+  useDataSync(loadData);
 
   const dynamicClasses: AcademicClass[] = Array.from(
     new Set([

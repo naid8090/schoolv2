@@ -8,6 +8,7 @@ import { Calendar, Tag, MapPin, User, Eye, EyeOff, Archive, Trash2, Edit2, Plus,
 import { dbService } from '../services/db';
 import { SchoolEvent, SchoolEventImage, MediaItem } from '../types';
 import { MediaSelectorModal } from './MediaLibrary';
+import { useDataSync } from '../hooks/useDataSync';
 
 export const EventsAdmin: React.FC = () => {
   const [eventsList, setEventsList] = useState<SchoolEvent[]>([]);
@@ -45,17 +46,6 @@ export const EventsAdmin: React.FC = () => {
   // Album images state for current editing event
   const [currentAlbum, setCurrentAlbum] = useState<SchoolEventImage[]>([]);
 
-  useEffect(() => {
-    refreshLists();
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener('gsss-data-synced', refreshLists);
-    return () => {
-      window.removeEventListener('gsss-data-synced', refreshLists);
-    };
-  }, [categoriesList, formCategory]);
-
   const refreshLists = () => {
     setEventsList(dbService.getEvents());
     const categories = dbService.getEventCategories();
@@ -64,6 +54,12 @@ export const EventsAdmin: React.FC = () => {
       setFormCategory(categories[0]);
     }
   };
+
+  useEffect(() => {
+    refreshLists();
+  }, []);
+
+  useDataSync(refreshLists);
 
   // Switch to Create Mode
   const handleInitCreate = () => {

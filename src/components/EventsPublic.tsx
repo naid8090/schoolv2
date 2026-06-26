@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, User, Search, ArrowLeft, FileText, Download, Grid, Award, Eye, CalendarDays, Image as ImageIcon } from 'lucide-react';
 import { dbService } from '../services/db';
 import { SchoolEvent, SchoolEventImage } from '../types';
+import { useDataSync } from '../hooks/useDataSync';
 
 interface EventsPublicProps {
   initialSelectedEventId?: string | null;
@@ -24,42 +25,18 @@ export const EventsPublic: React.FC<EventsPublicProps> = ({
   const [yearFilter, setYearFilter] = useState('ALL');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialSelectedEventId || null);
 
-  useEffect(() => {
-    // Load published events
+  const loadEvents = () => {
     const allEvents = dbService.getEvents();
-    console.log(
-      '[DEBUG] EventsPublic allEvents:',
-      allEvents.length
-    );
-    // Public view only shows Published and Archived events (not drafts)
     const publicEvents = allEvents.filter(e => e.status !== 'Draft');
     setEvents(publicEvents);
     setCategories(dbService.getEventCategories());
-  }, []);
+  };
 
   useEffect(() => {
-    const handleSync = () => {
-      console.log(
-        '[DEBUG] handleSync fired'
-      );
-      const allEvents = dbService.getEvents();
-      console.log(
-        '[DEBUG] EventsPublic allEvents:',
-        allEvents.length
-      );
-      console.log(
-        '[DEBUG] handleSync events:',
-        allEvents.length
-      );
-      const publicEvents = allEvents.filter(e => e.status !== 'Draft');
-      setEvents(publicEvents);
-      setCategories(dbService.getEventCategories());
-    };
-    window.addEventListener('gsss-data-synced', handleSync);
-    return () => {
-      window.removeEventListener('gsss-data-synced', handleSync);
-    };
+    loadEvents();
   }, []);
+
+  useDataSync(loadEvents);
 
   useEffect(() => {
     if (initialSelectedEventId) {

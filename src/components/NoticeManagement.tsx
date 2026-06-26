@@ -8,20 +8,15 @@ import { Plus, Trash2, Edit, Save, X, Pin, Eye, EyeOff, FileText, Check, Papercl
 import { Notice, NoticeCategory, NoticePriority, NoticeStatus, MediaItem } from '../types';
 import { dbService } from '../services/db';
 import { MediaSelectorModal } from './MediaLibrary';
+import { useDataSync } from '../hooks/useDataSync';
 
 export const NoticeManagement: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>(() => dbService.getNotices());
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    const handleSync = () => {
-      setNotices(dbService.getNotices());
-    };
-    window.addEventListener('gsss-data-synced', handleSync);
-    return () => {
-      window.removeEventListener('gsss-data-synced', handleSync);
-    };
-  }, []);
+  useDataSync(() => {
+    setNotices(dbService.getNotices());
+  });
   const [isCreating, setIsCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 

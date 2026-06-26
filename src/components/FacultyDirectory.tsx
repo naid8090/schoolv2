@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Search, Mail, Phone, BookOpen, GraduationCap, Briefcase, User, X } from 'lucide-react';
 import { Faculty } from '../types';
 import { dbService } from '../services/db';
+import { useDataSync } from '../hooks/useDataSync';
 
 export const FacultyDirectory: React.FC = () => {
   const [facultyList, setFacultyList] = useState<Faculty[]>(() => dbService.getFaculty());
@@ -15,15 +16,9 @@ export const FacultyDirectory: React.FC = () => {
   const [selectedDesig, setSelectedDesig] = useState('All');
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
 
-  React.useEffect(() => {
-    const handleSync = () => {
-      setFacultyList(dbService.getFaculty());
-    };
-    window.addEventListener('gsss-data-synced', handleSync);
-    return () => {
-      window.removeEventListener('gsss-data-synced', handleSync);
-    };
-  }, []);
+  useDataSync(() => {
+    setFacultyList(dbService.getFaculty());
+  });
 
   // Derive filters from active list
   const activeFaculty = facultyList.filter(f => f.is_active);

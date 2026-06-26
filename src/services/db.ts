@@ -1477,22 +1477,61 @@ class DatabaseService {
     return updated;
   }
 
-  deleteRoutineEntry(id: string): void {
+  async deleteRoutineEntry(id: string): Promise<void> {
     const targetId = id;
+    console.log('[ROUTINE ENTRY DELETE] Direct delete requested for ID:', targetId);
+    
     const entries = this.getRoutineEntries();
+    const initialCount = entries.length;
     const filtered = entries.filter(e => e.id !== targetId);
-    this.saveRoutineEntries(filtered);
+    const removedCount = initialCount - filtered.length;
 
-    // Explicitly delete from Supabase to handle the removed item
-    supabase
-      .from('routine_entries')
-      .delete()
-      .eq('id', targetId)
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Routine Entries Delete Error]:', error.message);
-        }
-      });
+    try {
+      const { error } = await supabase
+        .from('routine_entries')
+        .delete()
+        .eq('id', targetId);
+
+      if (error) {
+        console.error('[Supabase Routine Entries Delete Error]:', error.message);
+        throw error;
+      }
+      console.log('[REMOTE DELETE COUNT] Routine entries deleted from Supabase:', removedCount);
+    } catch (err: any) {
+      console.error('[ROUTINE ENTRY DELETE] Failed to delete from Supabase:', err.message || err);
+    }
+
+    this.saveRoutineEntries(filtered, true); // save locally only
+    console.log('[LOCAL DELETE COUNT] Local routine entries deleted:', removedCount);
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+  }
+
+  async deleteRoutineEntries(ids: string[]): Promise<void> {
+    console.log('[CASCADE DELETE] Bulk delete requested for IDs:', ids);
+    
+    const entries = this.getRoutineEntries();
+    const initialCount = entries.length;
+    const filtered = entries.filter(e => !ids.includes(e.id));
+    const removedCount = initialCount - filtered.length;
+
+    try {
+      const { error } = await supabase
+        .from('routine_entries')
+        .delete()
+        .in('id', ids);
+
+      if (error) {
+        console.error('[Supabase Routine Entries Bulk Delete Error]:', error.message);
+        throw error;
+      }
+      console.log('[REMOTE DELETE COUNT] Bulk routine entries deleted from Supabase:', removedCount);
+    } catch (err: any) {
+      console.error('[CASCADE DELETE] Failed to delete from Supabase:', err.message || err);
+    }
+
+    this.saveRoutineEntries(filtered, true); // save locally only
+    console.log('[LOCAL DELETE COUNT] Local bulk routine entries deleted:', removedCount);
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
   }
 
   // Exam Schedules CRM

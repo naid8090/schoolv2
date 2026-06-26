@@ -191,7 +191,7 @@ const PeriodsMasterWorkspace: React.FC<{
     setError(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     console.log('[ACADEMIC_ADMIN DELETE] clicked id:', id);
     if (!window.confirm("Delete this period?\nThis will also remove timetable slots using this period.")) {
       return;
@@ -205,10 +205,25 @@ const PeriodsMasterWorkspace: React.FC<{
     // Cascading clean up of associated routine entries to prevent empty/orphaned placeholders
     if (deletedPm) {
       const allEntries = dbService.getRoutineEntries();
-      const cleanedEntries = allEntries.filter(
-        e => e.period.toLowerCase().trim() !== deletedPm.name.toLowerCase().trim()
+      const entriesToRemove = allEntries.filter(
+        e => e.period.toLowerCase().trim() === deletedPm.name.toLowerCase().trim()
       );
-      dbService.saveRoutineEntries(cleanedEntries);
+      const idsToRemove = entriesToRemove.map(e => e.id);
+      
+      console.log('[CASCADE DELETE] Period Master cascade delete started for period:', deletedPm.name);
+      console.log('[CASCADE DELETE] Found routine entries to remove:', idsToRemove);
+
+      if (idsToRemove.length > 0) {
+        // Delete those IDs remotely and update local cache
+        try {
+          await dbService.deleteRoutineEntries(idsToRemove);
+          console.log('[CASCADE DELETE] Remote cascade delete successful.');
+        } catch (err) {
+          console.error('[CASCADE DELETE] Remote cascade delete failed:', err);
+        }
+      } else {
+        console.log('[CASCADE DELETE] No routine entries found using this period. No remote deletes needed.');
+      }
     }
     
     // Refresh local lists and dispatch sync event to update the UI
@@ -703,9 +718,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     window.scrollTo({ top: 320, behavior: 'smooth' });
   };
 
-  const handleDeleteEntryInline = (entryId: string) => {
-    const filtered = entries.filter(e => e.id !== entryId);
-    dbService.saveRoutineEntries(filtered);
+  const handleDeleteEntryInline = async (entryId: string) => {
+    try {
+      await dbService.deleteRoutineEntry(entryId);
+    } catch (err) {
+      console.error('[ROUTINE ENTRY DELETE] Direct delete inline failed:', err);
+    }
     fetchLocalData();
     setDeletingId(null);
   };
@@ -798,10 +816,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     fetchLocalData();
   };
 
-  const handleClearCombinedCell = () => {
+  const handleClearCombinedCell = async () => {
     if (editingCombinedCell?.entry) {
-      const filtered = entries.filter(e => e.id !== editingCombinedCell.entry?.id);
-      dbService.saveRoutineEntries(filtered);
+      try {
+        await dbService.deleteRoutineEntry(editingCombinedCell.entry.id);
+      } catch (err) {
+        console.error('[ROUTINE ENTRY DELETE] Clear combined cell failed:', err);
+      }
       fetchLocalData();
     }
     setEditingCombinedCell(null);

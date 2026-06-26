@@ -283,6 +283,25 @@ export default function App() {
           console.error('[Supabase routines sync error]:', err);
         }
 
+        // --- 10. ROUTINE ENTRIES SYNC ---
+        try {
+          console.log('[ROUTINE ENTRIES SYNC]');
+          const remoteEntries = await supabaseDbService.getRoutineEntries();
+          console.log('[ROUTINE ENTRIES REMOTE COUNT]', remoteEntries?.length ?? 0);
+
+          if (active) {
+            if (remoteEntries && remoteEntries.length > 0) {
+              dbService.saveRoutineEntries(remoteEntries, true);
+              console.log('[ROUTINE ENTRIES LOCAL COUNT]', dbService.getRoutineEntries().length);
+            } else {
+              console.log('[ROUTINE ENTRIES]\nRemote empty.\nWaiting for admin seed.');
+              console.log('[ROUTINE ENTRIES LOCAL COUNT]', dbService.getRoutineEntries().length);
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase routine entries sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           console.log('[SYNC EVENT DISPATCHED]');

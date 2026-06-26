@@ -1368,26 +1368,59 @@ class DatabaseService {
       if (pm) {
         return {
           ...ent,
+          id: ensureValidUUID(ent.id),
+          routine_id: ensureValidUUID(ent.routine_id),
           time_range: pm.time_range
         };
       }
-      return ent;
+      return {
+        ...ent,
+        id: ensureValidUUID(ent.id),
+        routine_id: ensureValidUUID(ent.routine_id)
+      };
     });
   }
 
-  saveRoutineEntries(entries: RoutineEntry[]): void {
-    this.setStorageItem('gsss_routine_entries', entries);
+  saveRoutineEntries(entries: RoutineEntry[], localOnly = false): void {
+    const sanitized = entries.map(ent => ({
+      ...ent,
+      id: ensureValidUUID(ent.id),
+      routine_id: ensureValidUUID(ent.routine_id)
+    }));
+    this.setStorageItem('gsss_routine_entries', sanitized);
     this.updateTimetableTimestamp();
+
+    console.log('[ROUTINE ENTRIES SAVE] localOnly =', localOnly);
+    console.log('[ROUTINE ENTRIES LOCAL COUNT]', sanitized.length);
+
+    if (localOnly) return;
+
+    // Persist to Supabase
+    supabase
+      .from('routine_entries')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routine Entries Save Error]:', error.message);
+        }
+      });
   }
 
   getRoutineEntriesByRoutine(routineId: string): RoutineEntry[] {
-    return this.getRoutineEntries().filter(e => e.routine_id === routineId);
+    const targetRoutineId = ensureValidUUID(routineId);
+    return this.getRoutineEntries().filter(e => e.routine_id === targetRoutineId);
   }
 
   createRoutineEntry(entryData: Omit<RoutineEntry, 'id'>): RoutineEntry {
     const entries = this.getRoutineEntries();
-    const id = `re_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const newEntry: RoutineEntry = { id, ...entryData };
+    const rawId = `re_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = ensureValidUUID(rawId);
+    const routine_id = ensureValidUUID(entryData.routine_id);
+    const newEntry: RoutineEntry = {
+      ...entryData,
+      id,
+      routine_id
+    };
     entries.push(newEntry);
     this.saveRoutineEntries(entries);
     return newEntry;
@@ -1395,19 +1428,39 @@ class DatabaseService {
 
   updateRoutineEntry(id: string, updatedFields: Partial<RoutineEntry>): RoutineEntry | null {
     const entries = this.getRoutineEntries();
-    const index = entries.findIndex(e => e.id === id);
+    const targetId = ensureValidUUID(id);
+    const index = entries.findIndex(e => e.id === targetId);
     if (index === -1) return null;
 
-    const updated: RoutineEntry = { ...entries[index], ...updatedFields };
+    const updated: RoutineEntry = {
+      ...entries[index],
+      ...updatedFields,
+      id: targetId
+    };
+    if (updatedFields.routine_id) {
+      updated.routine_id = ensureValidUUID(updatedFields.routine_id);
+    }
     entries[index] = updated;
     this.saveRoutineEntries(entries);
     return updated;
   }
 
   deleteRoutineEntry(id: string): void {
+    const targetId = ensureValidUUID(id);
     const entries = this.getRoutineEntries();
-    const filtered = entries.filter(e => e.id !== id);
+    const filtered = entries.filter(e => e.id !== targetId);
     this.saveRoutineEntries(filtered);
+
+    // Explicitly delete from Supabase to handle the removed item
+    supabase
+      .from('routine_entries')
+      .delete()
+      .eq('id', targetId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Routine Entries Delete Error]:', error.message);
+        }
+      });
   }
 
   // Exam Schedules CRM

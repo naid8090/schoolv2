@@ -6,7 +6,7 @@
 import { supabase } from './supabase';
 import { dbService, ensureValidUUID } from './db';
 import { supabaseDbService } from './supabaseDb';
-import { Routine } from '../types';
+import { Routine, RoutineEntry } from '../types';
 
 class DatabaseSeeder {
   /**
@@ -92,6 +92,85 @@ class DatabaseSeeder {
         success: true,
         message: `Successfully seeded ${validatedRoutines.length} routine(s) to the remote database.`,
         count: validatedRoutines.length
+      };
+
+    } catch (error: any) {
+      console.error('[DatabaseSeeder Error]', error.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Seed Routine Entries from local cache to Supabase.
+   */
+  async seedRoutineEntries(): Promise<{ success: boolean; message: string; count: number }> {
+    try {
+      // 1. Verify authenticated admin
+      await this.verifyAdminAuth();
+
+      // 2. Query remote routine entries table
+      const { data: remoteData, error: queryError } = await supabase
+        .from('routine_entries')
+        .select('id');
+
+      if (queryError) {
+        throw new Error(`Seeding aborted: Unable to fetch remote routine entries (${queryError.message}).`);
+      }
+
+      if (remoteData && remoteData.length > 0) {
+        return {
+          success: false,
+          message: `Already Seeded: Remote table already contains ${remoteData.length} routine entry record(s).`,
+          count: remoteData.length
+        };
+      }
+
+      // 3. Retrieve local dataset
+      const localEntries = dbService.getRoutineEntries();
+      if (!localEntries || localEntries.length === 0) {
+        throw new Error('Seeding aborted: No local routine entries found in cache.');
+      }
+
+      // Fetch remote routines to verify FK constraint
+      const remoteRoutines = await supabaseDbService.getRoutines();
+      const remoteRoutineIds = new Set(remoteRoutines.map(r => ensureValidUUID(r.id)));
+
+      const validatedEntries = [];
+      for (const entry of localEntries) {
+        const sanitizedId = ensureValidUUID(entry.id);
+        const sanitizedRoutineId = ensureValidUUID(entry.routine_id);
+
+        // Check FK constraint
+        if (!remoteRoutineIds.has(sanitizedRoutineId)) {
+          throw new Error(`Foreign Key Mismatch: routine_id "${sanitizedRoutineId}" (from entry "${entry.id}") does not exist in remote "routines" table.`);
+        }
+
+        validatedEntries.push({
+          id: sanitizedId,
+          routine_id: sanitizedRoutineId,
+          day: entry.day,
+          period: entry.period,
+          subject: entry.subject,
+          teacher: entry.teacher || null,
+          time_range: entry.time_range || null
+        });
+      }
+
+      // 4. Perform upload insert/upsert
+      const { error: insertError } = await supabase
+        .from('routine_entries')
+        .insert(validatedEntries);
+
+      if (insertError) {
+        throw new Error(`Seeding failed during upload: ${insertError.message}`);
+      }
+
+      console.log(`[ROUTINE ENTRIES SEEDED] Successfully seeded ${validatedEntries.length} routine entries.`);
+
+      return {
+        success: true,
+        message: `Successfully seeded ${validatedEntries.length} routine entry/entries to the remote database.`,
+        count: validatedEntries.length
       };
 
     } catch (error: any) {

@@ -457,13 +457,15 @@ export const DatabaseHealth: React.FC = () => {
   };
 
   const handleSeed = async (moduleId: string) => {
-    if (moduleId !== 'routines') return;
+    if (moduleId !== 'routines' && moduleId !== 'routine_entries') return;
 
     setSeedingId(moduleId);
     setOperationResult(null);
 
     try {
-      const result = await databaseSeeder.seedRoutines();
+      const result = moduleId === 'routines'
+        ? await databaseSeeder.seedRoutines()
+        : await databaseSeeder.seedRoutineEntries();
       setOperationResult({
         success: result.success,
         message: result.message
@@ -700,7 +702,7 @@ export const DatabaseHealth: React.FC = () => {
                   {/* Future Operations Desk */}
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
-                      {m.id === 'routines' ? (
+                      {m.id === 'routines' || m.id === 'routine_entries' ? (
                         <button
                           onClick={() => handleSeed(m.id)}
                           disabled={seedingId !== null || m.loading}

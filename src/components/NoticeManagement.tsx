@@ -16,7 +16,7 @@ export const NoticeManagement: React.FC = () => {
 
   useDataSync(() => {
     setNotices(dbService.getNotices());
-  });
+  }, 'NoticeManagement');
   const [isCreating, setIsCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 

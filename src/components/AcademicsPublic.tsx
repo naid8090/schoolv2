@@ -84,7 +84,10 @@ export const ClassRoutinePage: React.FC = () => {
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
 
   const loadRoutines = () => {
+    console.log('[ACADEMICS RELOAD]');
+    console.log(dbService.getRoutines().length);
     setRoutines(dbService.getRoutines());
+    console.log('[ACADEMICS STATE UPDATED]');
     setEntries(dbService.getRoutineEntries());
   };
 
@@ -92,7 +95,7 @@ export const ClassRoutinePage: React.FC = () => {
     loadRoutines();
   }, []);
 
-  useDataSync(loadRoutines);
+  useDataSync(loadRoutines, 'ClassRoutinePage');
 
   const activeRoutine = routines.find(r => r.class_name === selectedClass);
   const classEntries = entries.filter(e => e.routine_id === activeRoutine?.id);
@@ -370,7 +373,7 @@ export const ExamSchedulePage: React.FC = () => {
     loadExamData();
   }, []);
 
-  useDataSync(loadExamData);
+  useDataSync(loadExamData, 'ExamSchedulePage');
 
   const activeSchedule = schedules.find(s => s.id === selectedScheduleId);
   const activeEntries = entries.filter(e => e.schedule_id === selectedScheduleId)
@@ -559,7 +562,7 @@ export const AcademicCalendarPage: React.FC = () => {
     loadCalendarEvents();
   }, []);
 
-  useDataSync(loadCalendarEvents);
+  useDataSync(loadCalendarEvents, 'AcademicCalendarPage');
 
   useEffect(() => {
     if (selectedCategory === 'All') {

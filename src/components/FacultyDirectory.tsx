@@ -18,7 +18,7 @@ export const FacultyDirectory: React.FC = () => {
 
   useDataSync(() => {
     setFacultyList(dbService.getFaculty());
-  });
+  }, 'FacultyDirectory');
 
   // Derive filters from active list
   const activeFaculty = facultyList.filter(f => f.is_active);

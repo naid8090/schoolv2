@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react';
  *
  * @param onSync Callback function invoked when a data synchronization event occurs.
  */
-export function useDataSync(onSync: () => void): void {
+export function useDataSync(onSync: () => void, componentName: string = 'Unknown'): void {
   const syncRef = useRef(onSync);
 
   // Maintain references to the latest callback function
@@ -21,7 +21,11 @@ export function useDataSync(onSync: () => void): void {
   }, [onSync]);
 
   useEffect(() => {
+    console.log(`[SYNC LISTENER REGISTERED]\n${componentName}`);
+
     const handleSync = () => {
+      console.log(`[SYNC EVENT RECEIVED]\n${componentName}`);
+      console.log(`[SYNC CALLBACK START]\n${componentName}`);
       if (syncRef.current) {
         syncRef.current();
       }
@@ -32,5 +36,5 @@ export function useDataSync(onSync: () => void): void {
     return () => {
       window.removeEventListener('gsss-data-synced', handleSync);
     };
-  }, []);
+  }, [componentName]);
 }

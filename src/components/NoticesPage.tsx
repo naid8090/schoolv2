@@ -30,7 +30,7 @@ export const NoticesPage: React.FC<NoticesPageProps> = ({
   // Auto-sync list if remote data is loaded
   useDataSync(() => {
     setNotices(allNotices());
-  });
+  }, 'NoticesPage');
   
   // Notice detail image viewer zoom states
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);

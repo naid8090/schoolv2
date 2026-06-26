@@ -48,7 +48,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
     loadData();
   }, []);
 
-  useDataSync(loadData);
+  useDataSync(loadData, 'ConsolidatedRoutineMatrix');
 
   const dynamicClasses: AcademicClass[] = Array.from(
     new Set([

@@ -263,7 +263,7 @@ export default function App() {
 
         // --- 9. ROUTINES SYNC ---
         try {
-          console.log('[ROUTINES SYNC] Starting...');
+          console.log('[ROUTINES SYNC START]');
           const remoteRoutines = await supabaseDbService.getRoutines();
           console.log('[ROUTINES REMOTE COUNT]', remoteRoutines?.length ?? 0);
 
@@ -271,6 +271,7 @@ export default function App() {
             if (remoteRoutines && remoteRoutines.length > 0) {
               // Remote has records, sync to local cache
               dbService.saveRoutines(remoteRoutines, true);
+              console.log('[ROUTINES CACHE UPDATED]');
               console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
             } else {
               // Remote table is empty: DO NOT seed automatically.
@@ -284,6 +285,7 @@ export default function App() {
 
         if (active) {
           setDataSyncVersion(prev => prev + 1);
+          console.log('[SYNC EVENT DISPATCHED]');
           window.dispatchEvent(new CustomEvent('gsss-data-synced'));
         }
       } catch (err) {

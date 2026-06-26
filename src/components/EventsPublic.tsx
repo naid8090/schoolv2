@@ -36,7 +36,7 @@ export const EventsPublic: React.FC<EventsPublicProps> = ({
     loadEvents();
   }, []);
 
-  useDataSync(loadEvents);
+  useDataSync(loadEvents, 'EventsPublic');
 
   useEffect(() => {
     if (initialSelectedEventId) {

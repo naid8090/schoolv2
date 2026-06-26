@@ -59,7 +59,7 @@ export const EventsAdmin: React.FC = () => {
     refreshLists();
   }, []);
 
-  useDataSync(refreshLists);
+  useDataSync(refreshLists, 'EventsAdmin');
 
   // Switch to Create Mode
   const handleInitCreate = () => {

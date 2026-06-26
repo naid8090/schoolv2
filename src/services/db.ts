@@ -1961,6 +1961,7 @@ class DatabaseService {
 
   deletePeriodMaster(id: string): void {
     const targetId = ensureValidUUID(id);
+    console.log('[DB_SERVICE DELETE] targetId:', targetId);
     const periods = this.getPeriodMasters();
     const filtered = periods.filter(p => p.id !== targetId);
     

@@ -392,12 +392,28 @@ class SupabaseDbService {
   }
 
   async deletePeriodMaster(id: string): Promise<void> {
-    const { error } = await supabase
+    console.log('[DELETE START] id:', id);
+    const response = await supabase
       .from('period_masters')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    console.log('[DELETE RESULT] status:', response.status, 'statusText:', response.statusText, 'error:', response.error, 'data:', response.data);
+
+    if (response.error) {
+      console.error('[SUPABASE DELETE ERROR OBJECT]:', JSON.stringify(response.error, null, 2));
+      throw response.error;
+    } else {
+      // Query period_masters immediately afterwards to get remaining row count
+      const { count, error: countError } = await supabase
+        .from('period_masters')
+        .select('*', { count: 'exact', head: true });
+      if (!countError) {
+        console.log('[DELETE SUCCESS] remaining row count of period_masters:', count);
+      } else {
+        console.error('[QUERY ERROR AFTER DELETE]:', countError);
+      }
+    }
   }
 
   async getTimetableLastUpdated(): Promise<string> {

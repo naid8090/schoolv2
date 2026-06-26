@@ -6,7 +6,7 @@
 import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage } from '../types';
 import { supabase } from './supabase';
 
-function generateUUID(): string {
+export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -1363,30 +1363,62 @@ class DatabaseService {
   getRoutineEntries(): RoutineEntry[] {
     const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', DEFAULT_ROUTINE_ENTRIES);
     const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
-    return entries.map(ent => {
+    
+    let changed = false;
+    const mapped = entries.map(ent => {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
+      let entId = ent.id;
+      if (!isUuid) {
+        entId = generateUUID();
+        changed = true;
+      }
+      const routine_id = ensureValidUUID(ent.routine_id);
+      if (routine_id !== ent.routine_id) {
+        changed = true;
+      }
+      
       const pm = masters.find(m => m.name === ent.period);
       if (pm) {
         return {
           ...ent,
-          id: ensureValidUUID(ent.id),
-          routine_id: ensureValidUUID(ent.routine_id),
+          id: entId,
+          routine_id,
           time_range: pm.time_range
         };
       }
       return {
         ...ent,
-        id: ensureValidUUID(ent.id),
-        routine_id: ensureValidUUID(ent.routine_id)
+        id: entId,
+        routine_id
       };
     });
+
+    if (changed) {
+      // Save mapped entries back to local storage
+      const localDataToSave = mapped.map(ent => ({
+        id: ent.id,
+        routine_id: ent.routine_id,
+        day: ent.day,
+        period: ent.period,
+        subject: ent.subject,
+        teacher: ent.teacher || null,
+        time_range: ent.time_range || null
+      }));
+      this.setStorageItem('gsss_routine_entries', localDataToSave);
+    }
+
+    return mapped;
   }
 
   saveRoutineEntries(entries: RoutineEntry[], localOnly = false): void {
-    const sanitized = entries.map(ent => ({
-      ...ent,
-      id: ensureValidUUID(ent.id),
-      routine_id: ensureValidUUID(ent.routine_id)
-    }));
+    const sanitized = entries.map(ent => {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
+      return {
+        ...ent,
+        id: isUuid ? ent.id : generateUUID(),
+        routine_id: ensureValidUUID(ent.routine_id)
+      };
+    });
     this.setStorageItem('gsss_routine_entries', sanitized);
     this.updateTimetableTimestamp();
 
@@ -1413,8 +1445,7 @@ class DatabaseService {
 
   createRoutineEntry(entryData: Omit<RoutineEntry, 'id'>): RoutineEntry {
     const entries = this.getRoutineEntries();
-    const rawId = `re_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const id = ensureValidUUID(rawId);
+    const id = generateUUID();
     const routine_id = ensureValidUUID(entryData.routine_id);
     const newEntry: RoutineEntry = {
       ...entryData,
@@ -1428,7 +1459,7 @@ class DatabaseService {
 
   updateRoutineEntry(id: string, updatedFields: Partial<RoutineEntry>): RoutineEntry | null {
     const entries = this.getRoutineEntries();
-    const targetId = ensureValidUUID(id);
+    const targetId = id;
     const index = entries.findIndex(e => e.id === targetId);
     if (index === -1) return null;
 
@@ -1446,7 +1477,7 @@ class DatabaseService {
   }
 
   deleteRoutineEntry(id: string): void {
-    const targetId = ensureValidUUID(id);
+    const targetId = id;
     const entries = this.getRoutineEntries();
     const filtered = entries.filter(e => e.id !== targetId);
     this.saveRoutineEntries(filtered);

@@ -4,7 +4,7 @@
  */
 
 import { supabase } from './supabase';
-import { dbService, ensureValidUUID } from './db';
+import { dbService, ensureValidUUID, generateUUID } from './db';
 import { supabaseDbService } from './supabaseDb';
 import { Routine, RoutineEntry } from '../types';
 
@@ -137,7 +137,8 @@ class DatabaseSeeder {
 
       const validatedEntries = [];
       for (const entry of localEntries) {
-        const sanitizedId = ensureValidUUID(entry.id);
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(entry.id);
+        const sanitizedId = isUuid ? entry.id : generateUUID();
         const sanitizedRoutineId = ensureValidUUID(entry.routine_id);
 
         // Check FK constraint
@@ -158,14 +159,19 @@ class DatabaseSeeder {
 
       // 4. Perform upload insert/upsert
       const { error: insertError } = await supabase
-        .from('routine_entries')
-        .insert(validatedEntries);
+         .from('routine_entries')
+         .insert(validatedEntries);
 
       if (insertError) {
         throw new Error(`Seeding failed during upload: ${insertError.message}`);
       }
 
       console.log(`[ROUTINE ENTRIES SEEDED] Successfully seeded ${validatedEntries.length} routine entries.`);
+
+      // Dispatch gsss-data-synced after successful seeding
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      }
 
       return {
         success: true,

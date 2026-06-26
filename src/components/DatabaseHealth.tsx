@@ -472,6 +472,10 @@ export const DatabaseHealth: React.FC = () => {
       });
       // Refresh database diagnostics immediately after success
       await refreshModule(moduleId);
+      
+      if (result.success) {
+        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      }
     } catch (err: any) {
       setOperationResult({
         success: false,

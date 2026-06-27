@@ -169,15 +169,7 @@ export const DatabaseHealth: React.FC = () => {
     message: string;
   } | null>(null);
 
-  const bannerRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (operationResult) {
-      setTimeout(() => {
-        bannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 50);
-    }
-  }, [operationResult]);
 
   const getSeedButtonProps = (m: ModuleHealthData) => {
     // 1. If currently seeding this specific module
@@ -185,16 +177,16 @@ export const DatabaseHealth: React.FC = () => {
       return {
         label: 'SEEDING...',
         disabled: true,
-        className: 'px-2 py-0.5 rounded border select-none transition bg-orange-100 text-orange-700 border-orange-300 cursor-wait font-mono'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-amber-100 text-amber-700 border-amber-200 cursor-wait select-none'
       };
     }
 
     // 2. If any module is currently seeding, disable all other seed buttons
     if (seedingId !== null) {
       return {
-        label: m.seedable ? 'Seed' : 'SEED',
+        label: 'SEED',
         disabled: true,
-        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50'
       };
     }
 
@@ -203,7 +195,7 @@ export const DatabaseHealth: React.FC = () => {
       return {
         label: 'SEED',
         disabled: true,
-        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50'
       };
     }
 
@@ -214,48 +206,48 @@ export const DatabaseHealth: React.FC = () => {
     // 4. Error state
     if (status === 'Error' || cloud === null) {
       return {
-        label: 'Unavailable',
+        label: 'UNAVAILABLE',
         disabled: true,
-        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50'
       };
     }
 
     // 5. Healthy & Synced: Local > 0 and Cloud == Local
     if (status === 'Healthy' && local > 0 && cloud === local) {
       return {
-        label: 'Already Seeded',
+        label: 'ALREADY SEEDED',
         disabled: true,
-        className: 'px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded select-none cursor-not-allowed font-mono font-bold'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 cursor-not-allowed select-none'
       };
     }
 
-    // 6. Needs Seeding: Cloud == 0 and Local > 0
+    // 6. Empty: Cloud == 0 and Local == 0
+    if (cloud === 0 && local === 0) {
+      return {
+        label: 'EMPTY',
+        disabled: true,
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none'
+      };
+    }
+
+    // 7. Needs Seeding: Cloud == 0 and Local > 0
     if ((status === 'Needs Seeding' || status === 'Local Only') && cloud === 0 && local > 0) {
       const isSeedable = !!m.seedable;
       return {
-        label: isSeedable ? 'Seed' : (status === 'Local Only' ? 'Local Only' : 'Seed'),
+        label: 'SEED',
         disabled: !isSeedable,
         className: isSeedable
-          ? 'px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white border border-orange-600 hover:border-orange-700 rounded select-none cursor-pointer shadow-xs active:scale-95 transition font-mono font-bold'
-          : 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
-      };
-    }
-
-    // 7. Empty: Cloud == 0 and Local == 0
-    if (cloud === 0 && local === 0) {
-      return {
-        label: 'Empty',
-        disabled: true,
-        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
+          ? 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-orange-600 hover:bg-orange-700 text-white border-orange-600 hover:border-orange-700 cursor-pointer shadow-xs active:scale-95 transition-all'
+          : 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50'
       };
     }
 
     // 8. Out of Sync: Cloud > 0 and Cloud != Local
-    if (status === 'Out of Sync' && cloud > 0 && cloud !== local) {
+    if (status === 'Out of Sync') {
       return {
-        label: 'Out of Sync',
+        label: 'OUT OF SYNC',
         disabled: true,
-        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
+        className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-amber-50 text-amber-700 border-amber-200 cursor-not-allowed select-none'
       };
     }
 
@@ -263,7 +255,7 @@ export const DatabaseHealth: React.FC = () => {
     return {
       label: 'SEED',
       disabled: true,
-      className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+      className: 'px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50'
     };
   };
 
@@ -661,32 +653,7 @@ export const DatabaseHealth: React.FC = () => {
         </div>
       </div>
 
-      {/* Operation Results Banner */}
-      {operationResult && (
-        <div ref={bannerRef} className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
-          operationResult.success 
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-            : 'bg-rose-50 border-rose-200 text-rose-800'
-        }`} id="seeder-feedback-banner">
-          <div className="flex items-center gap-2.5">
-            {operationResult.success ? (
-              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-            )}
-            <div className="text-xs sm:text-sm font-medium">
-              <span className="font-bold">{operationResult.success ? 'Success: ' : 'Abort/Error: '}</span>
-              {operationResult.message}
-            </div>
-          </div>
-          <button 
-            onClick={() => setOperationResult(null)}
-            className="text-slate-400 hover:text-slate-600 text-xs font-mono font-bold tracking-wider cursor-pointer ml-4 hover:underline"
-          >
-            DISMISS
-          </button>
-        </div>
-      )}
+
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" id="health-dashboard-kpis">
@@ -833,17 +800,24 @@ export const DatabaseHealth: React.FC = () => {
                       <button
                         onClick={() => refreshModule(m.id)}
                         disabled={m.loading || seedingId !== null}
-                        className="px-2 py-0.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded border border-slate-200 select-none cursor-pointer transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                       >
                         {m.loading ? '...' : 'REFRESH'}
                       </button>
 
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
+                      <button
+                        disabled
+                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50"
+                      >
                         REPAIR
-                      </span>
-                      <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
+                      </button>
+
+                      <button
+                        disabled
+                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50"
+                      >
                         VALIDATE
-                      </span>
+                      </button>
                     </div>
                     {m.errorMsg && (
                       <div className="text-rose-500 text-[10px] mt-1.5 font-mono max-w-xs break-words">
@@ -857,6 +831,35 @@ export const DatabaseHealth: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Floating Sticky Toast Notification */}
+      {operationResult && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white border border-slate-200 rounded-2xl p-4 shadow-xl animate-in fade-in slide-in-from-bottom-5 duration-300 flex items-start gap-3" id="seeder-feedback-toast">
+          <div className={`p-2 rounded-xl shrink-0 ${
+            operationResult.success ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
+          }`}>
+            {operationResult.success ? (
+              <ShieldCheck className="w-5 h-5" />
+            ) : (
+              <AlertTriangle className="w-5 h-5" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-black text-slate-900 font-mono tracking-tight uppercase">
+              {operationResult.success ? 'Seeding Completed' : 'Seeding Aborted'}
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-1 leading-normal font-sans font-semibold">
+              {operationResult.message}
+            </p>
+          </div>
+          <button 
+            onClick={() => setOperationResult(null)}
+            className="text-slate-400 hover:text-slate-600 font-mono text-[9px] font-bold tracking-wider cursor-pointer ml-1 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 transition-all active:scale-95 shrink-0"
+          >
+            CLOSE
+          </button>
+        </div>
+      )}
     </div>
   );
 };

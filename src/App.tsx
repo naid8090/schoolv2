@@ -143,10 +143,12 @@ export default function App() {
           if (active) {
             if (remoteNotices && remoteNotices.length > 0) {
               dbService.saveNotices(remoteNotices, true);
+              console.log('[SYNC COMPLETE]\n[notices]');
             } else {
-              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-              const localNotices = dbService.getNotices();
-              dbService.saveNotices(localNotices, true);
+              console.log('[SYNC EMPTY REMOTE]\n[notices]');
+              dbService.saveNotices([], true);
+              console.log('[CACHE CLEARED]\n[notices]');
+              console.log('[SYNC COMPLETE]\n[notices]');
             }
           }
         } catch (err) {
@@ -159,10 +161,12 @@ export default function App() {
           if (active) {
             if (remoteFaculty && remoteFaculty.length > 0) {
               dbService.saveFaculty(remoteFaculty, true);
+              console.log('[SYNC COMPLETE]\n[faculty]');
             } else {
-              // Seeding phase: Supabase is empty, read local data and seed Supabase locally
-              const localFaculty = dbService.getFaculty();
-              dbService.saveFaculty(localFaculty, true);
+              console.log('[SYNC EMPTY REMOTE]\n[faculty]');
+              dbService.saveFaculty([], true);
+              console.log('[CACHE CLEARED]\n[faculty]');
+              console.log('[SYNC COMPLETE]\n[faculty]');
             }
           }
         } catch (err) {
@@ -172,16 +176,16 @@ export default function App() {
         // --- 5. EVENTS SYNC ---
         try {
           const remoteEvents = await supabaseDbService.getEvents();
-          console.log(
-            '[DEBUG] remoteEvents count:',
-            remoteEvents?.length ?? 'null'
-          );
-          if (active && remoteEvents !== null) {
-            console.log(
-              '[DEBUG] saving remoteEvents:',
-              remoteEvents.length
-            );
-            dbService.saveEvents(remoteEvents, true);
+          if (active) {
+            if (remoteEvents && remoteEvents.length > 0) {
+              dbService.saveEvents(remoteEvents, true);
+              console.log('[SYNC COMPLETE]\n[events]');
+            } else {
+              console.log('[SYNC EMPTY REMOTE]\n[events]');
+              dbService.saveEvents([], true);
+              console.log('[CACHE CLEARED]\n[events]');
+              console.log('[SYNC COMPLETE]\n[events]');
+            }
           }
         } catch (err) {
           console.error('[Supabase events sync error]:', err);
@@ -190,8 +194,16 @@ export default function App() {
         // --- 6. EVENT IMAGES SYNC ---
         try {
           const remoteEventImages = await supabaseDbService.getEventImages();
-          if (active && remoteEventImages !== null) {
-            dbService.saveEventImages(remoteEventImages, true);
+          if (active) {
+            if (remoteEventImages && remoteEventImages.length > 0) {
+              dbService.saveEventImages(remoteEventImages, true);
+              console.log('[SYNC COMPLETE]\n[event_images]');
+            } else {
+              console.log('[SYNC EMPTY REMOTE]\n[event_images]');
+              dbService.saveEventImages([], true);
+              console.log('[CACHE CLEARED]\n[event_images]');
+              console.log('[SYNC COMPLETE]\n[event_images]');
+            }
           }
         } catch (err) {
           console.error('[Supabase event images sync error]:', err);
@@ -208,21 +220,12 @@ export default function App() {
               // Remote has records, sync to local cache
               dbService.savePeriodMasters(remotePeriods, true);
               console.log('[PERIODS LOCAL COUNT]', dbService.getPeriodMasters().length);
+              console.log('[SYNC COMPLETE]\n[period_masters]');
             } else {
-              // Remote table is empty, seed Supabase with local defaults
-              const localPeriods = dbService.getPeriodMasters();
-              console.log('[PERIODS SYNC] Remote empty. Seeding Supabase with local count:', localPeriods.length);
-              try {
-                // Save locally first to ensure they are formatted
-                dbService.savePeriodMasters(localPeriods, true);
-                
-                // Then write/seed to Supabase
-                await supabaseDbService.savePeriodMasters(localPeriods);
-                console.log('[PERIODS SYNC] Seeding completed successfully.');
-              } catch (err) {
-                console.warn('[Supabase period masters seeding skipped or failed]:', err);
-              }
-              console.log('[PERIODS LOCAL COUNT]', dbService.getPeriodMasters().length);
+              console.log('[SYNC EMPTY REMOTE]\n[period_masters]');
+              dbService.savePeriodMasters([], true);
+              console.log('[CACHE CLEARED]\n[period_masters]');
+              console.log('[SYNC COMPLETE]\n[period_masters]');
             }
           }
         } catch (err) {
@@ -240,21 +243,12 @@ export default function App() {
               // Remote has records, sync to local cache
               dbService.saveCalendarEvents(remoteCalendarEvents, true);
               console.log('[CALENDAR LOCAL COUNT]', dbService.getCalendarEvents().length);
+              console.log('[SYNC COMPLETE]\n[calendar_events]');
             } else {
-              // Remote table is empty, seed Supabase with local defaults
-              const localCalendarEvents = dbService.getCalendarEvents();
-              console.log('[CALENDAR SYNC] Remote empty. Seeding Supabase with local count:', localCalendarEvents.length);
-              try {
-                // Save locally first to ensure they are formatted and validated
-                dbService.saveCalendarEvents(localCalendarEvents, true);
-
-                // Then write/seed to Supabase
-                await supabaseDbService.saveCalendarEvents(localCalendarEvents);
-                console.log('[CALENDAR SEEDED] Seeding completed successfully.');
-              } catch (err) {
-                console.warn('[Supabase calendar events seeding skipped or failed]:', err);
-              }
-              console.log('[CALENDAR LOCAL COUNT]', dbService.getCalendarEvents().length);
+              console.log('[SYNC EMPTY REMOTE]\n[calendar_events]');
+              dbService.saveCalendarEvents([], true);
+              console.log('[CACHE CLEARED]\n[calendar_events]');
+              console.log('[SYNC COMPLETE]\n[calendar_events]');
             }
           }
         } catch (err) {
@@ -273,10 +267,12 @@ export default function App() {
               dbService.saveRoutines(remoteRoutines, true);
               console.log('[ROUTINES CACHE UPDATED]');
               console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
+              console.log('[SYNC COMPLETE]\n[routines]');
             } else {
-              // Remote table is empty: DO NOT seed automatically.
-              console.log('[ROUTINES SYNC] Remote empty. Admin seeding required. No writes. No upserts. No automatic seeding.');
-              console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
+              console.log('[SYNC EMPTY REMOTE]\n[routines]');
+              dbService.saveRoutines([], true);
+              console.log('[CACHE CLEARED]\n[routines]');
+              console.log('[SYNC COMPLETE]\n[routines]');
             }
           }
         } catch (err) {
@@ -293,9 +289,12 @@ export default function App() {
             if (remoteEntries && remoteEntries.length > 0) {
               dbService.saveRoutineEntries(remoteEntries, true);
               console.log('[ROUTINE ENTRIES LOCAL COUNT]', dbService.getRoutineEntries().length);
+              console.log('[SYNC COMPLETE]\n[routine_entries]');
             } else {
-              console.log('[ROUTINE ENTRIES]\nRemote empty.\nWaiting for admin seed.');
-              console.log('[ROUTINE ENTRIES LOCAL COUNT]', dbService.getRoutineEntries().length);
+              console.log('[SYNC EMPTY REMOTE]\n[routine_entries]');
+              dbService.saveRoutineEntries([], true);
+              console.log('[CACHE CLEARED]\n[routine_entries]');
+              console.log('[SYNC COMPLETE]\n[routine_entries]');
             }
           }
         } catch (err) {

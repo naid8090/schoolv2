@@ -32,6 +32,7 @@ interface ModuleHealthData {
   errorMsg?: string;
   isDefault: boolean;
   icon: React.ReactNode;
+  seedable?: boolean;
 }
 
 export const DatabaseHealth: React.FC = () => {
@@ -133,7 +134,8 @@ export const DatabaseHealth: React.FC = () => {
       status: 'Healthy',
       loading: true,
       isDefault: true,
-      icon: <Clock className="w-4 h-4 text-amber-500" />
+      icon: <Clock className="w-4 h-4 text-amber-500" />,
+      seedable: true
     },
     {
       id: 'routine_entries',
@@ -144,7 +146,8 @@ export const DatabaseHealth: React.FC = () => {
       status: 'Healthy',
       loading: true,
       isDefault: true,
-      icon: <Layers className="w-4 h-4 text-indigo-500" />
+      icon: <Layers className="w-4 h-4 text-indigo-500" />,
+      seedable: true
     },
     {
       id: 'media_library',
@@ -165,6 +168,104 @@ export const DatabaseHealth: React.FC = () => {
     success: boolean;
     message: string;
   } | null>(null);
+
+  const bannerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (operationResult) {
+      setTimeout(() => {
+        bannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    }
+  }, [operationResult]);
+
+  const getSeedButtonProps = (m: ModuleHealthData) => {
+    // 1. If currently seeding this specific module
+    if (seedingId === m.id) {
+      return {
+        label: 'SEEDING...',
+        disabled: true,
+        className: 'px-2 py-0.5 rounded border select-none transition bg-orange-100 text-orange-700 border-orange-300 cursor-wait font-mono'
+      };
+    }
+
+    // 2. If any module is currently seeding, disable all other seed buttons
+    if (seedingId !== null) {
+      return {
+        label: m.seedable ? 'Seed' : 'SEED',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+      };
+    }
+
+    // 3. If the module itself is currently loading diagnostics
+    if (m.loading) {
+      return {
+        label: 'SEED',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+      };
+    }
+
+    const local = m.localCount;
+    const cloud = m.remoteCount;
+    const status = m.status;
+
+    // 4. Error state
+    if (status === 'Error' || cloud === null) {
+      return {
+        label: 'Unavailable',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+      };
+    }
+
+    // 5. Healthy & Synced: Local > 0 and Cloud == Local
+    if (status === 'Healthy' && local > 0 && cloud === local) {
+      return {
+        label: 'Already Seeded',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded select-none cursor-not-allowed font-mono font-bold'
+      };
+    }
+
+    // 6. Needs Seeding: Cloud == 0 and Local > 0
+    if ((status === 'Needs Seeding' || status === 'Local Only') && cloud === 0 && local > 0) {
+      const isSeedable = !!m.seedable;
+      return {
+        label: isSeedable ? 'Seed' : (status === 'Local Only' ? 'Local Only' : 'Seed'),
+        disabled: !isSeedable,
+        className: isSeedable
+          ? 'px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white border border-orange-600 hover:border-orange-700 rounded select-none cursor-pointer shadow-xs active:scale-95 transition font-mono font-bold'
+          : 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
+      };
+    }
+
+    // 7. Empty: Cloud == 0 and Local == 0
+    if (cloud === 0 && local === 0) {
+      return {
+        label: 'Empty',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
+      };
+    }
+
+    // 8. Out of Sync: Cloud > 0 and Cloud != Local
+    if (status === 'Out of Sync' && cloud > 0 && cloud !== local) {
+      return {
+        label: 'Out of Sync',
+        disabled: true,
+        className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono font-bold'
+      };
+    }
+
+    // Fallback/Default
+    return {
+      label: 'SEED',
+      disabled: true,
+      className: 'px-2 py-0.5 bg-slate-50 text-slate-450 border border-slate-200 rounded select-none cursor-not-allowed opacity-50 font-mono'
+    };
+  };
 
   const runDatabaseDiagnostics = async () => {
     setIsLoadingAll(true);
@@ -457,7 +558,17 @@ export const DatabaseHealth: React.FC = () => {
   };
 
   const handleSeed = async (moduleId: string) => {
-    if (moduleId !== 'routines' && moduleId !== 'routine_entries') return;
+    const targetModule = healthModules.find(m => m.id === moduleId);
+    if (!targetModule || !targetModule.seedable) return;
+
+    // Prevent duplicate seeding: check if remote already contains records
+    if (targetModule.remoteCount && targetModule.remoteCount > 0) {
+      setOperationResult({
+        success: false,
+        message: `Already Seeded: Remote table already contains ${targetModule.remoteCount} record(s). No new rows inserted.`
+      });
+      return;
+    }
 
     setSeedingId(moduleId);
     setOperationResult(null);
@@ -470,8 +581,8 @@ export const DatabaseHealth: React.FC = () => {
         success: result.success,
         message: result.message
       });
-      // Refresh database diagnostics immediately after success
-      await refreshModule(moduleId);
+      // Refresh database diagnostics immediately after success to update all badges, buttons, and counts
+      await runDatabaseDiagnostics();
       
       if (result.success) {
         window.dispatchEvent(new CustomEvent('gsss-data-synced'));
@@ -552,7 +663,7 @@ export const DatabaseHealth: React.FC = () => {
 
       {/* Operation Results Banner */}
       {operationResult && (
-        <div className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
+        <div ref={bannerRef} className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
           operationResult.success 
             ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
             : 'bg-rose-50 border-rose-200 text-rose-800'
@@ -706,23 +817,18 @@ export const DatabaseHealth: React.FC = () => {
                   {/* Future Operations Desk */}
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
-                      {m.id === 'routines' || m.id === 'routine_entries' ? (
-                        <button
-                          onClick={() => handleSeed(m.id)}
-                          disabled={seedingId !== null || m.loading}
-                          className={`px-2 py-0.5 rounded border select-none transition ${
-                            seedingId === m.id
-                              ? 'bg-orange-100 text-orange-700 border-orange-300 cursor-wait'
-                              : 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600 hover:border-orange-700 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
-                          }`}
-                        >
-                          {seedingId === m.id ? 'SEEDING...' : 'SEED'}
-                        </button>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200 select-none cursor-not-allowed opacity-50">
-                          SEED
-                        </span>
-                      )}
+                      {(() => {
+                        const btnProps = getSeedButtonProps(m);
+                        return (
+                          <button
+                            onClick={() => handleSeed(m.id)}
+                            disabled={btnProps.disabled}
+                            className={btnProps.className}
+                          >
+                            {btnProps.label}
+                          </button>
+                        );
+                      })()}
 
                       <button
                         onClick={() => refreshModule(m.id)}

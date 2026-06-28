@@ -1684,22 +1684,26 @@ class DatabaseService {
     return updated;
   }
 
-  deleteCalendarEvent(id: string): void {
+  async deleteCalendarEvent(id: string): Promise<void> {
+    console.log('[CALENDAR DELETE START] id:', id);
     const targetId = ensureValidUUID(id);
     const events = this.getCalendarEvents();
+    const initialCount = events.length;
     const filtered = events.filter(e => e.id !== targetId);
-    this.saveCalendarEvents(filtered);
+    const removedCount = initialCount - filtered.length;
 
-    // Explicitly delete from Supabase to handle the removed item
-    supabase
-      .from('calendar_events')
-      .delete()
-      .eq('id', targetId)
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Calendar Event Delete Error]:', error.message);
-        }
-      });
+    this.saveCalendarEvents(filtered, true); // save locally only
+    console.log('[LOCAL DELETE COUNT] Local calendar events deleted:', removedCount);
+
+    try {
+      await supabaseDbService.deleteCalendarEvent(targetId);
+      console.log('[REMOTE DELETE SUCCESS] Remote calendar event deleted successfully from Supabase');
+    } catch (err: any) {
+      console.error('[Supabase Calendar Event Delete Error]:', err.message || err);
+    }
+
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+    console.log('[SYNC EVENT DISPATCHED] Custom event gsss-data-synced dispatched');
   }
 
   // Supabase dynamic configurations in case they connect their real Supabase database

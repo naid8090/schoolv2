@@ -2886,10 +2886,9 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
     fetchLocalData();
   };
 
-  const handleDeleteEvent = (evId: string, name: string) => {
+  const handleDeleteEvent = async (evId: string, name: string) => {
     if (!confirm(`Are you sure you want to remove school calendar event "${name}"?`)) return;
-    const filtered = events.filter(e => e.id !== evId);
-    dbService.saveCalendarEvents(filtered);
+    await dbService.deleteCalendarEvent(evId);
     fetchLocalData();
   };
 

@@ -150,6 +150,28 @@ export const DatabaseHealth: React.FC = () => {
       seedable: true
     },
     {
+      id: 'exam_schedules',
+      name: 'Exam Schedules',
+      description: 'Term exam schedules, titles, and publishing/active parameters.',
+      localCount: 0,
+      remoteCount: null,
+      status: 'Healthy',
+      loading: true,
+      isDefault: false,
+      icon: <Layers className="w-4 h-4 text-sky-600" />
+    },
+    {
+      id: 'exam_entries',
+      name: 'Exam Entries',
+      description: 'Exam slot entries mapping exam schedules to dates, times, and subjects.',
+      localCount: 0,
+      remoteCount: null,
+      status: 'Healthy',
+      loading: true,
+      isDefault: false,
+      icon: <Calendar className="w-4 h-4 text-violet-500" />
+    },
+    {
       id: 'media_library',
       name: 'Media Library',
       description: 'Ingested file assets, documents, pdf downloads, and image gallery files.',
@@ -305,6 +327,12 @@ export const DatabaseHealth: React.FC = () => {
             case 'routine_entries':
               localCount = dbService.getRoutineEntries().length;
               break;
+            case 'exam_schedules':
+              localCount = dbService.getExamSchedules().length;
+              break;
+            case 'exam_entries':
+              localCount = dbService.getExamEntries().length;
+              break;
             case 'media_library':
               localCount = dbService.getMediaItems().length;
               break;
@@ -367,6 +395,16 @@ export const DatabaseHealth: React.FC = () => {
               remoteCount = res ? res.length : 0;
               break;
             }
+            case 'exam_schedules': {
+              const res = await supabaseDbService.getExamSchedules();
+              remoteCount = res ? res.length : 0;
+              break;
+            }
+            case 'exam_entries': {
+              const res = await supabaseDbService.getExamEntries();
+              remoteCount = res ? res.length : 0;
+              break;
+            }
             case 'media_library': {
               const res = await supabaseDbService.getMediaItems();
               remoteCount = res ? res.length : 0;
@@ -388,6 +426,12 @@ export const DatabaseHealth: React.FC = () => {
           status = 'Out of Sync';
         } else {
           status = 'Healthy';
+        }
+
+        if (m.id === 'exam_schedules') {
+          console.log(`[DB HEALTH EXAM SCHEDULE] Local Count: ${localCount} Remote Count: ${remoteCount} Status: ${status}`);
+        } else if (m.id === 'exam_entries') {
+          console.log(`[DB HEALTH EXAM ENTRY] Local Count: ${localCount} Remote Count: ${remoteCount} Status: ${status}`);
         }
 
         return {
@@ -452,6 +496,12 @@ export const DatabaseHealth: React.FC = () => {
           case 'routine_entries':
             localCount = dbService.getRoutineEntries().length;
             break;
+          case 'exam_schedules':
+            localCount = dbService.getExamSchedules().length;
+            break;
+          case 'exam_entries':
+            localCount = dbService.getExamEntries().length;
+            break;
           case 'media_library':
             localCount = dbService.getMediaItems().length;
             break;
@@ -513,6 +563,16 @@ export const DatabaseHealth: React.FC = () => {
             remoteCount = res ? res.length : 0;
             break;
           }
+          case 'exam_schedules': {
+            const res = await supabaseDbService.getExamSchedules();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'exam_entries': {
+            const res = await supabaseDbService.getExamEntries();
+            remoteCount = res ? res.length : 0;
+            break;
+          }
           case 'media_library': {
             const res = await supabaseDbService.getMediaItems();
             remoteCount = res ? res.length : 0;
@@ -533,6 +593,12 @@ export const DatabaseHealth: React.FC = () => {
         status = 'Out of Sync';
       } else {
         status = 'Healthy';
+      }
+
+      if (moduleId === 'exam_schedules') {
+        console.log(`[DB HEALTH EXAM SCHEDULE] Local Count: ${localCount} Remote Count: ${remoteCount} Status: ${status}`);
+      } else if (moduleId === 'exam_entries') {
+        console.log(`[DB HEALTH EXAM ENTRY] Local Count: ${localCount} Remote Count: ${remoteCount} Status: ${status}`);
       }
 
       setHealthModules(prev => prev.map(m => m.id === moduleId ? {

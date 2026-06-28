@@ -1569,6 +1569,7 @@ class DatabaseService {
   }
 
   createExamSchedule(scheduleData: Omit<ExamSchedule, 'id' | 'created_at' | 'updated_at'>): ExamSchedule {
+    console.log('[EXAM CREATE CALLED] createExamSchedule', scheduleData);
     const schedules = this.getExamSchedules();
     const now = new Date().toISOString();
     const newSchedule: ExamSchedule = {
@@ -1583,6 +1584,7 @@ class DatabaseService {
   }
 
   updateExamSchedule(id: string, updatedFields: Partial<ExamSchedule>): ExamSchedule | null {
+    console.log('[EXAM UPDATE CALLED] updateExamSchedule', id, updatedFields);
     const targetId = ensureValidUUID(id);
     const schedules = this.getExamSchedules();
     const index = schedules.findIndex(s => s.id === targetId);
@@ -1600,6 +1602,7 @@ class DatabaseService {
   }
 
   async deleteExamSchedule(id: string): Promise<void> {
+    console.log('[EXAM DELETE CALLED] deleteExamSchedule', id);
     console.log('[EXAM SCHEDULE DELETE START] id:', id);
     const targetId = ensureValidUUID(id);
     const schedules = this.getExamSchedules();
@@ -1685,6 +1688,7 @@ class DatabaseService {
   }
 
   createExamEntry(entryData: Omit<ExamEntry, 'id'>): ExamEntry {
+    console.log('[EXAM CREATE CALLED] createExamEntry', entryData);
     const entries = this.getExamEntries();
     const id = generateUUID();
     const newEntry: ExamEntry = {
@@ -1698,6 +1702,7 @@ class DatabaseService {
   }
 
   updateExamEntry(id: string, updatedFields: Partial<ExamEntry>): ExamEntry | null {
+    console.log('[EXAM UPDATE CALLED] updateExamEntry', id, updatedFields);
     const targetId = ensureValidUUID(id);
     const entries = this.getExamEntries();
     const index = entries.findIndex(e => e.id === targetId);
@@ -1717,6 +1722,7 @@ class DatabaseService {
   }
 
   async deleteExamEntry(id: string): Promise<void> {
+    console.log('[EXAM DELETE CALLED] deleteExamEntry', id);
     console.log('[EXAM ENTRY DELETE START] id:', id);
     const targetId = ensureValidUUID(id);
     const entries = this.getExamEntries();

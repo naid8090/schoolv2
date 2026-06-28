@@ -2413,16 +2413,14 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   // Toggle display mode between 'online' & 'pdf'
   const toggleDisplayMethod = (mode: 'online' | 'pdf') => {
     if (!activeSchedule) return;
-    const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, display_mode: mode } : s);
-    dbService.saveExamSchedules(updated);
+    dbService.updateExamSchedule(activeSchedule.id, { display_mode: mode });
     fetchLocalData();
   };
 
   // Toggle status (Active / Inactive Datesheet)
   const toggleActiveStatus = (val: boolean) => {
     if (!activeSchedule) return;
-    const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, is_active: val } : s);
-    dbService.saveExamSchedules(updated);
+    dbService.updateExamSchedule(activeSchedule.id, { is_active: val });
     fetchLocalData();
   };
 
@@ -2431,18 +2429,13 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     e.preventDefault();
     if (!newScheduleTitle) return;
 
-    const newSch: ExamSchedule = {
-      id: `exams-${Date.now()}`,
+    const newSch = dbService.createExamSchedule({
       title: newScheduleTitle,
       display_mode: 'online',
       pdf_url: '',
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+      is_active: true
+    });
 
-    const updated = [...schedules, newSch];
-    dbService.saveExamSchedules(updated);
     setIsAddingSchedule(false);
     setNewScheduleTitle('');
     setSelectedScheduleId(newSch.id);
@@ -2450,13 +2443,11 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   };
 
   // Delete Exam datesheet Inline
-  const handleDeleteScheduleInline = (schId: string) => {
-    const filteredSch = schedules.filter(s => s.id !== schId);
-    const filteredEntries = entries.filter(e => e.schedule_id !== schId);
-    dbService.saveExamSchedules(filteredSch);
-    dbService.saveExamEntries(filteredEntries);
+  const handleDeleteScheduleInline = async (schId: string) => {
+    await dbService.deleteExamSchedule(schId);
     if (selectedScheduleId === schId) {
-      setSelectedScheduleId(filteredSch[0]?.id || '');
+      const remaining = schedules.filter(s => s.id !== schId);
+      setSelectedScheduleId(remaining[0]?.id || '');
     }
     setDeletingSchId(null);
     fetchLocalData();
@@ -2468,8 +2459,7 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     triggerMedia(
       `Attach Exam Datesheet PDF [${activeSchedule.title}]`,
       (url) => {
-        const updated = schedules.map(s => s.id === activeSchedule.id ? { ...s, pdf_url: url } : s);
-        dbService.saveExamSchedules(updated);
+        dbService.updateExamSchedule(activeSchedule.id, { pdf_url: url });
         fetchLocalData();
       }
     );
@@ -2480,26 +2470,22 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     e.preventDefault();
     if (!activeSchedule || !newEntryForm.exam_date || !newEntryForm.subject) return;
 
-    const ent: ExamEntry = {
-      id: `exa-ent-${Date.now()}`,
+    dbService.createExamEntry({
       schedule_id: activeSchedule.id,
       exam_date: newEntryForm.exam_date,
       subject: newEntryForm.subject,
       time: newEntryForm.time || '',
       notes: newEntryForm.notes || ''
-    };
+    });
 
-    const updated = [...entries, ent];
-    dbService.saveExamEntries(updated);
     setIsAddingEntry(false);
     setNewEntryForm({ exam_date: '', subject: '', time: '10:00 AM - 01:00 PM', notes: '' });
     fetchLocalData();
   };
 
   // Delete an assessment date column entry Inline
-  const handleDeleteEntryInline = (entId: string) => {
-    const filtered = entries.filter(e => e.id !== entId);
-    dbService.saveExamEntries(filtered);
+  const handleDeleteEntryInline = async (entId: string) => {
+    await dbService.deleteExamEntry(entId);
     setDeletingEntId(null);
     fetchLocalData();
   };

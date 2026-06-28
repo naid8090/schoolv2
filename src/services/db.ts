@@ -1536,11 +1536,36 @@ class DatabaseService {
 
   // Exam Schedules CRM
   getExamSchedules(): ExamSchedule[] {
-    return this.getStorageItem<ExamSchedule[]>('gsss_exam_schedules', DEFAULT_EXAM_SCHEDULES);
+    const raw = this.getStorageItem<ExamSchedule[]>('gsss_exam_schedules', DEFAULT_EXAM_SCHEDULES);
+    return raw.map(s => ({
+      ...s,
+      id: ensureValidUUID(s.id)
+    }));
   }
 
-  saveExamSchedules(schedules: ExamSchedule[]): void {
-    this.setStorageItem('gsss_exam_schedules', schedules);
+  saveExamSchedules(schedules: ExamSchedule[], localOnly = false): void {
+    const sanitized = schedules.map(s => ({
+      ...s,
+      id: ensureValidUUID(s.id)
+    }));
+    this.setStorageItem('gsss_exam_schedules', sanitized);
+
+    if (localOnly) {
+      window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      return;
+    }
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('exam_schedules')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Exam Schedules Sync Error]:', error.message);
+        } else {
+          window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+        }
+      });
   }
 
   createExamSchedule(scheduleData: Omit<ExamSchedule, 'id' | 'created_at' | 'updated_at'>): ExamSchedule {
@@ -1548,7 +1573,7 @@ class DatabaseService {
     const now = new Date().toISOString();
     const newSchedule: ExamSchedule = {
       ...scheduleData,
-      id: `exam_sch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateUUID(),
       created_at: now,
       updated_at: now
     };
@@ -1558,13 +1583,15 @@ class DatabaseService {
   }
 
   updateExamSchedule(id: string, updatedFields: Partial<ExamSchedule>): ExamSchedule | null {
+    const targetId = ensureValidUUID(id);
     const schedules = this.getExamSchedules();
-    const index = schedules.findIndex(s => s.id === id);
+    const index = schedules.findIndex(s => s.id === targetId);
     if (index === -1) return null;
 
     const updated: ExamSchedule = {
       ...schedules[index],
       ...updatedFields,
+      id: targetId,
       updated_at: new Date().toISOString()
     };
     schedules[index] = updated;
@@ -1572,53 +1599,151 @@ class DatabaseService {
     return updated;
   }
 
-  deleteExamSchedule(id: string): void {
+  async deleteExamSchedule(id: string): Promise<void> {
+    console.log('[EXAM SCHEDULE DELETE START] id:', id);
+    const targetId = ensureValidUUID(id);
     const schedules = this.getExamSchedules();
-    const filtered = schedules.filter(s => s.id !== id);
-    this.saveExamSchedules(filtered);
+    const initialCount = schedules.length;
+    const filtered = schedules.filter(s => s.id !== targetId);
+    const removedCount = initialCount - filtered.length;
+
+    this.saveExamSchedules(filtered, true); // save locally only
+    console.log('[LOCAL DELETE COUNT] Local exam schedules deleted:', removedCount);
 
     // Also remove respective exam entries for sanity
     const entries = this.getExamEntries();
-    const cleaned = entries.filter(e => e.schedule_id !== id);
-    this.saveExamEntries(cleaned);
+    const cleaned = entries.filter(e => e.schedule_id !== targetId);
+    this.saveExamEntries(cleaned, true); // save locally only
+
+    try {
+      const { error: entryError } = await supabase
+        .from('exam_entries')
+        .delete()
+        .eq('schedule_id', targetId);
+
+      if (entryError) {
+        console.error('[Supabase Exam Entries Delete Cascade Error]:', entryError.message);
+      }
+
+      const { error: scheduleError } = await supabase
+        .from('exam_schedules')
+        .delete()
+        .eq('id', targetId);
+
+      if (scheduleError) {
+        console.error('[Supabase Exam Schedule Delete Error]:', scheduleError.message);
+        throw scheduleError;
+      }
+
+      console.log('[REMOTE DELETE SUCCESS] Remote exam schedule and cascade entries deleted successfully from Supabase');
+    } catch (err: any) {
+      console.error('[Supabase Exam Schedule Delete Error]:', err.message || err);
+    }
+
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+    console.log('[SYNC EVENT DISPATCHED] Custom event gsss-data-synced dispatched from deleteExamSchedule');
   }
 
   getExamEntries(): ExamEntry[] {
-    return this.getStorageItem<ExamEntry[]>('gsss_exam_entries', DEFAULT_EXAM_ENTRIES);
+    const raw = this.getStorageItem<ExamEntry[]>('gsss_exam_entries', DEFAULT_EXAM_ENTRIES);
+    return raw.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id),
+      schedule_id: ensureValidUUID(e.schedule_id)
+    }));
   }
 
-  saveExamEntries(entries: ExamEntry[]): void {
-    this.setStorageItem('gsss_exam_entries', entries);
+  saveExamEntries(entries: ExamEntry[], localOnly = false): void {
+    const sanitized = entries.map(e => ({
+      ...e,
+      id: ensureValidUUID(e.id),
+      schedule_id: ensureValidUUID(e.schedule_id)
+    }));
+    this.setStorageItem('gsss_exam_entries', sanitized);
+
+    if (localOnly) {
+      window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      return;
+    }
+
+    // Save/Upsert to Supabase
+    supabase
+      .from('exam_entries')
+      .upsert(sanitized)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[Supabase Exam Entries Sync Error]:', error.message);
+        } else {
+          window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+        }
+      });
   }
 
   getExamEntriesBySchedule(scheduleId: string): ExamEntry[] {
-    return this.getExamEntries().filter(e => e.schedule_id === scheduleId);
+    const targetScheduleId = ensureValidUUID(scheduleId);
+    return this.getExamEntries().filter(e => e.schedule_id === targetScheduleId);
   }
 
   createExamEntry(entryData: Omit<ExamEntry, 'id'>): ExamEntry {
     const entries = this.getExamEntries();
-    const id = `exam_ent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const newEntry: ExamEntry = { id, ...entryData };
+    const id = generateUUID();
+    const newEntry: ExamEntry = {
+      ...entryData,
+      id,
+      schedule_id: ensureValidUUID(entryData.schedule_id)
+    };
     entries.push(newEntry);
     this.saveExamEntries(entries);
     return newEntry;
   }
 
   updateExamEntry(id: string, updatedFields: Partial<ExamEntry>): ExamEntry | null {
+    const targetId = ensureValidUUID(id);
     const entries = this.getExamEntries();
-    const index = entries.findIndex(e => e.id === id);
+    const index = entries.findIndex(e => e.id === targetId);
     if (index === -1) return null;
 
-    const updated: ExamEntry = { ...entries[index], ...updatedFields };
+    const updated: ExamEntry = {
+      ...entries[index],
+      ...updatedFields,
+      id: targetId
+    };
+    if (updatedFields.schedule_id) {
+      updated.schedule_id = ensureValidUUID(updatedFields.schedule_id);
+    }
     entries[index] = updated;
     this.saveExamEntries(entries);
     return updated;
   }
 
-  deleteExamEntry(id: string): void {
+  async deleteExamEntry(id: string): Promise<void> {
+    console.log('[EXAM ENTRY DELETE START] id:', id);
+    const targetId = ensureValidUUID(id);
     const entries = this.getExamEntries();
-    const filtered = entries.filter(e => e.id !== id);
-    this.saveExamEntries(filtered);
+    const initialCount = entries.length;
+    const filtered = entries.filter(e => e.id !== targetId);
+    const removedCount = initialCount - filtered.length;
+
+    this.saveExamEntries(filtered, true); // save locally only
+    console.log('[LOCAL DELETE COUNT] Local exam entries deleted:', removedCount);
+
+    try {
+      const { error } = await supabase
+        .from('exam_entries')
+        .delete()
+        .eq('id', targetId);
+
+      if (error) {
+        console.error('[Supabase Exam Entry Delete Error]:', error.message);
+        throw error;
+      }
+      console.log('[REMOTE DELETE SUCCESS] Remote exam entry deleted successfully from Supabase');
+    } catch (err: any) {
+      console.error('[Supabase Exam Entry Delete Error]:', err.message || err);
+    }
+
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+    console.log('[SYNC EVENT DISPATCHED] Custom event gsss-data-synced dispatched from deleteExamEntry');
   }
 
   // Academic Calendar Events CRM

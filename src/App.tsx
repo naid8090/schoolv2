@@ -1468,50 +1468,41 @@ export default function App() {
                   
                   {/* Icon & Title */}
                   <div className="text-center space-y-2">
-                    <div className="w-14 h-14 rounded-full bg-sky-50 border border-sky-100 mx-auto flex items-center justify-center text-sky-900 shadow-sm">
+                    <div className="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 mx-auto flex items-center justify-center text-slate-800 shadow-sm">
                       <Lock className="w-6 h-6" />
                     </div>
-                    <h2 className="text-slate-800 text-lg font-bold tracking-tight">Admin Authentication</h2>
-                    <p className="text-[10px] text-orange-600 font-mono tracking-wider uppercase font-bold">Secure Personnel Sign-In</p>
-                  </div>
-
-                  {/* credentials instructions note */}
-                  <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl flex items-start gap-2.5 text-slate-600">
-                    <Key className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                    <div className="text-[11px] leading-relaxed font-sans">
-                      <span className="text-sky-900 font-bold block uppercase tracking-wide text-xs">Supabase Auth Gateway</span>
-                      <p className="text-slate-500 mt-1">Please sign in using your registered Supabase administrator credentials. Manual assignment of the administrative role (<code className="font-mono bg-slate-100 px-1 rounded text-red-600">admin</code>) inside the <code className="font-mono bg-slate-100 px-1 rounded text-red-600">user_roles</code> table is required to obtain dashboard privileges.</p>
-                    </div>
+                    <h2 className="text-slate-800 text-xl font-bold tracking-tight">Administrator Login</h2>
+                    <p className="text-xs text-slate-500">Secure access to the School Administration Panel</p>
                   </div>
 
                   {/* Form */}
                   <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-slate-500 mb-1.5">Administrative Email</label>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Administrative Email</label>
                       <input
                         type="email"
                         required
                         placeholder="admin@gsss.edu"
                         value={loginUser}
                         onChange={(e) => setLoginUser(e.target.value)}
-                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded text-slate-800 text-xs px-3.5 py-2.5"
+                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-slate-500 mb-1.5">Secret Password</label>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Secret Password</label>
                       <input
                         type="password"
                         required
                         placeholder="••••••••"
                         value={loginPass}
                         onChange={(e) => setLoginPass(e.target.value)}
-                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded text-slate-800 text-xs px-3.5 py-2.5"
+                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
                       />
                     </div>
 
                     {loginError && (
-                      <p className="text-xs font-bold text-rose-600 font-sans" id="login-error-message">
+                      <p className="text-xs font-semibold text-rose-600 font-sans" id="login-error-message">
                         {loginError}
                       </p>
                     )}
@@ -1519,9 +1510,9 @@ export default function App() {
                     <div className="pt-2">
                       <button
                         type="submit"
-                        className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg transition-all shadow-md shadow-orange-500/10 cursor-pointer"
+                        className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg transition-all shadow-md shadow-orange-500/10 cursor-pointer text-center"
                       >
-                        Authenticate Member
+                        Login
                       </button>
                     </div>
                   </form>

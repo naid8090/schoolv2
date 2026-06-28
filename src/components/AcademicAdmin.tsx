@@ -2851,22 +2851,17 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
     fetchLocalData();
   }, []);
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventForm.event_date || !eventForm.title) return;
 
-    const newEv: CalendarEvent = {
-      id: `ev-${Date.now()}`,
+    await dbService.createCalendarEvent({
       event_date: eventForm.event_date,
       title: eventForm.title,
       event_type: (eventForm.event_type || 'Holiday') as CalendarEventType,
-      description: eventForm.description || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+      description: eventForm.description || ''
+    });
 
-    const updated = [...events, newEv];
-    dbService.saveCalendarEvents(updated);
     setIsAddingEvent(false);
     setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
     fetchLocalData();

@@ -1783,6 +1783,7 @@ class DatabaseService {
   }
 
   createCalendarEvent(eventData: Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'>): CalendarEvent {
+    console.log('[CALENDAR CREATE CALLED] createCalendarEvent', eventData);
     const events = this.getCalendarEvents();
     const now = new Date().toISOString();
     const tempId = `cal_ev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1799,6 +1800,7 @@ class DatabaseService {
   }
 
   updateCalendarEvent(id: string, updatedFields: Partial<CalendarEvent>): CalendarEvent | null {
+    console.log('[CALENDAR UPDATE CALLED] updateCalendarEvent', id, updatedFields);
     const targetId = ensureValidUUID(id);
     const events = this.getCalendarEvents();
     const index = events.findIndex(e => e.id === targetId);
@@ -1816,6 +1818,7 @@ class DatabaseService {
   }
 
   async deleteCalendarEvent(id: string): Promise<void> {
+    console.log('[CALENDAR DELETE CALLED] deleteCalendarEvent', id);
     console.log('[CALENDAR DELETE START] id:', id);
     const targetId = ensureValidUUID(id);
     const events = this.getCalendarEvents();

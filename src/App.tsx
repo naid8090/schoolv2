@@ -301,6 +301,48 @@ export default function App() {
           console.error('[Supabase routine entries sync error]:', err);
         }
 
+        // --- 11. EXAM SCHEDULES SYNC ---
+        try {
+          console.log('[EXAM SYNC START]');
+          const remoteSchedules = await supabaseDbService.getExamSchedules();
+          console.log('[EXAM REMOTE COUNT]', remoteSchedules?.length ?? 0);
+
+          if (active) {
+            if (remoteSchedules && remoteSchedules.length > 0) {
+              dbService.saveExamSchedules(remoteSchedules, true);
+              console.log('[EXAM LOCAL UPDATED]', dbService.getExamSchedules().length);
+              console.log('[EXAM SYNC COMPLETE]');
+            } else {
+              console.log('[EXAM EMPTY REMOTE]');
+              dbService.saveExamSchedules([], true);
+              console.log('[EXAM SYNC COMPLETE]');
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase exam schedules sync error]:', err);
+        }
+
+        // --- 12. EXAM ENTRIES SYNC ---
+        try {
+          console.log('[EXAM ENTRY SYNC START]');
+          const remoteEntries = await supabaseDbService.getExamEntries();
+          console.log('[EXAM ENTRY REMOTE COUNT]', remoteEntries?.length ?? 0);
+
+          if (active) {
+            if (remoteEntries && remoteEntries.length > 0) {
+              dbService.saveExamEntries(remoteEntries, true);
+              console.log('[EXAM ENTRY LOCAL UPDATED]', dbService.getExamEntries().length);
+              console.log('[EXAM ENTRY SYNC COMPLETE]');
+            } else {
+              console.log('[EXAM ENTRY EMPTY REMOTE]');
+              dbService.saveExamEntries([], true);
+              console.log('[EXAM ENTRY SYNC COMPLETE]');
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase exam entries sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           console.log('[SYNC EVENT DISPATCHED]');

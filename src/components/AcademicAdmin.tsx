@@ -23,7 +23,8 @@ import {
   X,
   User,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { dbService } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty } from '../types';
@@ -419,6 +420,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
   // PDF global scope configuration
   const [pdfApplyTarget, setPdfApplyTarget] = useState<'current' | 'all'>('current');
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // Strict Validation states
   const [formError, setFormError] = useState<string | null>(null);
@@ -671,6 +673,52 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         fetchLocalData();
       }
     );
+  };
+
+  const getPdfFilename = (url: string) => {
+    if (!url) return 'Timetable_Routine.pdf';
+    try {
+      const decoded = decodeURIComponent(url);
+      const parts = decoded.split('/');
+      const lastPart = parts[parts.length - 1];
+      return lastPart.split('?')[0];
+    } catch {
+      return 'Timetable_Routine.pdf';
+    }
+  };
+
+  const formatRoutineDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return '—';
+    }
+  };
+
+  const handleDeletePDF = () => {
+    if (!activeRoutine || !activeRoutine.pdf_url) return;
+    
+    const sharedWith = routines.filter(r => r.pdf_url && r.pdf_url === activeRoutine.pdf_url);
+    const isShared = sharedWith.length > 1;
+    
+    const message = isShared 
+      ? `Warning: This PDF is shared across multiple classes (${sharedWith.map(r => r.class_name).join(', ')}). Deleting it will remove the PDF assignment from ALL these classes. Do you want to proceed?`
+      : `Are you sure you want to remove the PDF timetable assignment for ${selectedClass}?`;
+      
+    if (!confirm(message)) return;
+    
+    if (isShared) {
+      const urlToDelete = activeRoutine.pdf_url;
+      const updated = routines.map(r => r.pdf_url === urlToDelete ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
+      dbService.saveRoutines(updated);
+    } else {
+      const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
+      dbService.saveRoutines(updated);
+    }
+    setShowPdfPreview(false);
+    fetchLocalData();
   };
 
   // Form Submit for Routine Grid Entry (Add & Edit)
@@ -1450,70 +1498,172 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         ) : (
           /* CLASS-WISE ONLINE GRID WORKSPACE */
           activeRoutine && activeRoutine.display_mode === 'pdf' ? (
-            /* PDF SOURCING BLOCK */
+            /* PDF SOURCING BLOCK WITH COMPLETE LIFECYCLE MANAGEMENT */
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-              <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
-                PDF Document Sourcing
+              <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide flex items-center gap-2">
+                <FileText className="w-4 h-4 text-orange-500" /> PDF Document Sourcing
               </h3>
               <p className="text-slate-500 text-xs">
                 Upload the administrative BSEB timetable flyer template for {selectedClass}. Live frame and download links are automatically set.
               </p>
 
-              <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-605 font-bold">Attached URL:</span>
-                  <span className="text-slate-500 truncate max-w-sm font-mono text-[10px] bg-white p-1 rounded border border-slate-200">
-                    {activeRoutine.pdf_url || 'No File Sourced Yet'}
-                  </span>
-                </div>
+              {activeRoutine.pdf_url ? (
+                /* COMPACT INFORMATION PANEL */
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-orange-50 text-orange-600 rounded-lg shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-grow">
+                        <p className="text-xs font-bold text-slate-800 break-all leading-tight">
+                          {getPdfFilename(activeRoutine.pdf_url)}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium text-slate-500">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono font-bold text-[9px] uppercase border border-emerald-200/50">
+                            ✓ Sourced
+                          </span>
+                          <span>•</span>
+                          <span>Last updated: {formatRoutineDate(activeRoutine.updated_at)}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="pt-2.5 border-t border-slate-200/65 space-y-2 select-none">
-                  <span className="block text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500">Apply PDF Scope</span>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
-                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="pdfApplyTarget"
-                        value="current"
-                        checked={pdfApplyTarget === 'current'}
-                        onChange={() => setPdfApplyTarget('current')}
-                        className="text-orange-500 focus:ring-orange-500 cursor-pointer"
-                      />
-                      <span>Current Class ({selectedClass})</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="pdfApplyTarget"
-                        value="all"
-                        checked={pdfApplyTarget === 'all'}
-                        onChange={() => setPdfApplyTarget('all')}
-                        className="text-orange-500 focus:ring-orange-500 cursor-pointer"
-                      />
-                      <span>All Academic Classes (Class 9 - 12)</span>
-                    </label>
+                    <div className="pt-3 border-t border-slate-200/50 space-y-1.5">
+                      <span className="block text-[10.5px] uppercase font-mono font-bold tracking-wider text-slate-500">
+                        Assignment Scope:
+                      </span>
+                      {routines.filter(r => r.pdf_url && r.pdf_url === activeRoutine.pdf_url).length === 4 ? (
+                        <div>
+                          <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                            <span className="text-emerald-600 font-extrabold">✓</span> Applied to <span className="text-orange-600">All Classes</span>
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5 mt-2 pl-4">
+                            {['Class 9', 'Class 10', 'Class 11', 'Class 12'].map((cls) => (
+                              <div key={cls} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                                <span className="text-emerald-500 font-bold">✓</span> {cls}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">
+                            Applied to custom classes:
+                          </p>
+                          <div className="flex flex-wrap gap-2.5 mt-1.5">
+                            {['Class 9', 'Class 10', 'Class 11', 'Class 12'].map((cls) => {
+                              const hasIt = routines.some(r => r.class_name === cls && r.pdf_url === activeRoutine.pdf_url);
+                              return (
+                                <div key={cls} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                  hasIt ? 'bg-orange-50 text-orange-700 border border-orange-200/50' : 'bg-slate-100 text-slate-400'
+                                }`}>
+                                  <span>{hasIt ? '✓' : '✗'}</span>
+                                  <span>{cls}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACTIONS: Preview, Replace, Delete */}
+                    <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200/50 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setShowPdfPreview(!showPdfPreview)}
+                        className="px-3.5 py-1.5 bg-sky-900 hover:bg-sky-950 text-white rounded-lg flex items-center gap-1 cursor-pointer transition uppercase text-[10px] tracking-wide shadow-3xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> {showPdfPreview ? 'Hide Preview' : 'Preview'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAssignPDF}
+                        className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-1 cursor-pointer transition uppercase text-[10px] tracking-wide shadow-3xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeletePDF}
+                        className="px-3.5 py-1.5 bg-red-650 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-1 cursor-pointer transition uppercase text-[10px] tracking-wide shadow-3xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex gap-2 mt-4 text-xs font-bold font-sans pt-1">
-                  <button
-                    onClick={handleAssignPDF}
-                    className="py-2 px-4 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg uppercase tracking-wide shadow-sm cursor-pointer"
-                  >
-                    Attach PDF from Media Library
-                  </button>
-                  {activeRoutine.pdf_url && (
-                    <a
-                      href={activeRoutine.pdf_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-2 border border-slate-200 hover:border-slate-350 bg-white rounded-lg flex items-center justify-center text-slate-700 hover:text-slate-950"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                  {/* PREVIEW CONTAINER */}
+                  {showPdfPreview && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative animate-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-sky-900" /> Timetable PDF Live Preview ({selectedClass})
+                        </span>
+                        <button 
+                          onClick={() => setShowPdfPreview(false)}
+                          className="text-[10px] uppercase font-bold text-red-650 text-red-600 hover:text-red-700 px-2 py-1 bg-white border border-slate-200 rounded cursor-pointer transition"
+                        >
+                          Hide Preview
+                        </button>
+                      </div>
+                      <iframe 
+                        src={activeRoutine.pdf_url} 
+                        className="w-full h-[500px]"
+                        title="Routine Calendar PDF View"
+                      />
+                    </div>
                   )}
                 </div>
-              </div>
+              ) : (
+                /* NO PDF ASSIGNED WORKFLOW */
+                <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-4">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-605 font-bold">Attached URL:</span>
+                    <span className="text-slate-500 truncate max-w-sm font-mono text-[10px] bg-white p-1 rounded border border-slate-200">
+                      No File Sourced Yet
+                    </span>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-slate-200/65 space-y-2 select-none">
+                    <span className="block text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500">Apply PDF Scope</span>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pdfApplyTarget"
+                          value="current"
+                          checked={pdfApplyTarget === 'current'}
+                          onChange={() => setPdfApplyTarget('current')}
+                          className="text-orange-500 focus:ring-orange-500 cursor-pointer"
+                        />
+                        <span>Current Class ({selectedClass})</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pdfApplyTarget"
+                          value="all"
+                          checked={pdfApplyTarget === 'all'}
+                          onChange={() => setPdfApplyTarget('all')}
+                          className="text-orange-500 focus:ring-orange-500 cursor-pointer"
+                        />
+                        <span>All Academic Classes (Class 9 - 12)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4 text-xs font-bold font-sans pt-1">
+                    <button
+                      onClick={handleAssignPDF}
+                      className="py-2 px-4 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg uppercase tracking-wide shadow-sm cursor-pointer"
+                    >
+                      Attach PDF from Media Library
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* ONLINE TIMETABLE GRID MATRIX */

@@ -3004,6 +3004,7 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>({
     event_date: '',
     title: '',
@@ -3023,16 +3024,38 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
     e.preventDefault();
     if (!eventForm.event_date || !eventForm.title) return;
 
-    await dbService.createCalendarEvent({
-      event_date: eventForm.event_date,
-      title: eventForm.title,
-      event_type: (eventForm.event_type || 'Holiday') as CalendarEventType,
-      description: eventForm.description || ''
-    });
+    if (editingEventId) {
+      await dbService.updateCalendarEvent(editingEventId, {
+        event_date: eventForm.event_date,
+        title: eventForm.title,
+        event_type: (eventForm.event_type || 'Holiday') as CalendarEventType,
+        description: eventForm.description || ''
+      });
+    } else {
+      await dbService.createCalendarEvent({
+        event_date: eventForm.event_date,
+        title: eventForm.title,
+        event_type: (eventForm.event_type || 'Holiday') as CalendarEventType,
+        description: eventForm.description || ''
+      });
+    }
 
     setIsAddingEvent(false);
+    setEditingEventId(null);
     setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
     fetchLocalData();
+  };
+
+  const handleStartEditEvent = (ev: CalendarEvent) => {
+    setEditingEventId(ev.id);
+    setEventForm({
+      event_date: ev.event_date,
+      title: ev.title,
+      event_type: ev.event_type,
+      description: ev.description || ''
+    });
+    setIsAddingEvent(true);
+    window.scrollTo({ top: 320, behavior: 'smooth' });
   };
 
   const handleDeleteEvent = async (evId: string, name: string) => {
@@ -3066,7 +3089,11 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
 
         {!isAddingEvent && (
           <button
-            onClick={() => setIsAddingEvent(true)}
+            onClick={() => {
+              setEditingEventId(null);
+              setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
+              setIsAddingEvent(true);
+            }}
             className="py-2 px-4.5 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10.5px] uppercase rounded-xl tracking-wider flex items-center gap-1 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -3078,8 +3105,15 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
       {isAddingEvent && (
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm animate-in zoom-in-95 duration-100">
           <div className="flex justify-between items-center text-xs pb-2.5 border-b border-slate-200/50 mb-4 font-mono font-bold uppercase text-slate-500 select-none">
-            <span>Register New Calendar Agenda</span>
-            <button onClick={() => setIsAddingEvent(false)} className="text-slate-400 hover:text-slate-700">
+            <span>{editingEventId ? 'Edit Calendar Agenda' : 'Register New Calendar Agenda'}</span>
+            <button
+              onClick={() => {
+                setIsAddingEvent(false);
+                setEditingEventId(null);
+                setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
+              }}
+              className="text-slate-400 hover:text-slate-700"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -3135,16 +3169,20 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
             <div className="sm:col-span-4 pt-3 border-t border-slate-205 flex justify-end gap-2 border-slate-200/50 mt-2">
               <button
                 type="button"
-                onClick={() => setIsAddingEvent(false)}
+                onClick={() => {
+                  setIsAddingEvent(false);
+                  setEditingEventId(null);
+                  setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
+                }}
                 className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg font-bold"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold"
+                className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold"
               >
-                Save Agenda
+                {editingEventId ? 'Save Changes' : 'Save Agenda'}
               </button>
             </div>
           </form>
@@ -3191,13 +3229,22 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
                         {ev.description || '—'}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => handleDeleteEvent(ev.id, ev.title)}
-                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
-                          title="Remove Event Agenda"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleStartEditEvent(ev)}
+                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-orange-500 cursor-pointer"
+                            title="Edit Event Agenda"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEvent(ev.id, ev.title)}
+                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
+                            title="Remove Event Agenda"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

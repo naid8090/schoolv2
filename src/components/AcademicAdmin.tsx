@@ -1516,15 +1516,15 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                         <FileText className="w-5.5 h-5.5" />
                       </div>
                       <div className="min-w-0 flex-grow space-y-2">
-                        <span className="block text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-400">PDF Document</span>
-                        <p className="text-xs font-black text-slate-900 flex items-center gap-1.5 break-all">
-                          📄 {getPdfFilename(activeRoutine.pdf_url)}
+                        <span className="block text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-400">Routine PDF</span>
+                        <p className="text-xs font-extrabold text-emerald-600 flex items-center gap-1.5">
+                          ✓ PDF Attached
                         </p>
                         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200/40">
                           <div>
                             <span className="block text-[9px] uppercase font-mono font-bold tracking-wider text-slate-400">Status</span>
-                            <span className="text-xs font-extrabold text-emerald-600 flex items-center gap-1 mt-0.5">
-                              ✓ Available
+                            <span className="text-xs font-extrabold text-slate-800 block mt-0.5">
+                              Available
                             </span>
                           </div>
                           <div>

@@ -134,54 +134,92 @@ export const ClassRoutinePage: React.FC = () => {
     return classEntries.find(e => e.day === day && e.period === period);
   };
 
+  const isSimplifiedPdfMode = routines.length > 0 &&
+    routines.every(r => r.display_mode === 'pdf') &&
+    routines.every(r => r.pdf_url && r.pdf_url === routines[0].pdf_url);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="class-routine-public">
       {/* Header Summary Tab */}
       <div className="border-b border-slate-200 pb-5 mb-8">
         <span className="text-xs font-mono font-extrabold text-orange-600 uppercase tracking-widest block">
-          Academic Timetable Registry
+          {isSimplifiedPdfMode ? 'Official School Timetable' : 'Academic Timetable Registry'}
         </span>
         <h1 className="text-slate-900 text-2xl sm:text-3xl font-black mt-1 tracking-tight">
-          Weekly Class Routines
+          {isSimplifiedPdfMode ? 'Weekly Class Routine' : 'Weekly Class Routines'}
         </h1>
         <p className="text-slate-500 text-sm mt-1 max-w-xl font-sans font-medium">
-          Access structured period listings, assigned subject teachers, and digital override dates authorized by BSEB code.
+          {isSimplifiedPdfMode 
+            ? 'Access the centralized, unified school timetable approved by the school administration.'
+            : 'Access structured period listings, assigned subject teachers, and digital override dates authorized by BSEB code.'}
         </p>
       </div>
 
-      {/* Class Level Selection Buttons */}
-      <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-100 p-1.5 rounded-xl max-w-xl">
-        {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => (
+      {/* Class Level Selection Buttons (Hidden in simplified mode) */}
+      {!isSimplifiedPdfMode && (
+        <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-100 p-1.5 rounded-xl max-w-xl">
+          {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => (
+            <button
+              key={cls}
+              onClick={() => setSelectedClass(cls)}
+              className={`flex-1 py-2.5 px-4 text-xs font-bold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center ${
+                selectedClass === cls
+                  ? 'bg-white text-orange-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/45'
+              }`}
+            >
+              {cls}
+            </button>
+          ))}
+
           <button
-            key={cls}
-            onClick={() => setSelectedClass(cls)}
-            className={`flex-1 py-2.5 px-4 text-xs font-bold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center ${
-              selectedClass === cls
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/45'
+            onClick={() => setSelectedClass('FullMatrix')}
+            className={`py-2.5 px-4 text-xs font-extrabold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-1.5 border ${
+              selectedClass === 'FullMatrix'
+                ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                : 'text-slate-700 hover:text-slate-950 bg-white border-slate-200 hover:bg-slate-50'
             }`}
           >
-            {cls}
+            <span>📊 Full Routine Matrix</span>
+            <span className={`text-[9px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
+              selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-705'
+            }`}>ROSTER</span>
           </button>
-        ))}
-
-        <button
-          onClick={() => setSelectedClass('FullMatrix')}
-          className={`py-2.5 px-4 text-xs font-extrabold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-1.5 border ${
-            selectedClass === 'FullMatrix'
-              ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-              : 'text-slate-700 hover:text-slate-950 bg-white border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <span>📊 Full Routine Matrix</span>
-          <span className={`text-[9px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
-            selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-705'
-          }`}>ROSTER</span>
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Primary Display Logic */}
-      {selectedClass === 'FullMatrix' ? (
+      {isSimplifiedPdfMode ? (
+        /* SIMPLIFIED PDF INTERFACE FOR CENTRALIZED TIMETABLE */
+        <div className="bg-white border border-slate-150 rounded-2xl p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6 shadow-xs animate-in fade-in duration-150" id="routine-pdf-simplified-module">
+          <div className="w-14 h-14 rounded-full bg-orange-50 border border-orange-100/50 mx-auto flex items-center justify-center text-orange-600">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-slate-900 font-extrabold text-lg">📄 Official Timetable</h3>
+            <p className="text-slate-400 text-xs">This physical copy is currently the active master calendar for all academic years.</p>
+          </div>
+          
+          <div className="space-y-4">
+            <a
+              href={routines[0].pdf_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              View Timetable
+            </a>
+            <div className="w-full h-[550px] border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative hidden sm:block">
+              <iframe 
+                src={routines[0].pdf_url} 
+                className="w-full h-full"
+                title="Official Routine Calendar PDF View"
+              />
+            </div>
+          </div>
+        </div>
+      ) : selectedClass === 'FullMatrix' ? (
         <ConsolidatedRoutineMatrix isAdmin={false} />
       ) : !activeRoutine ? (
         <div className="text-center py-16 bg-white border border-slate-150 rounded-2xl p-8" id="no-routine-alert">

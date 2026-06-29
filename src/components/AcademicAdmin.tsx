@@ -1513,18 +1513,26 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                   <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-3.5">
                     <div className="flex items-start gap-3">
                       <div className="p-2 bg-orange-50 text-orange-600 rounded-lg shrink-0">
-                        <FileText className="w-5 h-5" />
+                        <FileText className="w-5.5 h-5.5" />
                       </div>
-                      <div className="min-w-0 flex-grow">
-                        <p className="text-xs font-bold text-slate-800 break-all leading-tight">
-                          {getPdfFilename(activeRoutine.pdf_url)}
+                      <div className="min-w-0 flex-grow space-y-2">
+                        <span className="block text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-400">PDF Document</span>
+                        <p className="text-xs font-black text-slate-900 flex items-center gap-1.5 break-all">
+                          📄 {getPdfFilename(activeRoutine.pdf_url)}
                         </p>
-                        <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-medium text-slate-500">
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono font-bold text-[9px] uppercase border border-emerald-200/50">
-                            ✓ Sourced
-                          </span>
-                          <span>•</span>
-                          <span>Last updated: {formatRoutineDate(activeRoutine.updated_at)}</span>
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200/40">
+                          <div>
+                            <span className="block text-[9px] uppercase font-mono font-bold tracking-wider text-slate-400">Status</span>
+                            <span className="text-xs font-extrabold text-emerald-600 flex items-center gap-1 mt-0.5">
+                              ✓ Available
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] uppercase font-mono font-bold tracking-wider text-slate-400">Last Updated</span>
+                            <span className="text-xs font-bold text-slate-700 block mt-0.5">
+                              {formatRoutineDate(activeRoutine.updated_at)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

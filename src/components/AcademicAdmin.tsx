@@ -417,6 +417,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [isManualTeacher, setIsManualTeacher] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // PDF global scope configuration
+  const [pdfApplyTarget, setPdfApplyTarget] = useState<'current' | 'all'>('current');
+
   // Strict Validation states
   const [formError, setFormError] = useState<string | null>(null);
   const [combinedError, setCombinedError] = useState<string | null>(null);
@@ -629,8 +632,42 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     triggerMedia(
       `Select PDF for ${selectedClass} Timetable`,
       (url) => {
-        const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: url, updated_at: new Date().toISOString() } : r);
-        dbService.saveRoutines(updated);
+        if (pdfApplyTarget === 'all') {
+          const classesToApply: AcademicClass[] = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+          let currentRoutines = [...routines];
+          
+          classesToApply.forEach((cls) => {
+            const existingIdx = currentRoutines.findIndex(r => r.class_name === cls);
+            if (existingIdx >= 0) {
+              currentRoutines[existingIdx] = {
+                ...currentRoutines[existingIdx],
+                pdf_url: url,
+                display_mode: 'pdf',
+                updated_at: new Date().toISOString()
+              };
+            } else {
+              const newRoutine: Routine = {
+                id: `routine-${Date.now()}-${cls.replace(' ', '')}`,
+                class_name: cls,
+                display_mode: 'pdf',
+                pdf_url: url,
+                override_active: false,
+                override_title: '',
+                override_start: '',
+                override_end: '',
+                override_pdf_url: '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              currentRoutines.push(newRoutine);
+            }
+          });
+          
+          dbService.saveRoutines(currentRoutines);
+        } else {
+          const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: url, updated_at: new Date().toISOString() } : r);
+          dbService.saveRoutines(updated);
+        }
         fetchLocalData();
       }
     );
@@ -1422,7 +1459,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                 Upload the administrative BSEB timetable flyer template for {selectedClass}. Live frame and download links are automatically set.
               </p>
 
-              <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-3">
+              <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-4">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-605 font-bold">Attached URL:</span>
                   <span className="text-slate-500 truncate max-w-sm font-mono text-[10px] bg-white p-1 rounded border border-slate-200">
@@ -1430,7 +1467,35 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                   </span>
                 </div>
 
-                <div className="flex gap-2 mt-4 text-xs font-bold font-sans">
+                <div className="pt-2.5 border-t border-slate-200/65 space-y-2 select-none">
+                  <span className="block text-[10px] uppercase font-mono font-bold tracking-wider text-slate-500">Apply PDF Scope</span>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pdfApplyTarget"
+                        value="current"
+                        checked={pdfApplyTarget === 'current'}
+                        onChange={() => setPdfApplyTarget('current')}
+                        className="text-orange-500 focus:ring-orange-500 cursor-pointer"
+                      />
+                      <span>Current Class ({selectedClass})</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="pdfApplyTarget"
+                        value="all"
+                        checked={pdfApplyTarget === 'all'}
+                        onChange={() => setPdfApplyTarget('all')}
+                        className="text-orange-500 focus:ring-orange-500 cursor-pointer"
+                      />
+                      <span>All Academic Classes (Class 9 - 12)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4 text-xs font-bold font-sans pt-1">
                   <button
                     onClick={handleAssignPDF}
                     className="py-2 px-4 bg-orange-505 bg-orange-500 hover:bg-orange-600 text-white rounded-lg uppercase tracking-wide shadow-sm cursor-pointer"

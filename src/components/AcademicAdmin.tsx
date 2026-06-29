@@ -2389,6 +2389,13 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [editingSchId, setEditingSchId] = useState<string | null>(null);
   const [editSchTitle, setEditSchTitle] = useState<string>('');
 
+  // Edit exam entry states
+  const [editingExamEntId, setEditingExamEntId] = useState<string | null>(null);
+  const [editExamEntDate, setEditExamEntDate] = useState<string>('');
+  const [editExamEntSubject, setEditExamEntSubject] = useState<string>('');
+  const [editExamEntTime, setEditExamEntTime] = useState<string>('');
+  const [editExamEntNotes, setEditExamEntNotes] = useState<string>('');
+
   // Form states
   const [newScheduleTitle, setNewScheduleTitle] = useState('');
   const [newEntryForm, setNewEntryForm] = useState<Partial<ExamEntry>>({
@@ -2473,6 +2480,34 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const handleCancelEditSchedule = () => {
     setEditingSchId(null);
     setEditSchTitle('');
+  };
+
+  const handleStartEditEntry = (ent: ExamEntry) => {
+    setEditingExamEntId(ent.id);
+    setEditExamEntDate(ent.exam_date);
+    setEditExamEntSubject(ent.subject);
+    setEditExamEntTime(ent.time || '');
+    setEditExamEntNotes(ent.notes || '');
+  };
+
+  const handleSaveEditEntry = async (entryId: string) => {
+    if (!editExamEntDate.trim() || !editExamEntSubject.trim()) return;
+    await dbService.updateExamEntry(entryId, {
+      exam_date: editExamEntDate.trim(),
+      subject: editExamEntSubject.trim(),
+      time: editExamEntTime.trim(),
+      notes: editExamEntNotes.trim()
+    });
+    setEditingExamEntId(null);
+    fetchLocalData();
+  };
+
+  const handleCancelEditEntry = () => {
+    setEditingExamEntId(null);
+    setEditExamEntDate('');
+    setEditExamEntSubject('');
+    setEditExamEntTime('');
+    setEditExamEntNotes('');
   };
 
   // Upload/Choose PDF
@@ -2840,36 +2875,107 @@ const ExamAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                           .sort((a,b) => new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime())
                           .map((ent) => (
                             <tr key={ent.id} className="hover:bg-slate-50/50 transition">
-                              <td className="py-3 px-4 font-mono font-bold text-slate-800">{formatShortDate(ent.exam_date)}</td>
-                              <td className="py-3 px-4 font-bold text-slate-950">{ent.subject}</td>
-                              <td className="py-3 px-4 text-orange-600 font-mono font-bold leading-none">{ent.time}</td>
-                              <td className="py-3 px-4 text-slate-500 leading-relaxed font-sans font-medium max-w-xs">{ent.notes || '—'}</td>
-                              <td className="py-3 px-4 text-center text-xs">
-                                {deletingEntId === ent.id ? (
-                                  <div className="flex items-center justify-center gap-1 animate-in fade-in duration-100">
-                                    <button
-                                      onClick={() => handleDeleteEntryInline(ent.id)}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                                    >
-                                      Confirm
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingEntId(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => setDeletingEntId(ent.id)}
-                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
-                                    title="Delete assessment timing slot"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </td>
+                              {editingExamEntId === ent.id ? (
+                                <>
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="date"
+                                      value={editExamEntDate}
+                                      onChange={(e) => setEditExamEntDate(e.target.value)}
+                                      className="w-full p-1.5 border border-orange-300 rounded font-mono text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="text"
+                                      value={editExamEntSubject}
+                                      onChange={(e) => setEditExamEntSubject(e.target.value)}
+                                      className="w-full p-1.5 border border-orange-300 rounded text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-950"
+                                      placeholder="Subject"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="text"
+                                      value={editExamEntTime}
+                                      onChange={(e) => setEditExamEntTime(e.target.value)}
+                                      className="w-full p-1.5 border border-orange-300 rounded font-mono text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 text-orange-600 font-bold"
+                                      placeholder="Exam Time"
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <textarea
+                                      value={editExamEntNotes}
+                                      onChange={(e) => setEditExamEntNotes(e.target.value)}
+                                      className="w-full p-1.5 border border-orange-300 rounded text-xs leading-normal focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-700"
+                                      placeholder="Administrative Directives"
+                                      rows={1}
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveEditEntry(ent.id)}
+                                        className="p-1 rounded hover:bg-emerald-50 text-emerald-600 transition"
+                                        title="Save Changes"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={handleCancelEditEntry}
+                                        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                                        title="Cancel Changes"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="py-3 px-4 font-mono font-bold text-slate-800">{formatShortDate(ent.exam_date)}</td>
+                                  <td className="py-3 px-4 font-bold text-slate-950">{ent.subject}</td>
+                                  <td className="py-3 px-4 text-orange-600 font-mono font-bold leading-none">{ent.time}</td>
+                                  <td className="py-3 px-4 text-slate-500 leading-relaxed font-sans font-medium max-w-xs">{ent.notes || '—'}</td>
+                                  <td className="py-3 px-4 text-center text-xs">
+                                    {deletingEntId === ent.id ? (
+                                      <div className="flex items-center justify-center gap-1 animate-in fade-in duration-100">
+                                        <button
+                                          onClick={() => handleDeleteEntryInline(ent.id)}
+                                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
+                                        >
+                                          Confirm
+                                        </button>
+                                        <button
+                                          onClick={() => setDeletingEntId(null)}
+                                          className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
+                                        >
+                                          No
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <button
+                                          onClick={() => handleStartEditEntry(ent)}
+                                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-orange-500 cursor-pointer"
+                                          title="Edit assessment timing slot"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => setDeletingEntId(ent.id)}
+                                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500 cursor-pointer"
+                                          title="Delete assessment timing slot"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           ))
                       )}

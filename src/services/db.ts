@@ -1702,6 +1702,7 @@ class DatabaseService {
   }
 
   updateExamEntry(id: string, updatedFields: Partial<ExamEntry>): ExamEntry | null {
+    console.log('[EXAM ENTRY UPDATE CALLED] updateExamEntry', id, updatedFields);
     console.log('[EXAM UPDATE CALLED] updateExamEntry', id, updatedFields);
     const targetId = ensureValidUUID(id);
     const entries = this.getExamEntries();

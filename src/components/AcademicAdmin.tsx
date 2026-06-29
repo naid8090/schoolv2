@@ -1627,11 +1627,30 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
               ) : (
                 /* NO PDF ASSIGNED WORKFLOW */
                 <div className="p-5 bg-slate-50 border border-slate-150 rounded-xl space-y-4">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-605 font-bold">Attached URL:</span>
-                    <span className="text-slate-500 truncate max-w-sm font-mono text-[10px] bg-white p-1 rounded border border-slate-200">
-                      No File Sourced Yet
-                    </span>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-200 text-slate-500 rounded-lg shrink-0">
+                      <FileText className="w-5.5 h-5.5" />
+                    </div>
+                    <div className="min-w-0 flex-grow space-y-2">
+                      <span className="block text-[10px] uppercase font-mono font-extrabold tracking-wider text-slate-400">PDF Document</span>
+                      <p className="text-xs font-bold text-slate-500 italic">
+                        No physical copy attached yet.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200/40">
+                        <div>
+                          <span className="block text-[9px] uppercase font-mono font-bold tracking-wider text-slate-400">Status</span>
+                          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mt-0.5">
+                            ✗ Not Configured
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[9px] uppercase font-mono font-bold tracking-wider text-slate-400">Last Updated</span>
+                          <span className="text-xs font-bold text-slate-400 block mt-0.5">
+                            —
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="pt-2.5 border-t border-slate-200/65 space-y-2 select-none">

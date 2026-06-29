@@ -138,6 +138,15 @@ export const ClassRoutinePage: React.FC = () => {
     routines.every(r => r.display_mode === 'pdf') &&
     routines.every(r => r.pdf_url && r.pdf_url === routines[0].pdf_url);
 
+  const anyClassPdf = routines.some(r => r.display_mode === 'pdf');
+
+  // Recover selected class automatically if state is invalid under PDF constraints
+  useEffect(() => {
+    if (anyClassPdf && selectedClass === 'FullMatrix') {
+      setSelectedClass('Class 9');
+    }
+  }, [routines, selectedClass, anyClassPdf]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="class-routine-public">
       {/* Header Summary Tab */}
@@ -172,19 +181,21 @@ export const ClassRoutinePage: React.FC = () => {
             </button>
           ))}
 
-          <button
-            onClick={() => setSelectedClass('FullMatrix')}
-            className={`py-2.5 px-4 text-xs font-extrabold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-1.5 border ${
-              selectedClass === 'FullMatrix'
-                ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                : 'text-slate-700 hover:text-slate-950 bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <span>📊 Full Routine Matrix</span>
-            <span className={`text-[9px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
-              selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-705'
-            }`}>ROSTER</span>
-          </button>
+          {!anyClassPdf && (
+            <button
+              onClick={() => setSelectedClass('FullMatrix')}
+              className={`py-2.5 px-4 text-xs font-extrabold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-1.5 border ${
+                selectedClass === 'FullMatrix'
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-slate-950 bg-white border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <span>📊 Full Routine Matrix</span>
+              <span className={`text-[9px] px-1 py-0.5 rounded font-bold uppercase shrink-0 ${
+                selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-705'
+              }`}>ROSTER</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -208,7 +219,7 @@ export const ClassRoutinePage: React.FC = () => {
               className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg shadow-sm transition-all cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              View Timetable
+              Download PDF
             </a>
             <div className="w-full h-[550px] border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative hidden sm:block">
               <iframe 
@@ -287,7 +298,7 @@ export const ClassRoutinePage: React.FC = () => {
                 className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg shadow-sm transition-all"
               >
                 <Download className="w-4 h-4" />
-                View Timetable Sheet
+                Download PDF
               </a>
               <div className="w-full h-[500px] border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative hidden sm:block">
                 <iframe 

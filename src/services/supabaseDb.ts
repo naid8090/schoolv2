@@ -8,6 +8,7 @@ import {
   SchoolSettings, 
   HomepageModule, 
   MediaItem, 
+  MediaBucket,
   Notice, 
   Faculty, 
   Routine, 
@@ -179,6 +180,64 @@ class SupabaseDbService {
       .eq('id', id);
 
     if (error) throw error;
+  }
+
+  async uploadMediaFile(file: File, bucket: MediaBucket): Promise<{ publicUrl: string, storagePath: string }> {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(3)}.${fileExt}`;
+    const filePath = `${bucket}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('school-assets')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      throw new Error(`Upload to storage failed: ${uploadError.message}`);
+    }
+
+    const { data } = supabase.storage
+      .from('school-assets')
+      .getPublicUrl(filePath);
+
+    if (!data?.publicUrl) {
+      throw new Error('Failed to retrieve public URL from storage bucket');
+    }
+
+    return {
+      publicUrl: data.publicUrl,
+      storagePath: filePath
+    };
+  }
+
+  async updateMediaItem(id: string, updates: Partial<MediaItem>): Promise<MediaItem> {
+    const { data, error } = await supabase
+      .from('media_items')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as unknown as MediaItem;
+  }
+
+  async deleteMediaFile(filePath: string): Promise<void> {
+    const { error } = await supabase.storage
+      .from('school-assets')
+      .remove([filePath]);
+    if (error) {
+      console.error('[Supabase Storage Delete Error]:', error.message);
+    }
+  }
+
+  getStoragePathFromUrl(url: string): string | null {
+    if (!url) return null;
+    const marker = '/school-assets/';
+    const idx = url.indexOf(marker);
+    if (idx !== -1) {
+      return url.substring(idx + marker.length);
+    }
+    return null;
   }
 
   // ==========================================

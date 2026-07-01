@@ -7,6 +7,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Trash2, RefreshCw, FileText, Check, Search, Filter, Image as ImageIcon, X } from 'lucide-react';
 import { MediaItem, MediaBucket } from '../types';
 import { dbService } from '../services/db';
+import { supabaseDbService } from '../services/supabaseDb';
 import { CustomPDFIcon, CustomSchoolEmblem } from './CommonAssets';
 
 interface MediaLibraryProps {
@@ -31,6 +32,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   
   // Drag & drop / upload states
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadBucket, setUploadBucket] = useState<MediaBucket>(activeBucketFilter || 'notices');
   const [uploadError, setUploadError] = useState('');
   
@@ -62,7 +64,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     }
   };
 
-  const ingestFile = (file: File, bucket: MediaBucket) => {
+  const ingestFile = async (file: File, bucket: MediaBucket) => {
     setUploadError('');
     
     // Validations
@@ -85,37 +87,54 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
       return;
     }
 
-    // Limit base64 ingest payload size to stay within localstorage limits
-    const maxSizeBytes = 3.5 * 1024 * 1024; // 3.5 MB max for responsive previewing
+    // Limit sandbox client uploads to 10MB
+    const maxSizeBytes = 10 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
-      setUploadError('File exceeds max 3.5MB size constraint for sandbox client uploads.');
+      setUploadError('File exceeds max 10MB size constraint for sandbox cloud uploads.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const sizeKb = Math.round(file.size / 1024);
-      const fileType = isImage ? 'image' : 'pdf';
+    try {
+      setIsUploading(true);
       
-      const newMedia = dbService.uploadMediaItem(file.name, bucket, result, fileType, sizeKb);
+      // 1. Upload file to Supabase storage bucket
+      const { publicUrl } = await supabaseDbService.uploadMediaFile(file, bucket);
+      
+      // 2. Insert metadata row into Supabase
+      const newMedia = await supabaseDbService.createMediaItem({
+        file_name: file.name,
+        bucket,
+        file_url: publicUrl,
+        file_type: isImage ? 'image' : 'pdf',
+        size_kb: Math.round(file.size / 1024)
+      });
+
+      // 3. Update local cache
+      dbService.saveMediaItemSingle(newMedia);
+      
       refreshMediaList();
+
+      // Trigger sync event
+      window.dispatchEvent(new CustomEvent('gsss-data-synced'));
       
       // If of select mode, trigger auto-select
       if (onSelect) {
         onSelect(newMedia);
       }
-    };
-    reader.onerror = () => {
-      setUploadError('Error reading file resource.');
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error('Upload failed:', err);
+      setUploadError(`Upload failed: ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // Drag-and-drop actions
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    if (!isUploading) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = () => {
@@ -125,30 +144,57 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (isUploading) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       ingestFile(e.dataTransfer.files[0], uploadBucket);
     }
   };
 
   // Delete Action
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const targetItem = mediaItems.find(item => item.id === id);
+    if (!targetItem) return;
+
     if (confirm('Are you sure you want to permanently delete this media asset? Any active notices referencing this document as an attachment will be cleaned.')) {
-      dbService.deleteMediaItem(id);
-      refreshMediaList();
+      try {
+        setIsUploading(true);
+        
+        // 1. Delete storage file if it exists
+        const filePath = supabaseDbService.getStoragePathFromUrl(targetItem.file_url);
+        if (filePath) {
+          await supabaseDbService.deleteMediaFile(filePath);
+        }
+
+        // 2. Delete metadata row from Supabase
+        await supabaseDbService.deleteMediaItem(id);
+
+        // 3. Delete from Local Cache
+        dbService.deleteMediaItem(id);
+
+        refreshMediaList();
+
+        // 4. Trigger sync event
+        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      } catch (err: any) {
+        alert(`Delete failed: ${err.message || err}`);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
   // Replace file action
   const handleReplaceClick = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isUploading) return;
     setReplacingItemId(id);
     if (replaceInputRef.current) {
       replaceInputRef.current.click();
     }
   };
 
-  const handleReplaceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReplaceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && replacingItemId) {
       const file = e.target.files[0];
       const targetItem = mediaItems.find(item => item.id === replacingItemId);
@@ -165,19 +211,45 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
       }
 
       // Size cap
-      if (file.size > 3.5 * 1024 * 1024) {
-        alert('File size exceeds 3.5MB limit.');
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size exceeds 10MB limit.');
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        dbService.replaceMediaItem(replacingItemId, reader.result as string, Math.round(file.size / 1024));
+      try {
+        setIsUploading(true);
+
+        // 1. Delete old storage file if it exists
+        const oldFilePath = supabaseDbService.getStoragePathFromUrl(targetItem.file_url);
+        if (oldFilePath) {
+          await supabaseDbService.deleteMediaFile(oldFilePath);
+        }
+
+        // 2. Upload new storage file
+        const { publicUrl } = await supabaseDbService.uploadMediaFile(file, targetItem.bucket);
+
+        // 3. Update Supabase metadata row
+        const sizeKb = Math.round(file.size / 1024);
+        const updatedItem = await supabaseDbService.updateMediaItem(replacingItemId, {
+          file_url: publicUrl,
+          size_kb: sizeKb,
+          file_name: file.name
+        });
+
+        // 4. Update Local Cache
+        dbService.saveMediaItemSingle(updatedItem);
+
         alert('File replaced successfully.');
         setReplacingItemId(null);
         refreshMediaList();
-      };
-      reader.readAsDataURL(file);
+
+        // 5. Trigger sync event
+        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      } catch (err: any) {
+        alert(`Replace failed: ${err.message || err}`);
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -255,19 +327,30 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center ${
+              onClick={() => !isUploading && fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-300 flex flex-col items-center justify-center relative min-h-[160px] ${
+                isUploading ? 'border-orange-200 bg-slate-100/50 cursor-not-allowed' :
                 isDragging 
-                  ? 'border-orange-500 bg-orange-50/20' 
-                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50'
+                  ? 'border-orange-500 bg-orange-50/20 cursor-pointer' 
+                  : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 cursor-pointer'
               }`}
             >
-              <Upload className="w-8 h-8 text-slate-400 mb-2" />
-              <p className="text-xs font-bold text-slate-705 text-slate-755 text-slate-700">Drag & Drop Document Here</p>
-              <p className="text-[10px] text-slate-450 mt-1 font-medium">or Click to open your device browser profile</p>
-              <p className="text-[9px] text-slate-500 mt-2 font-medium">
-                Limits: Images (JPG/PNG/WEBP) or PDF documents up to 3.5MB.
-              </p>
+              {isUploading ? (
+                <div className="flex flex-col items-center justify-center animate-pulse">
+                  <RefreshCw className="w-8 h-8 text-orange-500 mb-2 animate-spin" />
+                  <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">Uploading to Cloud...</p>
+                  <p className="text-[9px] text-slate-400 mt-1 font-medium">Bypassing local Base64 cache</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                  <p className="text-xs font-bold text-slate-705 text-slate-755 text-slate-700">Drag & Drop Document Here</p>
+                  <p className="text-[10px] text-slate-450 mt-1 font-medium">or Click to open your device browser profile</p>
+                  <p className="text-[9px] text-slate-500 mt-2 font-medium">
+                    Limits: Images (JPG/PNG/WEBP) or PDF documents up to 10MB.
+                  </p>
+                </>
+              )}
             </div>
             
             <input

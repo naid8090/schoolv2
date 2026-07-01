@@ -1050,6 +1050,21 @@ class DatabaseService {
     return items;
   }
 
+  saveMediaItems(items: MediaItem[], localOnly = false): void {
+    this.setStorageItem('gsss_media_items', items);
+  }
+
+  saveMediaItemSingle(item: MediaItem): void {
+    const items = this.getMediaItems();
+    const index = items.findIndex(x => x.id === item.id);
+    if (index !== -1) {
+      items[index] = item;
+    } else {
+      items.unshift(item);
+    }
+    this.setStorageItem('gsss_media_items', items);
+  }
+
   uploadMediaItem(fileName: string, bucket: MediaBucket, fileUrl: string, fileType: 'image' | 'pdf', sizeKb: number): MediaItem {
     const items = this.getMediaItems();
     const newItem: MediaItem = {

@@ -343,6 +343,25 @@ export default function App() {
           console.error('[Supabase exam entries sync error]:', err);
         }
 
+        // --- 13. MEDIA ITEMS SYNC ---
+        try {
+          console.log('[MEDIA ITEMS SYNC START]');
+          const remoteMediaItems = await supabaseDbService.getMediaItems();
+          console.log('[MEDIA ITEMS REMOTE COUNT]', remoteMediaItems?.length ?? 0);
+
+          if (active) {
+            if (remoteMediaItems && remoteMediaItems.length > 0) {
+              dbService.saveMediaItems(remoteMediaItems, true);
+              console.log('[MEDIA ITEMS CACHE UPDATED]', dbService.getMediaItems().length);
+            } else {
+              console.log('[MEDIA ITEMS EMPTY REMOTE]');
+              dbService.saveMediaItems([], true);
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase media items sync error]:', err);
+        }
+
         if (active) {
           setDataSyncVersion(prev => prev + 1);
           console.log('[SYNC EVENT DISPATCHED]');

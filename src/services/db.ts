@@ -341,24 +341,6 @@ const DEFAULT_NOTICES: Notice[] = [
   }
 ];
 
-const DEFAULT_DESIGNATIONS: string[] = [
-  'Principal',
-  'Vice Principal',
-  'Teacher',
-  'Guest Teacher',
-  'Clerk',
-  'Lab Assistant',
-  'Support Staff'
-];
-
-const DEFAULT_DEPARTMENTS: string[] = [
-  'Science',
-  'Commerce & Accounts',
-  'Arts & Humanities',
-  'Administration',
-  'Support & Lab'
-];
-
 const DEFAULT_FACULTY: Faculty[] = [
   {
     id: 'fac_1',
@@ -1296,23 +1278,6 @@ class DatabaseService {
           console.error('[Supabase Faculty Delete Error]:', error.message);
         }
       });
-  }
-
-  // Designations / Categories Management
-  getFacultyDesignations(): string[] {
-    return this.getStorageItem<string[]>('gsss_faculty_designations', DEFAULT_DESIGNATIONS);
-  }
-
-  saveFacultyDesignations(designations: string[]): void {
-    this.setStorageItem('gsss_faculty_designations', designations);
-  }
-
-  getFacultyDepartments(): string[] {
-    return this.getStorageItem<string[]>('gsss_faculty_departments', DEFAULT_DEPARTMENTS);
-  }
-
-  saveFacultyDepartments(departments: string[]): void {
-    this.setStorageItem('gsss_faculty_departments', departments);
   }
 
   // ==========================================

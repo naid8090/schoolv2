@@ -44,6 +44,84 @@ import { AcademicAdmin } from './AcademicAdmin';
 import { EventsAdmin } from './EventsAdmin';
 import { DatabaseHealth } from './DatabaseHealth';
 
+interface AutocompleteInputProps {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  suggestions: string[];
+  placeholder?: string;
+}
+
+const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
+  label,
+  value,
+  onChange,
+  suggestions,
+  placeholder
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Filter suggestions based on value (case-insensitive)
+  const filtered = suggestions.filter(s => 
+    s.toLowerCase().includes(value.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-1.5 relative">
+      <label className="block text-slate-500 uppercase tracking-wider text-[10px] font-bold">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          required
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          className="w-full bg-slate-50 border border-slate-200 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-505 rounded-lg p-2.5 font-semibold text-slate-700 pr-10 text-xs"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      </div>
+
+      {isOpen && (
+        <>
+          {/* Backdrop to close click-outside */}
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <ul className="absolute z-20 w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto divide-y divide-slate-100 text-xs text-slate-700">
+            {filtered.length > 0 ? (
+              filtered.map(suggestion => (
+                <li
+                  key={suggestion}
+                  onClick={() => {
+                    onChange(suggestion);
+                    setIsOpen(false);
+                  }}
+                  className="px-3 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between font-semibold"
+                >
+                  <span>{suggestion}</span>
+                  {value === suggestion && <Check className="w-3.5 h-3.5 text-orange-500" />}
+                </li>
+              ))
+            ) : (
+              <li className="px-3 py-2.5 text-slate-400 italic font-medium">
+                No matching suggestions. Press tab/enter to use "{value}"
+              </li>
+            )}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+};
+
 interface AdminDashboardProps {
   onLogout: () => void;
   onSettingsChanged: () => void;
@@ -89,8 +167,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Faculty State Manager
   const [facultyList, setFacultyList] = useState<Faculty[]>(() => dbService.getFaculty());
-  const [designations, setDesignations] = useState<string[]>(() => dbService.getFacultyDesignations());
-  const [departments, setDepartments] = useState<string[]>(() => dbService.getFacultyDepartments());
+
+  // Dynamic suggestions derived from the active facultyList
+  const departments = (Array.from(new Set(facultyList.map(f => f.department).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b));
+  const designations = (Array.from(new Set(facultyList.map(f => f.designation).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b));
+
   const [isEditingFaculty, setIsEditingFaculty] = useState(false);
   const [editingFacultyId, setEditingFacultyId] = useState<string | null>(null);
   const [originalFacName, setOriginalFacName] = useState('');
@@ -135,18 +216,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     message: string;
   } | null>(null);
 
-  // Designation adding state
-  const [newDesignation, setNewDesignation] = useState('');
-  const [newDepartment, setNewDepartment] = useState('');
-
   // Faculty form parameters
   const [facName, setFacName] = useState('');
   const [facPhoto, setFacPhoto] = useState('');
   const [facDesignation, setFacDesignation] = useState('');
-  const [facDepartment, setFacDepartment] = useState(() => {
-    const depts = dbService.getFacultyDepartments();
-    return depts[0] || 'Science';
-  });
+  const [facDepartment, setFacDepartment] = useState('');
   const [facSubject, setFacSubject] = useState('');
   const [facQualification, setFacQualification] = useState('');
   const [facExperience, setFacExperience] = useState('');
@@ -512,57 +586,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onSettingsChanged();
   };
 
-  // Faculty & Designation Category Actions
-  const handleAddCategory = () => {
-    if (!newDesignation.trim()) return;
-    if (designations.includes(newDesignation.trim())) {
-      triggerAlert('Designation Category', 'Designation category already exists in the selection system.');
-      return;
-    }
-    const updated = [...designations, newDesignation.trim()];
-    dbService.saveFacultyDesignations(updated);
-    setDesignations(updated);
-    setNewDesignation('');
-  };
 
-  const handleRemoveCategory = (cat: string) => {
-    triggerConfirm(
-      'Remove Designation',
-      `Are you sure you want to remove the designation "${cat}"? Faculty members currently in this role will keep it, but this designation option will be deleted from the dropdown options list in the editor registry.`,
-      () => {
-        const updated = designations.filter(c => c !== cat);
-        dbService.saveFacultyDesignations(updated);
-        setDesignations(updated);
-      }
-    );
-  };
-
-  const handleAddDepartment = () => {
-    if (!newDepartment.trim()) return;
-    if (departments.some(d => d.toLowerCase().trim() === newDepartment.toLowerCase().trim())) {
-      triggerAlert('Faculty Department', 'Department profile selection already exists in the active register.');
-      return;
-    }
-    const updated = [...departments, newDepartment.trim()];
-    dbService.saveFacultyDepartments(updated);
-    setDepartments(updated);
-    setNewDepartment('');
-  };
-
-  const handleRemoveDepartment = (dept: string) => {
-    triggerConfirm(
-      'Remove Department',
-      `Are you sure you want to remove the department "${dept}"? Faculty members currently in this department will keep it, but it will be removed from future selection options.`,
-      () => {
-        const updated = departments.filter(d => d !== dept);
-        dbService.saveFacultyDepartments(updated);
-        setDepartments(updated);
-        if (facDepartment === dept) {
-          setFacDepartment(updated[0] || 'General');
-        }
-      }
-    );
-  };
 
   const handleSwapOrderByIds = (idA: string, idB: string) => {
     const list = dbService.getFaculty();
@@ -1992,8 +2016,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       setEditingFacultyId(null);
                       setFacName('');
                       setFacPhoto('');
-                      setFacDesignation(designations[0] || 'Teacher');
-                      setFacDepartment(departments[0] || 'Science');
+                      setFacDesignation(designations[0] || '');
+                      setFacDepartment(departments[0] || '');
                       setFacSubject('');
                       setFacQualification('');
                       setFacExperience('');
@@ -2045,32 +2069,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     {/* Designation / Category */}
-                    <div className="space-y-1.5">
-                      <label className="block text-slate-500 uppercase tracking-wider text-[10px] font-bold">Designation Category *</label>
-                      <select
-                        value={facDesignation}
-                        onChange={(e) => setFacDesignation(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 rounded-lg p-2.5 font-semibold text-slate-700"
-                      >
-                        {designations.map(desig => (
-                          <option key={desig} value={desig}>{desig}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <AutocompleteInput
+                      label="Designation Category *"
+                      value={facDesignation}
+                      onChange={setFacDesignation}
+                      suggestions={designations}
+                      placeholder="e.g. Principal, Vice Principal, Teacher"
+                    />
 
                     {/* Department */}
-                    <div className="space-y-1.5">
-                      <label className="block text-slate-500 uppercase tracking-wider text-[10px] font-bold">Department *</label>
-                      <select
-                        value={facDepartment}
-                        onChange={(e) => setFacDepartment(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 rounded-lg p-2.5 font-semibold text-slate-700"
-                      >
-                        {departments.map(dept => (
-                          <option key={dept} value={dept}>{dept}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <AutocompleteInput
+                      label="Department *"
+                      value={facDepartment}
+                      onChange={setFacDepartment}
+                      suggestions={departments}
+                      placeholder="e.g. Science, Commerce & Accounts, Arts & Humanities"
+                    />
 
                     {/* Subject Specialty */}
                     <div className="space-y-1.5">
@@ -2257,98 +2271,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ) : (
                 /* PROFILE TABLE REGISTRY */
                 <div className="space-y-6">
-                  {/* DESIGNATION / CATEGORY & DEPARTMENT MANAGER GRIDS */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* DESIGNATION MANAGER */}
-                    <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 space-y-4 shadow-sm">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-orange-400 font-mono">
-                          Create Custom Designation Categories
-                        </h4>
-                        <p className="text-slate-400 text-[11px] mt-0.5 font-sans leading-relaxed font-semibold">
-                          Predefined categories exist by default. Admin can expand designations below recursively.
-                        </p>
-                      </div>
 
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newDesignation}
-                          onChange={(e) => setNewDesignation(e.target.value)}
-                          placeholder="e.g. Senior Lecturer, Guest Speaker"
-                          className="bg-slate-800 border border-slate-700 focus:outline-none focus:border-orange-500 rounded-lg p-2 text-xs font-medium text-white placeholder-slate-550 flex-1 font-sans"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddCategory}
-                          className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold uppercase shrink-0 cursor-pointer font-sans"
-                        >
-                          Add
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {designations.map(cat => (
-                          <div key={cat} className="flex items-center gap-1 bg-slate-850 bg-slate-800 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg text-[9.5px] font-mono font-bold hover:border-rose-500/30 transition-colors">
-                            <span>{cat}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCategory(cat)}
-                              title={`Remove ${cat} category`}
-                              className="text-rose-500 hover:text-rose-300 ml-1 cursor-pointer text-xs font-black transition-colors"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* DEPARTMENT MANAGER */}
-                    <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 space-y-4 shadow-sm">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-sky-400 font-mono">
-                          Manage Faculty Departments
-                        </h4>
-                        <p className="text-slate-400 text-[11px] mt-0.5 font-sans leading-relaxed font-semibold">
-                          Edit departments list. Add or delete options to modify dropdown items during profile publishing.
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newDepartment}
-                          onChange={(e) => setNewDepartment(e.target.value)}
-                          placeholder="e.g. Science, Commerce, Arts"
-                          className="bg-slate-800 border border-slate-700 focus:outline-none focus:border-sky-505 rounded-lg p-2 text-xs font-medium text-white placeholder-slate-550 flex-1 font-sans"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddDepartment}
-                          className="px-3.5 py-2 bg-sky-650 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold uppercase shrink-0 cursor-pointer font-sans"
-                        >
-                          Add
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {departments.map(dept => (
-                          <div key={dept} className="flex items-center gap-1 bg-slate-850 bg-slate-800 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg text-[9.5px] font-mono font-bold hover:border-rose-500/30 transition-colors">
-                            <span>{dept}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDepartment(dept)}
-                              title={`Remove ${dept} department`}
-                              className="text-rose-500 hover:text-rose-300 ml-1 cursor-pointer text-xs font-black transition-colors"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
 
                   {facultyList.length > 0 ? (
                     <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-xs">

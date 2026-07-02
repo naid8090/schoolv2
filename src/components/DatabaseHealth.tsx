@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
   Layers, 
@@ -54,7 +54,7 @@ export const DatabaseHealth: React.FC = () => {
     },
     {
       id: 'homepage_modules',
-      name: 'Homepage Modules',
+      name: 'Homepage',
       description: 'Configurable layouts, statistics grids, and dynamic frontpage banners.',
       localCount: 0,
       remoteCount: null,
@@ -108,30 +108,19 @@ export const DatabaseHealth: React.FC = () => {
       icon: <ImageIcon className="w-4 h-4 text-teal-500" />
     },
     {
-      id: 'period_masters',
-      name: 'Period Masters',
-      description: 'Administrative bell timings, periods schedule definitions, and constraints.',
-      localCount: 0,
-      remoteCount: null,
-      status: 'Healthy',
-      loading: true,
-      isDefault: true,
-      icon: <Clock className="w-4 h-4 text-sky-500" />
-    },
-    {
-      id: 'calendar_events',
-      name: 'Calendar Events',
-      description: 'Academic calendar slots, holidays, exam dates, and student schedules.',
+      id: 'media_library',
+      name: 'Media Library',
+      description: 'Ingested file assets, documents, pdf downloads, and image gallery files.',
       localCount: 0,
       remoteCount: null,
       status: 'Healthy',
       loading: true,
       isDefault: false,
-      icon: <Calendar className="w-4 h-4 text-emerald-600" />
+      icon: <ImageIcon className="w-4 h-4 text-amber-600" />
     },
     {
       id: 'routines',
-      name: 'Routines',
+      name: 'Class Routines',
       description: 'Parent class timetable grids mapping classes to weekly subject layouts.',
       localCount: 0,
       remoteCount: null,
@@ -152,6 +141,17 @@ export const DatabaseHealth: React.FC = () => {
       isDefault: true,
       icon: <Layers className="w-4 h-4 text-indigo-500" />,
       seedable: true
+    },
+    {
+      id: 'period_masters',
+      name: 'Period Masters',
+      description: 'Administrative bell timings, periods schedule definitions, and constraints.',
+      localCount: 0,
+      remoteCount: null,
+      status: 'Healthy',
+      loading: true,
+      isDefault: true,
+      icon: <Clock className="w-4 h-4 text-sky-500" />
     },
     {
       id: 'exam_schedules',
@@ -176,19 +176,20 @@ export const DatabaseHealth: React.FC = () => {
       icon: <Calendar className="w-4 h-4 text-violet-500" />
     },
     {
-      id: 'media_library',
-      name: 'Media Library',
-      description: 'Ingested file assets, documents, pdf downloads, and image gallery files.',
+      id: 'calendar_events',
+      name: 'Academic Calendar',
+      description: 'Academic calendar slots, holidays, exam dates, and student schedules.',
       localCount: 0,
       remoteCount: null,
       status: 'Healthy',
       loading: true,
       isDefault: false,
-      icon: <ImageIcon className="w-4 h-4 text-amber-600" />
+      icon: <Calendar className="w-4 h-4 text-emerald-600" />
     }
   ]);
 
   const [isLoadingAll, setIsLoadingAll] = useState(true);
+  const isExecutingRef = useRef(false);
   const [seedingId, setSeedingId] = useState<string | null>(null);
   const [operationResult, setOperationResult] = useState<{
     success: boolean;
@@ -288,6 +289,8 @@ export const DatabaseHealth: React.FC = () => {
   };
 
   const runDatabaseDiagnostics = async () => {
+    if (isExecutingRef.current) return;
+    isExecutingRef.current = true;
     setIsLoadingAll(true);
     
     // Mark all as loading initially
@@ -458,9 +461,10 @@ export const DatabaseHealth: React.FC = () => {
       setIntegrityResults(integrity);
     } catch (e) {
       console.error('[DB HEALTH] Media integrity diagnostics run failed:', e);
+    } finally {
+      setIsLoadingAll(false);
+      isExecutingRef.current = false;
     }
-
-    setIsLoadingAll(false);
   };
 
   const refreshModule = async (moduleId: string) => {
@@ -669,6 +673,177 @@ export const DatabaseHealth: React.FC = () => {
     }
   };
 
+  const handleRepair = async (moduleId: string) => {
+    // Set specific module row to loading state
+    setHealthModules(prev => prev.map(m => m.id === moduleId ? { ...m, loading: true, errorMsg: undefined } : m));
+    setOperationResult(null);
+
+    try {
+      let repairSuccess = false;
+      let msg = '';
+
+      switch (moduleId) {
+        case 'school_settings': {
+          const remote = await supabaseDbService.getSchoolSettings();
+          if (remote) {
+            dbService.saveSchoolSettings(remote, true);
+            repairSuccess = true;
+            msg = 'School settings synchronized from cloud database to local system cache successfully.';
+          } else {
+            const local = dbService.getSchoolSettings();
+            if (local) {
+              const saved = await supabaseDbService.saveSchoolSettings(local);
+              if (saved) {
+                repairSuccess = true;
+                msg = 'Local school settings uploaded to cloud database successfully.';
+              }
+            }
+          }
+          break;
+        }
+        case 'homepage_modules': {
+          const remote = await supabaseDbService.getHomepageModules();
+          if (remote && remote.length > 0) {
+            dbService.saveHomepageModules(remote, true);
+            repairSuccess = true;
+            msg = 'Homepage configuration synchronized from cloud database successfully.';
+          } else {
+            const local = dbService.getHomepageModules();
+            if (local && local.length > 0) {
+              await supabaseDbService.saveHomepageModules(local);
+              repairSuccess = true;
+              msg = 'Local homepage configuration uploaded to cloud database successfully.';
+            }
+          }
+          break;
+        }
+        case 'notices': {
+          const remote = await supabaseDbService.getNotices();
+          if (remote) {
+            dbService.saveNotices(remote, true);
+            repairSuccess = true;
+            msg = 'Notices archive synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'faculty': {
+          const remote = await supabaseDbService.getFaculty();
+          if (remote) {
+            dbService.saveFaculty(remote, true);
+            repairSuccess = true;
+            msg = 'Faculty roster successfully synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'events': {
+          const remote = await supabaseDbService.getEvents();
+          if (remote) {
+            dbService.saveEvents(remote, true);
+            repairSuccess = true;
+            msg = 'Events Board synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'event_images': {
+          const remote = await supabaseDbService.getEventImages();
+          if (remote) {
+            dbService.saveEventImages(remote, true);
+            repairSuccess = true;
+            msg = 'Event photo gallery mapping synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'period_masters': {
+          const remote = await supabaseDbService.getPeriodMasters();
+          if (remote) {
+            dbService.savePeriodMasters(remote, true);
+            repairSuccess = true;
+            msg = 'Period Masters bell timings synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'calendar_events': {
+          const remote = await supabaseDbService.getCalendarEvents();
+          if (remote) {
+            dbService.saveCalendarEvents(remote, true);
+            repairSuccess = true;
+            msg = 'Academic Calendar slots synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'routines': {
+          const remote = await supabaseDbService.getRoutines();
+          if (remote) {
+            dbService.saveRoutines(remote, true);
+            repairSuccess = true;
+            msg = 'Class Routines successfully synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'routine_entries': {
+          const remote = await supabaseDbService.getRoutineEntries();
+          if (remote) {
+            dbService.saveRoutineEntries(remote, true);
+            repairSuccess = true;
+            msg = 'Timetable entries successfully synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'exam_schedules': {
+          const remote = await supabaseDbService.getExamSchedules();
+          if (remote) {
+            dbService.saveExamSchedules(remote, true);
+            repairSuccess = true;
+            msg = 'Exam Schedules database successfully synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'exam_entries': {
+          const remote = await supabaseDbService.getExamEntries();
+          if (remote) {
+            dbService.saveExamEntries(remote, true);
+            repairSuccess = true;
+            msg = 'Exam slot entries successfully synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'media_library': {
+          const remote = await supabaseDbService.getMediaItems();
+          if (remote) {
+            dbService.saveMediaItems(remote, true);
+            repairSuccess = true;
+            msg = 'Media Library metadata successfully synchronized with cloud database.';
+          }
+          break;
+        }
+      }
+
+      if (repairSuccess) {
+        setOperationResult({
+          success: true,
+          message: msg || `Operational register synchronized and aligned successfully.`
+        });
+        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+      } else {
+        setOperationResult({
+          success: false,
+          message: `No remote cloud records found to pull into local system cache.`
+        });
+      }
+
+      // Re-run diagnostics
+      await runDatabaseDiagnostics();
+
+    } catch (err: any) {
+      setOperationResult({
+        success: false,
+        message: `Alignment failed: ${err.message || err}`
+      });
+      // Re-run diagnostics to clear loading states
+      await runDatabaseDiagnostics();
+    }
+  };
+
   useEffect(() => {
     runDatabaseDiagnostics();
   }, []);
@@ -701,18 +876,68 @@ export const DatabaseHealth: React.FC = () => {
   const getStatusIcon = (status: ModuleHealthData['status']) => {
     switch (status) {
       case 'Healthy':
-        return <ShieldCheck className="w-3.5 h-3.5 mr-1" />;
+        return <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-500" />;
       case 'Needs Seeding':
-        return <HelpCircle className="w-3.5 h-3.5 mr-1" />;
+        return <HelpCircle className="w-3.5 h-3.5 mr-1 text-amber-500 animate-pulse" />;
       case 'Local Only':
-        return <Activity className="w-3.5 h-3.5 mr-1" />;
+        return <Activity className="w-3.5 h-3.5 mr-1 text-sky-500" />;
       case 'Out of Sync':
-        return <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin-slow" />;
+        return <RefreshCw className="w-3.5 h-3.5 mr-1 text-indigo-500 animate-spin-slow" />;
       case 'Error':
-        return <AlertTriangle className="w-3.5 h-3.5 mr-1" />;
+        return <AlertTriangle className="w-3.5 h-3.5 mr-1 text-rose-500" />;
       default:
         return null;
     }
+  };
+
+  const getSystemStatusBanner = () => {
+    if (isLoadingAll) {
+      return {
+        title: "Scanning System Caches...",
+        description: "Executing lightweight diagnostics and integrity checks on all school database tables. Please wait...",
+        type: "loading",
+        styles: "bg-slate-50 border-slate-200 text-slate-700",
+        icon: <RefreshCw className="w-5 h-5 text-orange-500 animate-spin" />
+      };
+    }
+
+    if (errorCount > 0) {
+      return {
+        title: "Connection Error Detected",
+        description: "The system is unable to connect to one or more Supabase Cloud endpoints. Please verify your network connection and configuration parameters.",
+        type: "error",
+        styles: "bg-rose-50 border-rose-150 text-rose-800",
+        icon: <AlertTriangle className="w-5 h-5 text-rose-600 animate-bounce" />
+      };
+    }
+
+    if (outOfSyncCount > 0 || localOnlyCount > 0) {
+      return {
+        title: "Database Sync Recommended",
+        description: "Replication discrepancies detected between local cache and cloud database. Use the 'Sync Cache' actions in the Operations Registry below to align.",
+        type: "warning",
+        styles: "bg-indigo-50 border-indigo-150 text-indigo-900",
+        icon: <RefreshCw className="w-5 h-5 text-indigo-600" />
+      };
+    }
+
+    if (needsSeedingCount > 0) {
+      return {
+        title: "Standard Table Seeding Recommended",
+        description: "Standard system registers are currently empty in your remote database. We recommend seeding default arrays to ensure maximum operational utility.",
+        type: "info",
+        styles: "bg-amber-50 border-amber-150 text-amber-900",
+        icon: <HelpCircle className="w-5 h-5 text-amber-600" />
+      };
+    }
+
+    return {
+      title: "All Registers Healthy & Fully Synchronized",
+      description: "Local system caches and remote cloud tables are in 100% alignment. No administrative intervention or manual synchronization is required.",
+      type: "success",
+      styles: "bg-emerald-50 border-emerald-150 text-emerald-900",
+      icon: <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+    };
   };
 
   return (
@@ -722,73 +947,96 @@ export const DatabaseHealth: React.FC = () => {
         <div className="absolute right-0 top-0 h-full w-1/3 bg-linear-to-l from-orange-50/20 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <span className="text-[10px] uppercase font-mono font-bold text-orange-600 tracking-widest block mb-1">
-            Database schema & replication audit
+            System Database & Cloud Sync Health
           </span>
           <h2 className="text-slate-900 text-xl sm:text-2xl font-extrabold tracking-tight">
-            Database Health Console
+            Database & Cloud Synchronization Console
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed font-sans max-w-2xl font-medium">
-            Review live record counts, health statuses, and replication synchronization status between client-side Local Cache and Supabase Cloud Tables.
+            Verify connection integrity, check synchronisation with Supabase Cloud storage, and run safety audits on school registers.
           </p>
         </div>
       </div>
-
-
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" id="health-dashboard-kpis">
         {/* Total Modules */}
         <div className="bg-white border border-slate-150 rounded-xl p-4 flex flex-col justify-between hover:shadow-xs transition">
-          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Monitored Tables</span>
+          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Active Registers</span>
           <div className="mt-2">
             <span className="block text-2xl font-black text-slate-800">{totalModules}</span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">Total active entities</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Monitored school record types</span>
           </div>
         </div>
 
         {/* Healthy & Synced */}
         <div className="bg-white border border-slate-150 rounded-xl p-4 flex flex-col justify-between hover:shadow-xs transition">
-          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Synced & Healthy</span>
+          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Healthy & Synchronized</span>
           <div className="mt-2">
             <span className="block text-2xl font-black text-emerald-600">{healthyCount}</span>
-            <span className="text-[10px] text-emerald-600 mt-0.5 block font-medium">Replication intact</span>
+            <span className="text-[10px] text-emerald-600 mt-0.5 block font-medium font-sans">Cloud connected & matching</span>
           </div>
         </div>
 
         {/* Needs Seeding */}
         <div className="bg-white border border-slate-150 rounded-xl p-4 flex flex-col justify-between hover:shadow-xs transition">
-          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Needs Seeding</span>
+          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Pending Seeding</span>
           <div className="mt-2">
             <span className="block text-2xl font-black text-amber-600">{needsSeedingCount}</span>
-            <span className="text-[10px] text-amber-500 mt-0.5 block font-medium">Ready to seed defaults</span>
+            <span className="text-[10px] text-amber-500 mt-0.5 block font-medium font-sans">Requires standard initial records</span>
           </div>
         </div>
 
         {/* Local Only / Out of Sync */}
         <div className="bg-white border border-slate-150 rounded-xl p-4 flex flex-col justify-between hover:shadow-xs transition">
-          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Unreplicated / Out of Sync</span>
+          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Local Differences</span>
           <div className="mt-2">
             <span className="block text-2xl font-black text-indigo-600">{localOnlyCount + outOfSyncCount}</span>
-            <span className="text-[10px] text-indigo-500 mt-0.5 block font-medium">Local-only data found</span>
+            <span className="text-[10px] text-indigo-500 mt-0.5 block font-medium font-sans">Awaiting cloud synchronisation</span>
           </div>
         </div>
 
         {/* Faulty / Errors */}
         <div className="bg-white border border-slate-150 rounded-xl p-4 flex flex-col justify-between hover:shadow-xs transition">
-          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Faulty & Error</span>
+          <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider">Connection Error</span>
           <div className="mt-2">
             <span className="block text-2xl font-black text-rose-600">{errorCount}</span>
-            <span className="text-[10px] text-rose-500 mt-0.5 block font-medium">API queries failing</span>
+            <span className="text-[10px] text-rose-500 mt-0.5 block font-medium font-sans">Failed cloud connection</span>
           </div>
         </div>
       </div>
+
+      {/* System Status Banner */}
+      {(() => {
+        const banner = getSystemStatusBanner();
+        return (
+          <div className={`border rounded-xl p-4 sm:p-5 flex items-start gap-4 transition-all duration-300 ${banner.styles}`} id="health-system-status-banner">
+            <div className="p-2.5 rounded-xl bg-white/60 border border-white/20 shrink-0 shadow-3xs">
+              {banner.icon}
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-slate-900 text-sm leading-none flex items-center gap-2">
+                {banner.title}
+                {!isLoadingAll && (
+                  <span className="text-[9px] font-mono bg-white/40 px-1.5 py-0.5 rounded uppercase tracking-wider border border-black/5">
+                    Live
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11.5px] leading-relaxed opacity-95 text-slate-650 font-medium font-sans max-w-3xl">
+                {banner.description}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Main Health Table */}
       <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="text-slate-900 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2">
             <span className="w-1.5 h-3.5 bg-orange-500 rounded-sm" />
-            Integrity Check Registry
+            Active Registers & Sync Audit
           </h3>
           <button
             onClick={runDatabaseDiagnostics}
@@ -864,7 +1112,8 @@ export const DatabaseHealth: React.FC = () => {
                   {/* Future Operations Desk */}
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
-                      {(() => {
+                      {/* 1. SEED DEFAULTS (Only shown if module supports seeding defaults) */}
+                      {m.seedable && (() => {
                         const btnProps = getSeedButtonProps(m);
                         return (
                           <button
@@ -872,31 +1121,29 @@ export const DatabaseHealth: React.FC = () => {
                             disabled={btnProps.disabled}
                             className={btnProps.className}
                           >
-                            {btnProps.label}
+                            {btnProps.label === 'SEED' ? 'SEED DEFAULTS' : btnProps.label}
                           </button>
                         );
                       })()}
 
+                      {/* 2. SYNC REPAIR (Only shown when replication discrepancy is detected) */}
+                      {(m.status === 'Out of Sync' || m.status === 'Local Only') && (
+                        <button
+                          onClick={() => handleRepair(m.id)}
+                          disabled={m.loading || seedingId !== null}
+                          className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 hover:border-indigo-700 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                        >
+                          SYNC REPAIR
+                        </button>
+                      )}
+
+                      {/* 3. REFRESH (Always present, lightweight and precise) */}
                       <button
                         onClick={() => refreshModule(m.id)}
                         disabled={m.loading || seedingId !== null}
                         className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                       >
                         {m.loading ? '...' : 'REFRESH'}
-                      </button>
-
-                      <button
-                        disabled
-                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50"
-                      >
-                        REPAIR
-                      </button>
-
-                      <button
-                        disabled
-                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed select-none opacity-50"
-                      >
-                        VALIDATE
                       </button>
                     </div>
                     {m.errorMsg && (

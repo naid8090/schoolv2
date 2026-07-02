@@ -4,10 +4,11 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Upload, Trash2, RefreshCw, FileText, Check, Search, Filter, Image as ImageIcon, X } from 'lucide-react';
+import { Upload, Trash2, RefreshCw, FileText, Check, Search, Filter, Image as ImageIcon, X, AlertTriangle, Info, CheckCircle } from 'lucide-react';
 import { MediaItem, MediaBucket } from '../types';
 import { dbService } from '../services/db';
 import { supabaseDbService } from '../services/supabaseDb';
+import { referenceService } from '../services/referenceService';
 import { CustomPDFIcon, CustomSchoolEmblem } from './CommonAssets';
 
 interface MediaLibraryProps {
@@ -40,6 +41,10 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [replacingItemId, setReplacingItemId] = useState<string | null>(null);
 
+  // Deferment and warning states for reference integrity & duplicate checks
+  const [duplicateFilePending, setDuplicateFilePending] = useState<{ file: File; bucket: MediaBucket; duplicateItem: MediaItem } | null>(null);
+  const [deleteRefPending, setDeleteRefPending] = useState<{ id: string; name: string; refs: any[] } | null>(null);
+
   const buckets: { value: MediaBucket | 'all'; label: string }[] = [
     { value: 'all', label: 'All Folders' },
     { value: 'logos', label: 'Logos (School Setting)' },
@@ -64,7 +69,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     }
   };
 
-  const ingestFile = async (file: File, bucket: MediaBucket) => {
+  const ingestFile = async (file: File, bucket: MediaBucket, bypassDuplicateCheck = false) => {
     setUploadError('');
     
     // Validations
@@ -94,6 +99,22 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
       return;
     }
 
+    const sizeKb = Math.round(file.size / 1024);
+    const fileType = isImage ? 'image' : 'pdf';
+
+    // Duplicate detection check
+    if (!bypassDuplicateCheck) {
+      const dupCheck = referenceService.detectDuplicate(file.name, sizeKb, fileType);
+      if (dupCheck.isDuplicate && dupCheck.duplicateItem) {
+        setDuplicateFilePending({
+          file,
+          bucket,
+          duplicateItem: dupCheck.duplicateItem
+        });
+        return;
+      }
+    }
+
     try {
       setIsUploading(true);
       
@@ -105,8 +126,8 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
         file_name: file.name,
         bucket,
         file_url: publicUrl,
-        file_type: isImage ? 'image' : 'pdf',
-        size_kb: Math.round(file.size / 1024)
+        file_type: fileType,
+        size_kb: sizeKb
       });
 
       // 3. Update local cache
@@ -150,37 +171,56 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
     }
   };
 
+  // Actual Deletion Operation
+  const performActualDelete = async (id: string) => {
+    const targetItem = mediaItems.find(item => item.id === id);
+    if (!targetItem) return;
+
+    try {
+      setIsUploading(true);
+      
+      // 1. Delete storage file if it exists
+      const filePath = supabaseDbService.getStoragePathFromUrl(targetItem.file_url);
+      if (filePath) {
+        await supabaseDbService.deleteMediaFile(filePath);
+      }
+
+      // 2. Delete metadata row from Supabase
+      await supabaseDbService.deleteMediaItem(id);
+
+      // 3. Delete from Local Cache
+      dbService.deleteMediaItem(id);
+
+      refreshMediaList();
+
+      // 4. Trigger sync event
+      window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Delete Action
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const targetItem = mediaItems.find(item => item.id === id);
     if (!targetItem) return;
 
-    if (confirm('Are you sure you want to permanently delete this media asset? Any active notices referencing this document as an attachment will be cleaned.')) {
-      try {
-        setIsUploading(true);
-        
-        // 1. Delete storage file if it exists
-        const filePath = supabaseDbService.getStoragePathFromUrl(targetItem.file_url);
-        if (filePath) {
-          await supabaseDbService.deleteMediaFile(filePath);
-        }
+    // Check active references across other modules
+    const refs = referenceService.findMediaReferences(targetItem.file_url);
+    if (refs.length > 0) {
+      setDeleteRefPending({
+        id,
+        name: targetItem.file_name,
+        refs
+      });
+      return;
+    }
 
-        // 2. Delete metadata row from Supabase
-        await supabaseDbService.deleteMediaItem(id);
-
-        // 3. Delete from Local Cache
-        dbService.deleteMediaItem(id);
-
-        refreshMediaList();
-
-        // 4. Trigger sync event
-        window.dispatchEvent(new CustomEvent('gsss-data-synced'));
-      } catch (err: any) {
-        alert(`Delete failed: ${err.message || err}`);
-      } finally {
-        setIsUploading(false);
-      }
+    if (confirm('Are you sure you want to permanently delete this media asset?')) {
+      performActualDelete(id);
     }
   };
 
@@ -530,6 +570,144 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Duplicate Detection Alert Modal */}
+      {duplicateFilePending && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-xs flex justify-center items-center p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+            <div className="p-5 flex items-start gap-3 border-b border-slate-100 bg-amber-50/50">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-xs font-mono font-bold text-amber-800 uppercase tracking-wide">Duplicate Asset Detected</h3>
+                <p className="text-slate-500 text-[10.5px] mt-0.5 font-medium">An identical asset already exists in the cloud system repository.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-xs">
+              <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 space-y-2">
+                <div>
+                  <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider block">Incoming File</span>
+                  <span className="font-bold text-slate-700 truncate block">{duplicateFilePending.file.name}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Size: {Math.round(duplicateFilePending.file.size / 1024)} KB</span>
+                </div>
+                <div className="border-t border-slate-200 pt-2">
+                  <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider block">Existing File Match</span>
+                  <span className="font-bold text-slate-700 truncate block">{duplicateFilePending.duplicateItem.file_name}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Size: {duplicateFilePending.duplicateItem.size_kb} KB • Folder: {duplicateFilePending.duplicateItem.bucket}</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-normal">
+                To conserve storage space and maintain integrity, you can choose to use the existing file reference or continue with the upload.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex flex-col sm:flex-row gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const existingItem = duplicateFilePending.duplicateItem;
+                  setDuplicateFilePending(null);
+                  if (onSelect) {
+                    onSelect(existingItem);
+                  }
+                }}
+                className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-mono font-bold uppercase rounded-lg shadow-xs active:scale-95 transition-all cursor-pointer"
+              >
+                Use Existing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const f = duplicateFilePending.file;
+                  const b = duplicateFilePending.bucket;
+                  setDuplicateFilePending(null);
+                  ingestFile(f, b, true); // bypass duplicate check
+                }}
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-mono font-bold uppercase rounded-lg active:scale-95 transition-all cursor-pointer"
+              >
+                Upload Again
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateFilePending(null)}
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-500 border border-slate-150 text-[11px] font-mono font-bold uppercase rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Reference Warning Modal */}
+      {deleteRefPending && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/50 backdrop-blur-xs flex justify-center items-center p-4">
+          <div className="w-full max-w-lg bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+            <div className="p-5 flex items-start gap-3 border-b border-slate-100 bg-rose-50/50">
+              <div className="p-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="text-xs font-mono font-bold text-rose-800 uppercase tracking-wide">Safe Delete Intercept</h3>
+                <p className="text-slate-500 text-[10.5px] mt-0.5 font-medium">This asset is actively referenced by other modules.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="text-[11px] text-slate-600 leading-normal">
+                The file <span className="font-black text-slate-800 font-mono bg-slate-100 px-1 py-0.5 rounded">{deleteRefPending.name}</span> is currently used by these sections:
+              </div>
+
+              <div className="border border-rose-150 bg-rose-50/5 rounded-xl divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                {deleteRefPending.refs.map((ref, idx) => (
+                  <div key={idx} className="p-2.5 flex items-center justify-between font-mono text-[10px]">
+                    <div className="flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-bold uppercase">{ref.module}</span>
+                      <span className="text-slate-700 font-bold">{ref.recordName}</span>
+                    </div>
+                    <span className="text-slate-400 font-medium font-mono text-[9px]">{ref.fieldName}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 text-[10.5px] leading-relaxed">
+                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>WARNING:</strong> Deleting this asset will break rendering in the affected sections listed above. It is recommended to replace the media or update the referencing modules first.
+                </span>
+              </div>
+              
+              <div className="text-[11px] text-slate-500 font-semibold">
+                Are you absolutely sure you want to proceed and permanently delete this asset?
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-100 px-5 py-3 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = deleteRefPending.id;
+                  setDeleteRefPending(null);
+                  performActualDelete(id);
+                }}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-mono font-bold uppercase rounded-lg shadow-xs active:scale-95 transition-all cursor-pointer"
+              >
+                Delete Anyway
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteRefPending(null)}
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-mono font-bold uppercase rounded-lg cursor-pointer shadow-2xs"
+              >
+                Keep File (Cancel)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

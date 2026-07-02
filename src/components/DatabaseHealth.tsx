@@ -15,11 +15,15 @@ import {
   Activity,
   AlertTriangle,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  CheckCircle2,
+  Trash2,
+  FileText
 } from 'lucide-react';
 import { dbService } from '../services/db';
 import { supabaseDbService } from '../services/supabaseDb';
 import { databaseSeeder } from '../services/databaseSeeder';
+import { referenceService, IntegrityDiagnostics } from '../services/referenceService';
 
 interface ModuleHealthData {
   id: string;
@@ -190,6 +194,8 @@ export const DatabaseHealth: React.FC = () => {
     success: boolean;
     message: string;
   } | null>(null);
+
+  const [integrityResults, setIntegrityResults] = useState<IntegrityDiagnostics | null>(null);
 
 
 
@@ -446,6 +452,14 @@ export const DatabaseHealth: React.FC = () => {
     );
 
     setHealthModules(updatedModules);
+    
+    try {
+      const integrity = referenceService.runIntegrityDiagnostics();
+      setIntegrityResults(integrity);
+    } catch (e) {
+      console.error('[DB HEALTH] Media integrity diagnostics run failed:', e);
+    }
+
     setIsLoadingAll(false);
   };
 
@@ -895,6 +909,161 @@ export const DatabaseHealth: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Media Library Integrity & Reference Audit Card */}
+      <div className="bg-white border border-slate-150 rounded-2xl shadow-xs overflow-hidden mt-6">
+        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="text-slate-900 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2">
+            <span className="w-1.5 h-3.5 bg-orange-500 rounded-sm" />
+            Media Assets Integrity & Reference Audit
+          </h3>
+          <span className={`px-3 py-1 text-[10px] font-mono font-black rounded-full uppercase tracking-wider border ${
+            integrityResults?.healthy 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+          }`}>
+            {integrityResults?.healthy ? 'HEALTHY / ALL REFERENCES INTACT' : 'INTEGRITY ISSUES DETECTED'}
+          </span>
+        </div>
+
+        <div className="p-5">
+          {/* Sub-grid of key stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="border border-slate-150 rounded-xl p-4 bg-slate-50/50">
+              <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider block">Broken References</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className={`text-xl font-black ${integrityResults?.brokenReferencesCount && integrityResults.brokenReferencesCount > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                  {integrityResults?.brokenReferencesCount ?? 0}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium ml-2">Record links to non-existent cloud media</span>
+              </div>
+            </div>
+
+            <div className="border border-slate-150 rounded-xl p-4 bg-slate-50/50">
+              <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider block">Duplicate Files</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className={`text-xl font-black ${integrityResults?.duplicateFilesCount && integrityResults.duplicateFilesCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                  {integrityResults?.duplicateFilesCount ?? 0}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium ml-2">Identical files uploaded multiple times</span>
+              </div>
+            </div>
+
+            <div className="border border-slate-150 rounded-xl p-4 bg-slate-50/50">
+              <span className="text-[9px] font-mono font-bold text-slate-450 uppercase tracking-wider block">Orphan Metadata Rows</span>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className={`text-xl font-black ${integrityResults?.orphanMetadataCount && integrityResults.orphanMetadataCount > 0 ? 'text-amber-500' : 'text-slate-700'}`}>
+                  {integrityResults?.orphanMetadataCount ?? 0}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium ml-2">Database records with empty or broken URLs</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Details sections */}
+          <div className="space-y-4">
+            {/* 1. Broken References List */}
+            <div>
+              <h4 className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span>Broken Reference Discovery</span>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">Audit View</span>
+              </h4>
+              {!integrityResults?.details?.brokenReferences || integrityResults.details.brokenReferences.length === 0 ? (
+                <div className="text-xs text-slate-500 bg-slate-50/30 border border-slate-100 rounded-xl p-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>No broken references detected. All document linkages point to existing cloud media.</span>
+                </div>
+              ) : (
+                <div className="border border-rose-150 bg-rose-50/10 rounded-xl overflow-hidden divide-y divide-rose-100">
+                  {integrityResults.details.brokenReferences.map((ref: any, idx: number) => (
+                    <div key={idx} className="p-3 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 font-mono rounded text-[9px] font-bold uppercase">{ref.module}</span>
+                          <span>Field: <span className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">{ref.fieldName}</span></span>
+                        </div>
+                        <div className="text-slate-500 mt-1 font-mono text-[10px] break-all">
+                          Target URI: {ref.invalidUrl}
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-rose-600 font-mono font-bold flex items-center gap-1 uppercase shrink-0">
+                        <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+                        Broken Reference
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Duplicates List */}
+            <div>
+              <h4 className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span>Duplicate Cloud Asset Registry</span>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">Deduplication Desk</span>
+              </h4>
+              {!integrityResults?.details?.duplicates || integrityResults.details.duplicates.length === 0 ? (
+                <div className="text-xs text-slate-500 bg-slate-50/30 border border-slate-100 rounded-xl p-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>No duplicate asset uploads found. Optimal storage density.</span>
+                </div>
+              ) : (
+                <div className="border border-amber-150 bg-amber-50/10 rounded-xl overflow-hidden divide-y divide-amber-100">
+                  {integrityResults.details.duplicates.map((dup: any, idx: number) => (
+                    <div key={idx} className="p-3 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 font-mono rounded text-[9px] font-bold uppercase">DUPLICATE x{dup.count}</span>
+                          <span className="truncate max-w-sm font-semibold">{dup.name}</span>
+                        </div>
+                        <div className="text-slate-500 mt-1 font-mono text-[10px]">
+                          File size: {dup.sizeKb} KB
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-amber-600 font-mono font-semibold shrink-0">
+                        Optimizable: Consolidate references
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Orphan Metadata List */}
+            <div>
+              <h4 className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <span>Orphan & Broken Metadata Rows</span>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px]">Database Hygiene</span>
+              </h4>
+              {!integrityResults?.details?.orphanMetadata || integrityResults.details.orphanMetadata.length === 0 ? (
+                <div className="text-xs text-slate-500 bg-slate-50/30 border border-slate-100 rounded-xl p-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>No orphan or broken metadata records discovered. Schema fully normalized.</span>
+                </div>
+              ) : (
+                <div className="border border-indigo-150 bg-indigo-50/10 rounded-xl overflow-hidden divide-y divide-indigo-100">
+                  {integrityResults.details.orphanMetadata.map((item: any, idx: number) => (
+                    <div key={idx} className="p-3 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 font-mono rounded text-[9px] font-bold uppercase">INVALID URI</span>
+                          <span className="font-semibold">{item.name}</span>
+                        </div>
+                        <div className="text-rose-500 mt-1 font-mono text-[10px] break-all">
+                          Stored URL: {item.url || '(empty)'}
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-indigo-600 font-mono font-bold flex items-center gap-1 uppercase shrink-0">
+                        Broken Metadata
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

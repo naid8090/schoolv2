@@ -95,7 +95,7 @@ export const AboutPage: React.FC<ViewProps> = ({ schoolSettings, onViewChange })
       {/* Principal Address Message Panel */}
       <div className="bg-white border border-slate-150 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-6 items-start">
         <div className="w-16 h-16 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
-          {principal?.photo_url ? (
+          {principal?.photo_url && principal.photo_url.trim() !== '' ? (
             <img src={principal.photo_url} alt={principal.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           ) : (
             <BookOpen className="w-8 h-8 text-orange-600" />

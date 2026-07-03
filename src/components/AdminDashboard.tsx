@@ -633,13 +633,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const payload = {
       name: facName.trim(),
-      photo_url: facPhoto.trim() || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop',
+      photo_url: facPhoto.trim() || "",
       designation: facDesignation || 'Teacher',
       department: facDepartment || 'Science',
-      subject: facSubject.trim() || 'General Studies',
-      qualification: facQualification.trim() || 'B.A. / B.Ed. Qualified',
-      experience: facExperience.trim() || 'Experienced Educator',
-      bio: facBio.trim() || 'Dedicated academic scholar committed to the intellectual and moral growth of students.',
+      subject: facSubject.trim() || "",
+      qualification: facQualification.trim() || "",
+      experience: facExperience.trim() || "",
+      bio: facBio.trim() || "",
       email: facEmail.trim() || undefined,
       phone: facPhone.trim() || undefined,
       joined_date: facJoinedDate.trim() || undefined,
@@ -2380,7 +2380,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <td className="p-4">
                                       <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-150 shrink-0 relative bg-slate-50">
-                                          {fac.photo_url ? (
+                                          {fac.photo_url && fac.photo_url.trim() !== '' ? (
                                             <img src={fac.photo_url} alt={fac.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                           ) : (
                                             <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-450">
@@ -2390,7 +2390,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         </div>
                                         <div className="min-w-0">
                                           <span className="block text-slate-900 font-extrabold text-sm truncate">{fac.name}</span>
-                                          <span className="block text-slate-400 text-[10px] uppercase font-mono font-bold truncate tracking-wide">{fac.qualification}</span>
+                                          <span className="block text-slate-400 text-[10px] uppercase font-mono font-bold truncate tracking-wide">{fac.qualification || '—'}</span>
                                         </div>
                                       </div>
                                     </td>
@@ -2407,7 +2407,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       )}
                                     </td>
                                     <td className="p-4 truncate max-w-[150px] font-sans font-semibold text-slate-600">
-                                      {fac.subject}
+                                      {fac.subject || '—'}
                                     </td>
                                     <td className="p-4 text-center">
                                       <button

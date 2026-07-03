@@ -105,7 +105,7 @@ export const FacultyDirectory: React.FC = () => {
             >
               {/* Photo Box */}
               <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-slate-50 border-2 border-slate-100 group-hover:border-orange-500/30 transition shadow-inner shrink-0 relative">
-                {fac.photo_url ? (
+                {fac.photo_url && fac.photo_url.trim() !== '' ? (
                   <img
                     src={fac.photo_url}
                     alt={fac.name}
@@ -132,7 +132,7 @@ export const FacultyDirectory: React.FC = () => {
                 </h4>
                 <p className="text-slate-500 text-xs truncate font-sans">
                   <span className="font-semibold text-slate-700">Subject: </span>
-                  {fac.subject}
+                  {fac.subject || '—'}
                 </p>
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
                   <span>{fac.department} Department</span>
@@ -169,7 +169,7 @@ export const FacultyDirectory: React.FC = () => {
               {/* Photo & Identity Hero Block */}
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left border-b border-slate-100 pb-5">
                 <div className="w-24 h-24 rounded-2xl overflow-hidden bg-slate-50 border-3 border-orange-500/20 shadow-md shrink-0 relative">
-                  {selectedFaculty.photo_url ? (
+                  {selectedFaculty.photo_url && selectedFaculty.photo_url.trim() !== '' ? (
                     <img
                       src={selectedFaculty.photo_url}
                       alt={selectedFaculty.name}
@@ -192,7 +192,7 @@ export const FacultyDirectory: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-slate-500 font-semibold font-sans">
                     <span>{selectedFaculty.department} Department</span>
                     <span className="hidden sm:inline text-slate-305">•</span>
-                    <span>Subject: <strong className="text-slate-700 font-bold">{selectedFaculty.subject}</strong></span>
+                    <span>Subject: <strong className="text-slate-700 font-bold">{selectedFaculty.subject || '—'}</strong></span>
                   </div>
                 </div>
               </div>
@@ -203,7 +203,7 @@ export const FacultyDirectory: React.FC = () => {
                   <GraduationCap className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <span className="text-slate-400 block font-mono uppercase tracking-wide text-[9px] font-bold">Qualification credentials</span>
-                    <span className="text-slate-800 font-bold block mt-0.5 font-sans leading-relaxed">{selectedFaculty.qualification}</span>
+                    <span className="text-slate-800 font-bold block mt-0.5 font-sans leading-relaxed">{selectedFaculty.qualification || '—'}</span>
                   </div>
                 </div>
 
@@ -211,20 +211,22 @@ export const FacultyDirectory: React.FC = () => {
                   <Briefcase className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <span className="text-slate-400 block font-mono uppercase tracking-wide text-[9px] font-bold">Experience record</span>
-                    <span className="text-slate-800 font-bold block mt-0.5 font-sans leading-relaxed">{selectedFaculty.experience}</span>
+                    <span className="text-slate-800 font-bold block mt-0.5 font-sans leading-relaxed">{selectedFaculty.experience || '—'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Biography Section */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-orange-500" /> Biography Overview
-                </h4>
-                <p className="text-slate-600 text-xs sm:text-sm leading-relaxed p-4 bg-slate-50 border border-slate-100 rounded-xl italic font-sans font-medium">
-                  "{selectedFaculty.bio || "No custom biography details configured for this scholar."}"
-                </p>
-              </div>
+              {selectedFaculty.bio && selectedFaculty.bio.trim() !== '' && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-orange-500" /> Biography Overview
+                  </h4>
+                  <p className="text-slate-600 text-xs sm:text-sm leading-relaxed p-4 bg-slate-50 border border-slate-100 rounded-xl italic font-sans font-medium">
+                    "{selectedFaculty.bio}"
+                  </p>
+                </div>
+              )}
 
               {/* Optional Contact details */}
               {(selectedFaculty.email || selectedFaculty.phone) && (

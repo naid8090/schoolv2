@@ -624,7 +624,7 @@ export default function App() {
               className="bg-white border border-slate-150 rounded-2xl p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center gap-4 group"
             >
               <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-50 border-2 border-slate-100 group-hover:border-orange-500/30 transition shrink-0 relative">
-                {fac.photo_url ? (
+                {fac.photo_url && fac.photo_url.trim() !== '' ? (
                   <img
                     src={fac.photo_url}
                     alt={fac.name}
@@ -648,7 +648,7 @@ export default function App() {
                   {fac.name}
                 </h4>
                 <p className="text-slate-500 text-xs truncate font-sans">
-                  Subject: <strong className="text-slate-705 font-bold">{fac.subject}</strong>
+                  Subject: <strong className="text-slate-705 font-bold">{fac.subject || '—'}</strong>
                 </p>
               </div>
             </div>

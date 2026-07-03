@@ -25,6 +25,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
   const [periodMasters, setPeriodMasters] = useState<PeriodMaster[]>([]);
   const [schoolSettings, setSchoolSettings] = useState<SchoolSettings | null>(null);
   const [selectedDay, setSelectedDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'>('Monday');
+  const [faculty, setFaculty] = useState<any[]>([]);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
@@ -42,6 +43,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
     setEntries(dbService.getRoutineEntries());
     setPeriodMasters(dbService.getPeriodMasters());
     setSchoolSettings(dbService.getSchoolSettings());
+    setFaculty(dbService.getFaculty());
   };
 
   useEffect(() => {
@@ -116,7 +118,10 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
       uniquePeriods.forEach((period) => {
         const matched = getMatrixEntry(cls, selectedDay, period);
         if (matched) {
-          row.push(`${matched.subject} - ${matched.teacher || 'N/A'}`);
+          const resolvedTeacher = matched.teacher_id 
+            ? (faculty.find(f => f.id === matched.teacher_id)?.name || matched.teacher || 'N/A')
+            : (matched.teacher || 'N/A');
+          row.push(`${matched.subject} - ${resolvedTeacher}`);
         } else {
           row.push("Empty Slot");
         }
@@ -293,10 +298,22 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
                             <span className="block text-slate-950 font-bold text-xs leading-snug">
                               {matched.subject}
                             </span>
-                            {matched.teacher && (
+                            {(() => {
+                              if (matched.teacher_id) {
+                                const f = faculty.find(fac => fac.id === matched.teacher_id);
+                                if (f) return f.name;
+                              }
+                              return matched.teacher;
+                            })() && (
                               <span className="text-[10.5px] text-slate-550 font-medium flex items-center gap-1">
                                 <User className="w-3 h-3 text-slate-400 shrink-0" />
-                                {matched.teacher}
+                                {(() => {
+                                  if (matched.teacher_id) {
+                                    const f = faculty.find(fac => fac.id === matched.teacher_id);
+                                    if (f) return f.name;
+                                  }
+                                  return matched.teacher;
+                                })()}
                               </span>
                             )}
                           </div>

@@ -157,6 +157,7 @@ export interface RoutineEntry {
   period: string; // Period number or indicator, e.g., "1", "2"
   subject: string;
   teacher?: string;
+  teacher_id?: string;
   time_range?: string; // Timing of the period, e.g., "09:00 AM - 09:45 AM"
 }
 

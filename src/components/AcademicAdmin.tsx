@@ -462,6 +462,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     timeRangeStr: string,
     clsName: string,
     teacherName: string,
+    teacherId?: string,
     excludeEntryId?: string
   ): { valid: boolean; error?: string } => {
     const parsedRange = parseTimeRange(timeRangeStr);
@@ -496,7 +497,14 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
       const isOverlapping = start < entRange.end && entRange.start < end;
       if (isOverlapping) {
-        if (teacherName && ent.teacher && teacherName.trim().toLowerCase() === ent.teacher.trim().toLowerCase()) {
+        let isTeacherConflict = false;
+        if (teacherId && ent.teacher_id) {
+          isTeacherConflict = teacherId === ent.teacher_id;
+        } else if (teacherName && ent.teacher) {
+          isTeacherConflict = teacherName.trim().toLowerCase() === ent.teacher.trim().toLowerCase();
+        }
+
+        if (isTeacherConflict) {
           const conflictRoutine = routines.find(r => r.id === ent.routine_id);
           const conflictClass = conflictRoutine ? conflictRoutine.class_name : 'another class';
           return {
@@ -529,9 +537,16 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     period: string;
     entry?: RoutineEntry;
   } | null>(null);
-  const [combinedForm, setCombinedForm] = useState({
+  const [combinedForm, setCombinedForm] = useState<{
+    subject: string;
+    teacher: string;
+    teacher_id?: string;
+    time_range: string;
+    isManual: boolean;
+  }>({
     subject: '',
     teacher: '',
+    teacher_id: undefined,
     time_range: '09:00 AM - 09:45 AM',
     isManual: false
   });
@@ -549,9 +564,15 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     period: string;
     timeRange: string;
   } | null>(null);
-  const [quickForm, setQuickForm] = useState({
+  const [quickForm, setQuickForm] = useState<{
+    subject: string;
+    teacher: string;
+    teacher_id?: string;
+    isManual: boolean;
+  }>({
     subject: '',
     teacher: '',
+    teacher_id: undefined,
     isManual: false
   });
   const [quickConflictWarning, setQuickConflictWarning] = useState<string | null>(null);
@@ -600,16 +621,20 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   }, [selectedClass]);
 
   // Check if a teacher has a conflict on standard day/period in another class
-  const checkTeacherConflict = (day: string, period: string, teacherName: string, excludeId?: string, targetClass?: string) => {
-    if (!teacherName || teacherName.trim() === '') return null;
+  const checkTeacherConflict = (day: string, period: string, teacherName: string, teacherId?: string, excludeId?: string, targetClass?: string) => {
+    if ((!teacherName || teacherName.trim() === '') && !teacherId) return null;
     
     // Find matching records in other classes
-    const match = entries.find(e => 
-      e.day === day &&
-      e.period.toLowerCase().trim() === period.toLowerCase().trim() &&
-      e.teacher?.toLowerCase().trim() === teacherName.toLowerCase().trim() &&
-      e.id !== excludeId
-    );
+    const match = entries.find(e => {
+      if (e.id === excludeId) return false;
+      if (e.day !== day) return false;
+      if (e.period.toLowerCase().trim() !== period.toLowerCase().trim()) return false;
+      
+      if (teacherId && e.teacher_id) {
+        return teacherId === e.teacher_id;
+      }
+      return teacherName && e.teacher && e.teacher.toLowerCase().trim() === teacherName.toLowerCase().trim();
+    });
     
     if (match) {
       const conflictRoutine = routines.find(r => r.id === match.routine_id);
@@ -737,6 +762,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       timeRangeVal,
       selectedClass as string,
       teacherName,
+      entryForm.teacher_id,
       editingEntryId || undefined
     );
     if (!validation.valid) {
@@ -746,7 +772,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setFormError(null);
 
     // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(dayVal, periodVal, teacherName, editingEntryId || undefined, selectedClass as string);
+    const conflictClass = checkTeacherConflict(dayVal, periodVal, teacherName, entryForm.teacher_id, editingEntryId || undefined, selectedClass as string);
     if (conflictClass && !forceConflict) {
       setConflictWarning(`Conflict detected: ${teacherName} is already assigned to lead ${conflictClass} during ${dayVal} ${periodVal}. Proceed anyway?`);
       return;
@@ -760,7 +786,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         period: periodVal,
         time_range: timeRangeVal,
         subject: entryForm.subject || '',
-        teacher: teacherName
+        teacher: teacherName,
+        teacher_id: entryForm.teacher_id || null
       } : ent);
       dbService.saveRoutineEntries(updated);
     } else {
@@ -772,7 +799,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         period: periodVal,
         time_range: timeRangeVal,
         subject: entryForm.subject || '',
-        teacher: teacherName
+        teacher: teacherName,
+        teacher_id: entryForm.teacher_id || null
       };
       dbService.saveRoutineEntries([...entries, newEntry]);
     }
@@ -782,7 +810,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setEditingEntryId(null);
     setConflictWarning(null);
     setForceConflict(false);
-    setEntryForm({ day: 'Monday', period: 'Period 1', time_range: '09:00 AM - 09:45 AM', subject: '', teacher: '' });
+    setEntryForm({ day: 'Monday', period: 'Period 1', time_range: '09:00 AM - 09:45 AM', subject: '', teacher: '', teacher_id: undefined });
     fetchLocalData();
   };
 
@@ -793,9 +821,10 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       period: ent.period,
       time_range: ent.time_range || '',
       subject: ent.subject,
-      teacher: ent.teacher || ''
+      teacher: ent.teacher || '',
+      teacher_id: ent.teacher_id
     });
-    setIsManualTeacher(ent.teacher ? !faculty.some(f => f.name === ent.teacher) : false);
+    setIsManualTeacher(ent.teacher_id ? false : (ent.teacher ? !faculty.some(f => f.name === ent.teacher) : false));
     setIsManualPeriod(ent.period ? !periodMasters.some(pm => pm.name.toLowerCase().trim() === ent.period.toLowerCase().trim()) : false);
     setIsAddingEntry(true);
     setFormError(null);
@@ -833,8 +862,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setCombinedForm({
       subject: matched?.subject || '',
       teacher: matched?.teacher || '',
+      teacher_id: matched?.teacher_id,
       time_range: matched?.time_range || (getPeriodTimeCombined(period) || '09:00 AM - 09:45 AM'),
-      isManual: matched?.teacher ? !faculty.some(f => f.name === matched.teacher) : false
+      isManual: matched?.teacher_id ? false : (matched?.teacher ? !faculty.some(f => f.name === matched.teacher) : false)
     });
     setCombinedConflictWarning(null);
     setCombinedForceConflict(false);
@@ -853,7 +883,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     if (!editingCombinedCell) return;
 
     const { className, day, period, entry } = editingCombinedCell;
-    const { subject, teacher, time_range } = combinedForm;
+    const { subject, teacher, teacher_id, time_range } = combinedForm;
 
     // Strict validation
     const validation = validateRoutineCollision(
@@ -861,6 +891,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       time_range,
       className,
       teacher,
+      teacher_id,
       entry?.id || undefined
     );
     if (!validation.valid) {
@@ -870,7 +901,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setCombinedError(null);
 
     // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(day, period, teacher, entry?.id || undefined, className);
+    const conflictClass = checkTeacherConflict(day, period, teacher, teacher_id, entry?.id || undefined, className);
     if (conflictClass && !combinedForceConflict) {
       setCombinedConflictWarning(`Teacher Conflict: ${teacher} is already occupying ${conflictClass} during ${day} ${period}. Bypass warning and confirm?`);
       return;
@@ -878,7 +909,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
     if (entry) {
       // Edit in place
-      const updated = entries.map(e => e.id === entry.id ? { ...e, subject, teacher, time_range } : e);
+      const updated = entries.map(e => e.id === entry.id ? { ...e, subject, teacher, teacher_id: teacher_id || null, time_range } : e);
       dbService.saveRoutineEntries(updated);
     } else {
       // Create fresh
@@ -891,6 +922,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           period,
           subject,
           teacher,
+          teacher_id: teacher_id || null,
           time_range
         };
         dbService.saveRoutineEntries([...entries, newEntry]);
@@ -917,16 +949,58 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const allClasses: AcademicClass[] = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
 
   const getTeacherWorkloadData = () => {
-    const facultyNames = faculty.map(f => f.name.trim());
-    const customNames = Array.from(new Set(
-      entries
-        .map(e => e.teacher?.trim())
-        .filter((t): t is string => !!t)
-    ));
-    const unifiedTeachers = Array.from(new Set([...facultyNames, ...customNames]));
+    // 1. Unique faculty members
+    const facultyTeachers = faculty.map(f => ({
+      id: f.id,
+      name: f.name,
+      department: f.department || f.subject || 'General Studies',
+      isFaculty: true
+    }));
+
+    // 2. Custom/legacy teachers
+    const customTeachers: typeof facultyTeachers = [];
+    entries.forEach(e => {
+      if (!e.teacher || !e.teacher.trim()) return;
+      
+      if (e.teacher_id) {
+        const existsInFaculty = facultyTeachers.some(f => f.id === e.teacher_id);
+        if (!existsInFaculty) {
+          const existsInCustom = customTeachers.some(c => c.id === e.teacher_id);
+          if (!existsInCustom) {
+            customTeachers.push({
+              id: e.teacher_id,
+              name: e.teacher,
+              department: 'Legacy Faculty',
+              isFaculty: false
+            });
+          }
+        }
+      } else {
+        const matchesFacultyName = facultyTeachers.some(f => f.name.toLowerCase().trim() === e.teacher!.toLowerCase().trim());
+        if (!matchesFacultyName) {
+          const existsInCustom = customTeachers.some(c => c.name.toLowerCase().trim() === e.teacher!.toLowerCase().trim());
+          if (!existsInCustom) {
+            customTeachers.push({
+              name: e.teacher,
+              department: 'Custom / Guest',
+              isFaculty: false
+            });
+          }
+        }
+      }
+    });
+
+    const unifiedTeachers = [...facultyTeachers, ...customTeachers];
     
-    const workloadMap = unifiedTeachers.map(teacher => {
-      const assigned = entries.filter(e => e.teacher?.toLowerCase().trim() === teacher.toLowerCase().trim());
+    const workloadMap = unifiedTeachers.map(t => {
+      const assigned = entries.filter(e => {
+        if (!e.teacher || !e.teacher.trim()) return false;
+        
+        if (t.id && e.teacher_id) {
+          return t.id === e.teacher_id;
+        }
+        return t.name.toLowerCase().trim() === e.teacher.toLowerCase().trim();
+      });
       
       const details = assigned.map(e => {
         const matchingRoutine = routines.find(r => r.id === e.routine_id);
@@ -939,13 +1013,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           subject: e.subject
         };
       });
-      
-      const facultyModel = faculty.find(f => f.name.toLowerCase().trim() === teacher.toLowerCase().trim());
-      
+
       return {
-        name: teacher,
-        department: facultyModel?.department || facultyModel?.subject || 'Guest/Specialist Lectures',
-        type: facultyModel ? 'Regular' : 'Temp / Guest',
+        id: t.id,
+        name: t.name,
+        department: t.department,
+        type: t.isFaculty ? 'Regular' : 'Temp / Guest',
         loadCount: assigned.length,
         assignments: details
       };
@@ -955,13 +1028,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   };
 
   const allTeachersFromData = () => {
-    const facultyNames = faculty.map(f => f.name.trim());
-    const customNames = Array.from(new Set(
-      entries
-        .map(e => e.teacher?.trim())
-        .filter((t): t is string => !!t)
-    ));
-    return Array.from(new Set([...facultyNames, ...customNames])).sort();
+    const rawData = getTeacherWorkloadData();
+    return rawData.map(t => t.name).sort();
   };
 
   const filteredWorkloadData = () => {
@@ -1010,7 +1078,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
               time_range: timeRange,
               reason: 'unscheduled'
             });
-          } else if (!matchedEntry.teacher || matchedEntry.teacher.trim() === '') {
+          } else if ((!matchedEntry.teacher || matchedEntry.teacher.trim() === '') && !matchedEntry.teacher_id) {
             gapsList.push({
               key: `${cls}-${day}-${period}`,
               class_name: cls,
@@ -1044,7 +1112,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     if (!quickAssignSlot) return;
 
     const { className, day, period, timeRange } = quickAssignSlot;
-    const { subject, teacher } = quickForm;
+    const { subject, teacher, teacher_id } = quickForm;
 
     let targetRoutine = routines.find(r => r.class_name === className);
     const existingEntry = targetRoutine ? entries.find(ent => 
@@ -1059,6 +1127,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       timeRange,
       className,
       teacher,
+      teacher_id,
       existingEntry?.id || undefined
     );
     if (!validation.valid) {
@@ -1067,7 +1136,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     }
     setQuickError(null);
 
-    const conflictClass = checkTeacherConflict(day, period, teacher, existingEntry?.id || undefined, className);
+    const conflictClass = checkTeacherConflict(day, period, teacher, teacher_id, existingEntry?.id || undefined, className);
     if (conflictClass && !quickForceConflict) {
       setQuickConflictWarning(`Teacher Conflict: ${teacher} is already assigned to ${conflictClass} during ${day} ${period}. Bypass warning to assign?`);
       return;
@@ -1097,7 +1166,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     if (finalExistingEntry) {
       const updated = entries.map(ent => 
         ent.id === finalExistingEntry.id 
-          ? { ...ent, subject: subject.trim() || ent.subject, teacher } 
+          ? { ...ent, subject: subject.trim() || ent.subject, teacher, teacher_id: teacher_id || null } 
           : ent
       );
       dbService.saveRoutineEntries(updated);
@@ -1109,13 +1178,14 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         period,
         subject: subject.trim() || 'General Studies',
         teacher,
+        teacher_id: teacher_id || null,
         time_range: timeRange
       };
       dbService.saveRoutineEntries([...entries, newEntry]);
     }
 
     setQuickAssignSlot(null);
-    setQuickForm({ subject: '', teacher: '', isManual: false });
+    setQuickForm({ subject: '', teacher: '', teacher_id: undefined, isManual: false });
     setQuickConflictWarning(null);
     setQuickForceConflict(false);
     fetchLocalData();
@@ -1316,7 +1386,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                                   <div className="font-extrabold text-slate-800 leading-tight group-hover:text-orange-600">{matched.subject}</div>
                                   <div className="text-slate-500 flex items-center gap-1 font-mono text-[10px]">
                                     <User className="w-3 h-3 text-slate-400" />
-                                    {matched.teacher || '—'}
+                                    {(() => {
+                                      if (matched.teacher_id) {
+                                        const f = faculty.find(fac => fac.id === matched.teacher_id);
+                                        if (f) return f.name;
+                                      }
+                                      return matched.teacher || '—';
+                                    })()}
                                   </div>
                                 </div>
                               ) : (
@@ -1375,17 +1451,20 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
                       <div className="space-y-2">
                         <select
-                          value={combinedForm.isManual ? 'manual_option' : (combinedForm.teacher || '')}
+                          value={combinedForm.isManual ? 'manual_option' : (combinedForm.teacher_id || '')}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === 'manual_option') {
-                              setCombinedForm(prev => ({ ...prev, isManual: true, teacher: '' }));
+                              setCombinedForm(prev => ({ ...prev, isManual: true, teacher: '', teacher_id: undefined }));
+                            } else if (val === '') {
+                              setCombinedForm(prev => ({ ...prev, isManual: false, teacher: '', teacher_id: undefined }));
                             } else {
-                              const matched = faculty.find(f => f.name === val);
+                              const matched = faculty.find(f => f.id === val);
                               setCombinedForm(prev => ({ 
                                 ...prev, 
                                 isManual: false, 
-                                teacher: val,
+                                teacher: matched ? matched.name : '',
+                                teacher_id: val,
                                 subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
                               }));
                             }
@@ -1395,7 +1474,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                         >
                           <option value="">Select Teacher from Faculty...</option>
                           {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
+                            <option key={f.id} value={f.id}>
                               {f.name} ({f.department || f.subject})
                             </option>
                           ))}
@@ -1899,18 +1978,22 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
                       <div className="space-y-1.5">
                         <select
-                          value={isManualTeacher ? 'manual_option' : (entryForm.teacher || '')}
+                          value={isManualTeacher ? 'manual_option' : (entryForm.teacher_id || '')}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === 'manual_option') {
                               setIsManualTeacher(true);
-                              setEntryForm(prev => ({ ...prev, teacher: '' }));
+                              setEntryForm(prev => ({ ...prev, teacher: '', teacher_id: undefined }));
+                            } else if (val === '') {
+                              setIsManualTeacher(false);
+                              setEntryForm(prev => ({ ...prev, teacher: '', teacher_id: undefined }));
                             } else {
                               setIsManualTeacher(false);
-                              const matched = faculty.find(f => f.name === val);
+                              const matched = faculty.find(f => f.id === val);
                               setEntryForm(prev => ({ 
                                 ...prev, 
-                                teacher: val,
+                                teacher: matched ? matched.name : '',
+                                teacher_id: val,
                                 subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
                               }));
                             }
@@ -1920,7 +2003,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                         >
                           <option value="">Select from Faculty List...</option>
                           {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
+                            <option key={f.id} value={f.id}>
                               {f.name} ({f.department ||'General'})
                             </option>
                           ))}
@@ -2032,10 +2115,22 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                               <td className="py-3 px-4 font-mono font-medium text-slate-500">{ent.time_range}</td>
                               <td className="py-3 px-4 font-bold text-slate-800">{ent.subject}</td>
                               <td className="py-3 px-4 text-slate-550 font-medium">
-                                {ent.teacher ? (
+                                {(() => {
+                                  if (ent.teacher_id) {
+                                    const f = faculty.find(fac => fac.id === ent.teacher_id);
+                                    if (f) return f.name;
+                                  }
+                                  return ent.teacher;
+                                })() ? (
                                   <span className="flex items-center gap-1">
                                     <User className="w-3.5 h-3.5 text-slate-400" />
-                                    {ent.teacher}
+                                    {(() => {
+                                      if (ent.teacher_id) {
+                                        const f = faculty.find(fac => fac.id === ent.teacher_id);
+                                        if (f) return f.name;
+                                      }
+                                      return ent.teacher;
+                                    })()}
                                   </span>
                                 ) : '—'}
                               </td>
@@ -2458,6 +2553,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                                 setQuickForm(prev => ({ 
                                   ...prev, 
                                   teacher: t.name, 
+                                  teacher_id: t.id,
                                   isManual: false,
                                   subject: teacherSubject ? teacherSubject : (prev.subject || '')
                                 }));
@@ -2488,17 +2584,20 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
                       <div className="space-y-1.5">
                         <select
-                          value={quickForm.isManual ? 'manual_option' : (quickForm.teacher || '')}
+                          value={quickForm.isManual ? 'manual_option' : (quickForm.teacher_id || '')}
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val === 'manual_option') {
-                              setQuickForm(prev => ({ ...prev, isManual: true, teacher: '' }));
+                              setQuickForm(prev => ({ ...prev, isManual: true, teacher: '', teacher_id: undefined }));
+                            } else if (val === '') {
+                              setQuickForm(prev => ({ ...prev, isManual: false, teacher: '', teacher_id: undefined }));
                             } else {
-                              const matched = faculty.find(f => f.name === val);
+                              const matched = faculty.find(f => f.id === val);
                               setQuickForm(prev => ({ 
                                 ...prev, 
                                 isManual: false, 
-                                teacher: val,
+                                teacher: matched ? matched.name : '',
+                                teacher_id: val,
                                 subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
                               }));
                             }
@@ -2508,7 +2607,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                         >
                           <option value="">Select recommended teacher...</option>
                           {faculty.map((f) => (
-                            <option key={f.id} value={f.name}>
+                            <option key={f.id} value={f.id}>
                               {f.name} ({f.department || 'General'})
                             </option>
                           ))}

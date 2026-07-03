@@ -1383,6 +1383,7 @@ class DatabaseService {
         period: ent.period,
         subject: ent.subject,
         teacher: ent.teacher || null,
+        teacher_id: ent.teacher_id || null,
         time_range: ent.time_range || null
       }));
       this.setStorageItem('gsss_routine_entries', localDataToSave);

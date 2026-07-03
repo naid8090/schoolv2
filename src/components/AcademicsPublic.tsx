@@ -82,6 +82,7 @@ export const ClassRoutinePage: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<AcademicClass | 'FullMatrix'>('Class 9');
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
+  const [faculty, setFaculty] = useState<any[]>([]);
 
   const loadRoutines = () => {
     console.log('[ACADEMICS RELOAD]');
@@ -89,6 +90,7 @@ export const ClassRoutinePage: React.FC = () => {
     setRoutines(dbService.getRoutines());
     console.log('[ACADEMICS STATE UPDATED]');
     setEntries(dbService.getRoutineEntries());
+    setFaculty(dbService.getFaculty());
   };
 
   useEffect(() => {
@@ -373,10 +375,22 @@ export const ClassRoutinePage: React.FC = () => {
                                   <span className="text-slate-850 font-bold text-xs text-slate-800 block leading-tight">
                                     {entry.subject}
                                   </span>
-                                  {entry.teacher && (
+                                  {(() => {
+                                    if (entry.teacher_id) {
+                                      const f = faculty.find(fac => fac.id === entry.teacher_id);
+                                      if (f) return f.name;
+                                    }
+                                    return entry.teacher;
+                                  })() && (
                                     <span className="text-[10px] text-slate-550 text-slate-500 flex items-center gap-1">
                                       <Users className="w-3 h-3 text-slate-400" />
-                                      {entry.teacher}
+                                      {(() => {
+                                        if (entry.teacher_id) {
+                                          const f = faculty.find(fac => fac.id === entry.teacher_id);
+                                          if (f) return f.name;
+                                        }
+                                        return entry.teacher;
+                                      })()}
                                     </span>
                                   )}
                                 </div>

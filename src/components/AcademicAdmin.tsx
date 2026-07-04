@@ -38,6 +38,36 @@ const formatShortDate = (dateStr: string) => {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+// Top-level Time & Overlap parse helper functions
+const parseTimeToMinutes = (timeStr: string): number | null => {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return null;
+  
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3]?.toUpperCase();
+
+  if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+
+  if (ampm === 'PM' && hours < 12) {
+    hours += 12;
+  } else if (ampm === 'AM' && hours === 12) {
+    hours = 0;
+  }
+  return hours * 60 + minutes;
+};
+
+const parseTimeRange = (timeRangeStr: string): { start: number; end: number } | null => {
+  if (!timeRangeStr) return null;
+  const parts = timeRangeStr.split(/[-–—to]/i);
+  if (parts.length !== 2) return null;
+  const startMin = parseTimeToMinutes(parts[0].trim());
+  const endMin = parseTimeToMinutes(parts[1].trim());
+  if (startMin === null || endMin === null) return null;
+  return { start: startMin, end: endMin };
+};
+
 export const AcademicAdmin: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'routine' | 'exam' | 'calendar'>('routine');
 
@@ -140,19 +170,89 @@ const PeriodsMasterWorkspace: React.FC<{
   const [timeRange, setTimeRange] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  // Dynamic warning as the user types
+  useEffect(() => {
+    if (!timeRange.trim()) {
+      setWarning(null);
+      return;
+    }
+    const parsedRange = parseTimeRange(timeRange);
+    if (!parsedRange) {
+      setWarning(null);
+      return;
+    }
+    const { start, end } = parsedRange;
+    if (end > start) {
+      const duration = end - start;
+      if (duration < 20) {
+        setWarning("This period is unusually short.");
+      } else if (duration > 120) {
+        setWarning("This period is unusually long. Please verify the timing.");
+      } else {
+        setWarning(null);
+      }
+    } else {
+      setWarning(null);
+    }
+  }, [timeRange]);
 
   const handleAddOrUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (!timeRange.trim()) return;
 
-    // Check time syntax
-    const parts = timeRange.split(/[-–—to]/i);
-    if (parts.length !== 2) {
-      setError("Please use exact timing format like '09:00 AM - 09:45 AM'");
+    // 1. Syntax check & Parse Time Range properly
+    const parsedRange = parseTimeRange(timeRange);
+    if (!parsedRange) {
+      setError("Invalid time format. Please use: 09:00 AM - 09:45 AM");
       return;
     }
 
+    const { start, end } = parsedRange;
+
+    // 2. Chronological Validation with Specific Suggestions
+    if (end <= start) {
+      const parts = timeRange.split(/[-–—to]/i);
+      const startStr = parts[0].trim();
+      const endStr = parts[1].trim();
+      let errorMsg = `End time (${endStr}) is earlier than the start time (${startStr}).`;
+      if (/AM/i.test(endStr)) {
+        errorMsg += ` Did you mean ${endStr.replace(/AM/i, 'PM')}?`;
+      } else if (/PM/i.test(endStr)) {
+        errorMsg += ` Did you mean ${endStr.replace(/PM/i, 'AM')}?`;
+      } else {
+        errorMsg += ` Please check the AM/PM selection.`;
+      }
+      setError(errorMsg);
+      return;
+    }
+
+    // 3. Duplicate Period Name Check
+    const isDuplicateName = periodMasters.some(pm => 
+      pm.id !== editingId && 
+      pm.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+    if (isDuplicateName) {
+      setError(`A standard period with name "${name.trim()}" already exists.`);
+      return;
+    }
+
+    // 4. Time Overlap Validation (excluding the editing period)
+    const otherPMs = periodMasters.filter(pm => pm.id !== editingId);
+    for (const other of otherPMs) {
+      const otherRange = parseTimeRange(other.time_range);
+      if (otherRange) {
+        const { start: oStart, end: oEnd } = otherRange;
+        if (start < oEnd && end > oStart) {
+          setError(`This time overlaps with ${other.name} (${other.time_range}).`);
+          return;
+        }
+      }
+    }
+
+    // 5. Apply save or update
     if (editingId) {
       // Edit
       const updated = periodMasters.map(pm => pm.id === editingId ? { ...pm, name: name.trim(), time_range: timeRange.trim() } : pm);
@@ -161,10 +261,6 @@ const PeriodsMasterWorkspace: React.FC<{
       setEditingId(null);
     } else {
       // Create
-      if (periodMasters.some(pm => pm.name.toLowerCase().trim() === name.toLowerCase().trim())) {
-        setError(`A standard period with name "${name}" already exists.`);
-        return;
-      }
       const newPm: PeriodMaster = {
         id: `pm_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
         name: name.trim(),
@@ -182,6 +278,7 @@ const PeriodsMasterWorkspace: React.FC<{
     setName('');
     setTimeRange('');
     setError(null);
+    setWarning(null);
     fetchLocalData();
   };
 
@@ -307,6 +404,13 @@ const PeriodsMasterWorkspace: React.FC<{
               </div>
             )}
 
+            {warning && (
+              <div className="bg-amber-50 border border-amber-150 p-2.5 rounded-lg text-amber-800 text-[10.5px] font-medium leading-relaxed flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+                <span>{warning}</span>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2 border-t border-slate-200/50">
               {editingId && (
                 <button
@@ -426,36 +530,6 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [formError, setFormError] = useState<string | null>(null);
   const [combinedError, setCombinedError] = useState<string | null>(null);
   const [quickError, setQuickError] = useState<string | null>(null);
-
-  // Time & Overlap parse helper functions
-  const parseTimeToMinutes = (timeStr: string): number | null => {
-    if (!timeStr) return null;
-    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!match) return null;
-    
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const ampm = match[3]?.toUpperCase();
-
-    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
-
-    if (ampm === 'PM' && hours < 12) {
-      hours += 12;
-    } else if (ampm === 'AM' && hours === 12) {
-      hours = 0;
-    }
-    return hours * 60 + minutes;
-  };
-
-  const parseTimeRange = (timeRangeStr: string): { start: number; end: number } | null => {
-    if (!timeRangeStr) return null;
-    const parts = timeRangeStr.split(/[-–—to]/i);
-    if (parts.length !== 2) return null;
-    const startMin = parseTimeToMinutes(parts[0].trim());
-    const endMin = parseTimeToMinutes(parts[1].trim());
-    if (startMin === null || endMin === null) return null;
-    return { start: startMin, end: endMin };
-  };
 
   const validateRoutineCollision = (
     day: string,

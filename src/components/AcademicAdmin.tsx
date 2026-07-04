@@ -843,7 +843,14 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   };
 
   // Consolidated helpers
-  const standardPeriods = ['Period 1', 'Period 2', 'Period 3', 'Period 4', 'Period 5', 'Period 6'];
+  const dynamicPeriodNames = periodMasters.map(pm => pm.name);
+  const foundPeriodNames = entries.map(e => e.period) as string[];
+  const standardPeriods: string[] = Array.from(new Set([...dynamicPeriodNames, ...foundPeriodNames]))
+    .sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, '')) || 99;
+      const numB = parseInt(b.replace(/\D/g, '')) || 99;
+      return numA - numB;
+    });
   const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
   const getCombinedEntry = (cls: AcademicClass, day: string, period: string) => {
@@ -1362,9 +1369,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                 <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
                   {weekDays.map((day) => {
                     return standardPeriods.map((period, pIndex) => (
-                      <tr key={`${day}-${period}`} className={`hover:bg-slate-50/25 ${pIndex === 5 ? 'border-b-2 border-slate-200' : ''}`}>
+                      <tr key={`${day}-${period}`} className={`hover:bg-slate-50/25 ${pIndex === standardPeriods.length - 1 ? 'border-b-2 border-slate-200' : ''}`}>
                         {pIndex === 0 && (
-                          <td rowSpan={6} className="p-3 bg-slate-50/70 border-r border-slate-150 font-black text-slate-900 uppercase tracking-wide text-center alignment-middle w-28 select-none">
+                          <td rowSpan={standardPeriods.length} className="p-3 bg-slate-50/70 border-r border-slate-150 font-black text-slate-900 uppercase tracking-wide text-center alignment-middle w-28 select-none">
                             {day}
                           </td>
                         )}

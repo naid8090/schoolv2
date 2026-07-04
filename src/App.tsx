@@ -30,6 +30,12 @@ export default function App() {
   const [homepageModules, setHomepageModules] = useState<HomepageModule[]>(() => dbService.getHomepageModules());
   const [dataSyncVersion, setDataSyncVersion] = useState<number>(0);
 
+  // App Initialization state for synchronization experience
+  const [appInitializationComplete, setAppInitializationComplete] = useState<boolean>(() => {
+    return localStorage.getItem('gsss_is_synchronized') === 'true';
+  });
+  const [showSkeletons, setShowSkeletons] = useState<boolean>(false);
+
   // Administration Auth States
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState<boolean>(true);
@@ -42,6 +48,15 @@ export default function App() {
   // Load and sync School Settings & Homepage Modules on Startup
   useEffect(() => {
     let active = true;
+    let skeletonTimer: any = null;
+
+    if (localStorage.getItem('gsss_is_synchronized') !== 'true') {
+      skeletonTimer = setTimeout(() => {
+        if (active) {
+          setShowSkeletons(true);
+        }
+      }, 150);
+    }
 
     const syncMetadata = async () => {
       try {
@@ -363,12 +378,18 @@ export default function App() {
         }
 
         if (active) {
+          localStorage.setItem('gsss_is_synchronized', 'true');
+        }
+      } catch (err) {
+        console.error('Failed to sync school settings and modules with Supabase:', err);
+      } finally {
+        if (active) {
+          if (skeletonTimer) clearTimeout(skeletonTimer);
+          setAppInitializationComplete(true);
           setDataSyncVersion(prev => prev + 1);
           console.log('[SYNC EVENT DISPATCHED]');
           window.dispatchEvent(new CustomEvent('gsss-data-synced'));
         }
-      } catch (err) {
-        console.error('Failed to sync school settings and modules with Supabase:', err);
       }
     };
 
@@ -376,6 +397,7 @@ export default function App() {
 
     return () => {
       active = false;
+      if (skeletonTimer) clearTimeout(skeletonTimer);
     };
   }, []);
 
@@ -1365,6 +1387,103 @@ export default function App() {
     }
   };
 
+  const renderSkeletonContent = () => {
+    switch (currentView) {
+      case 'home':
+        return (
+          <div className="space-y-8 py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Skeleton Hero */}
+            <div className="bg-slate-200 border border-slate-300/40 rounded-3xl p-12 h-64 animate-pulse flex flex-col justify-center space-y-4">
+              <div className="h-6 bg-slate-300 rounded w-1/3"></div>
+              <div className="h-10 bg-slate-300 rounded w-2/3"></div>
+              <div className="h-4 bg-slate-300 rounded w-1/2"></div>
+            </div>
+            {/* Skeleton Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 h-40 animate-pulse space-y-3">
+                  <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                  <div className="h-6 bg-slate-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-slate-200 rounded w-5/6"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'notices':
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse"></div>
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="bg-white border border-slate-200 rounded-xl p-6 animate-pulse flex justify-between items-center">
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 bg-slate-200 rounded w-1/6"></div>
+                    <div className="h-6 bg-slate-200 rounded w-1/2"></div>
+                  </div>
+                  <div className="h-8 bg-slate-200 rounded w-24"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'faculty':
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse"></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 animate-pulse flex flex-col items-center space-y-4">
+                  <div className="w-24 h-24 bg-slate-200 rounded-full"></div>
+                  <div className="h-5 bg-slate-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'routine':
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse"></div>
+            <div className="border border-slate-200 rounded-2xl overflow-hidden animate-pulse">
+              <div className="bg-slate-100 h-12 border-b border-slate-200 grid grid-cols-6 gap-2 p-2">
+                {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="bg-slate-200 rounded h-full"></div>)}
+              </div>
+              <div className="divide-y divide-slate-150">
+                {[1, 2, 3, 4, 5].map(row => (
+                  <div key={row} className="grid grid-cols-6 gap-2 p-3 h-20">
+                    {[1, 2, 3, 4, 5, 6].map(col => <div key={col} className="bg-slate-150 rounded h-full"></div>)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      case 'calendar':
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="h-8 bg-slate-200 rounded w-48 animate-pulse"></div>
+            <div className="grid grid-cols-7 gap-4 animate-pulse">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-xl p-2 h-24 flex flex-col justify-between">
+                  <div className="h-4 bg-slate-100 rounded w-6"></div>
+                  <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex flex-col items-center justify-center min-h-[400px] gap-4 animate-pulse">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
+            <p className="text-xs font-mono tracking-wider text-slate-400">Loading school details...</p>
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans text-slate-600">
       
@@ -1379,169 +1498,175 @@ export default function App() {
 
       {/* 2. PRIMARY VIEWPORT SWITCHBOARD */}
       <main className="flex-grow">
-        
-        {/* VIEW A: HOMEPAGE (DYNAMIC REORDERABLE MODULE PATTERN) */}
-        {currentView === 'home' && (
-          <div className="space-y-4 pb-12" id="home-view-canvas">
-            {(() => {
-              return homepageModules
-                .filter(mod => mod.is_visible)
-                .map(mod => renderHomepageModule(mod));
-            })()}
-          </div>
-        )}
-
-        {/* VIEW B: ARCHIVES NOTICE BOARD */}
-        {currentView === 'notices' && (
-          <div className="pb-16" id="notices-view-canvas">
-            <NoticesPage />
-          </div>
-        )}
-
-        {/* VIEW B1.5: EVENTS PUBLIC PAGE (MODULE 4) */}
-        {currentView === 'events' && (
-          <div className="pb-16" id="events-view-canvas">
-            <EventsPublic
-              initialSelectedEventId={selectedEventId}
-              onClearSelectedEvent={() => setSelectedEventId(null)}
-            />
-          </div>
-        )}
-
-        {/* VIEW B2: ACADEMIC - CLASS ROUTINE */}
-        {currentView === 'routine' && (
-          <div className="pb-16 animate-fade-in" id="routine-view-canvas">
-            <ClassRoutinePage />
-          </div>
-        )}
-
-        {/* VIEW B3: ACADEMIC - EXAM SCHEDULE */}
-        {currentView === 'exams' && (
-          <div className="pb-16 animate-fade-in" id="exams-view-canvas">
-            <ExamSchedulePage />
-          </div>
-        )}
-
-        {/* VIEW B4: ACADEMIC - ACADEMIC CALENDAR */}
-        {currentView === 'calendar' && (
-          <div className="pb-16 animate-fade-in" id="calendar-view-canvas">
-            <AcademicCalendarPage />
-          </div>
-        )}
-
-        {/* VIEW C: ABOUT INSTITUTION */}
-        {currentView === 'about' && (
-          <div className="pb-16" id="about-view-canvas">
-            <AboutPage 
-              schoolSettings={schoolSettings} 
-              onViewChange={setCurrentView} 
-            />
-          </div>
-        )}
-
-        {/* VIEW D: ENROLLMENT ADMISSIONS */}
-        {currentView === 'admissions' && (
-          <div className="pb-16" id="admissions-view-canvas">
-            <AdmissionsPage 
-              schoolSettings={schoolSettings} 
-              onViewChange={setCurrentView} 
-            />
-          </div>
-        )}
-
-        {/* VIEW E: CONTACT PORTAL */}
-        {currentView === 'contact' && (
-          <div className="pb-16" id="contact-view-canvas">
-            <ContactPage 
-              schoolSettings={schoolSettings} 
-              onViewChange={setCurrentView} 
-            />
-          </div>
-        )}
-
-        {/* VIEW G: FACULTY DIRECTORY PORTAL */}
-        {currentView === 'faculty' && (
-          <div className="pb-16" id="faculty-view-canvas">
-            <FacultyDirectory />
-          </div>
-        )}
-
-        {/* VIEW F: ADMINISTRATION DESK PANEL */}
-        {currentView === 'admin' && (
-          <div className="pb-16" id="admin-view-canvas">
-            {isVerifyingAuth ? (
-              <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
-                <p className="text-xs font-mono tracking-wider text-slate-400">Verifying Administrative Session...</p>
-              </div>
-            ) : isAdminLoggedIn ? (
-              // Active Admin Panel
-              <AdminDashboard
-                onLogout={handleAdminLogout}
-                onSettingsChanged={refreshGlobalSchoolSettings}
-              />
-            ) : (
-              // Secure Authentication Form Card
-              <div className="max-w-md mx-auto mt-16 px-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-md space-y-6">
-                  
-                  {/* Icon & Title */}
-                  <div className="text-center space-y-2">
-                    <div className="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 mx-auto flex items-center justify-center text-slate-800 shadow-sm">
-                      <Lock className="w-6 h-6" />
-                    </div>
-                    <h2 className="text-slate-800 text-xl font-bold tracking-tight">Administrator Login</h2>
-                    <p className="text-xs text-slate-500">Secure access to the School Administration Panel</p>
-                  </div>
-
-                  {/* Form */}
-                  <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Administrative Email</label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="admin@gsss.edu"
-                        value={loginUser}
-                        onChange={(e) => setLoginUser(e.target.value)}
-                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Secret Password</label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="••••••••"
-                        value={loginPass}
-                        onChange={(e) => setLoginPass(e.target.value)}
-                        className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
-                      />
-                    </div>
-
-                    {loginError && (
-                      <p className="text-xs font-semibold text-rose-600 font-sans" id="login-error-message">
-                        {loginError}
-                      </p>
-                    )}
-
-                    <div className="pt-2">
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg transition-all shadow-md shadow-orange-500/10 cursor-pointer text-center"
-                      >
-                        Login
-                      </button>
-                    </div>
-                  </form>
-
-                </div>
+        {!appInitializationComplete ? (
+          showSkeletons ? renderSkeletonContent() : (
+            <div className="min-h-[400px]"></div>
+          )
+        ) : (
+          <>
+            {/* VIEW A: HOMEPAGE (DYNAMIC REORDERABLE MODULE PATTERN) */}
+            {currentView === 'home' && (
+              <div className="space-y-4 pb-12" id="home-view-canvas">
+                {(() => {
+                  return homepageModules
+                    .filter(mod => mod.is_visible)
+                    .map(mod => renderHomepageModule(mod));
+                })()}
               </div>
             )}
-          </div>
-        )}
 
+            {/* VIEW B: ARCHIVES NOTICE BOARD */}
+            {currentView === 'notices' && (
+              <div className="pb-16" id="notices-view-canvas">
+                <NoticesPage />
+              </div>
+            )}
+
+            {/* VIEW B1.5: EVENTS PUBLIC PAGE (MODULE 4) */}
+            {currentView === 'events' && (
+              <div className="pb-16" id="events-view-canvas">
+                <EventsPublic
+                  initialSelectedEventId={selectedEventId}
+                  onClearSelectedEvent={() => setSelectedEventId(null)}
+                />
+              </div>
+            )}
+
+            {/* VIEW B2: ACADEMIC - CLASS ROUTINE */}
+            {currentView === 'routine' && (
+              <div className="pb-16 animate-fade-in" id="routine-view-canvas">
+                <ClassRoutinePage />
+              </div>
+            )}
+
+            {/* VIEW B3: ACADEMIC - EXAM SCHEDULE */}
+            {currentView === 'exams' && (
+              <div className="pb-16 animate-fade-in" id="exams-view-canvas">
+                <ExamSchedulePage />
+              </div>
+            )}
+
+            {/* VIEW B4: ACADEMIC - ACADEMIC CALENDAR */}
+            {currentView === 'calendar' && (
+              <div className="pb-16 animate-fade-in" id="calendar-view-canvas">
+                <AcademicCalendarPage />
+              </div>
+            )}
+
+            {/* VIEW C: ABOUT INSTITUTION */}
+            {currentView === 'about' && (
+              <div className="pb-16" id="about-view-canvas">
+                <AboutPage 
+                  schoolSettings={schoolSettings} 
+                  onViewChange={setCurrentView} 
+                />
+              </div>
+            )}
+
+            {/* VIEW D: ENROLLMENT ADMISSIONS */}
+            {currentView === 'admissions' && (
+              <div className="pb-16" id="admissions-view-canvas">
+                <AdmissionsPage 
+                  schoolSettings={schoolSettings} 
+                  onViewChange={setCurrentView} 
+                />
+              </div>
+            )}
+
+            {/* VIEW E: CONTACT PORTAL */}
+            {currentView === 'contact' && (
+              <div className="pb-16" id="contact-view-canvas">
+                <ContactPage 
+                  schoolSettings={schoolSettings} 
+                  onViewChange={setCurrentView} 
+                />
+              </div>
+            )}
+
+            {/* VIEW G: FACULTY DIRECTORY PORTAL */}
+            {currentView === 'faculty' && (
+              <div className="pb-16" id="faculty-view-canvas">
+                <FacultyDirectory />
+              </div>
+            )}
+
+            {/* VIEW F: ADMINISTRATION DESK PANEL */}
+            {currentView === 'admin' && (
+              <div className="pb-16" id="admin-view-canvas">
+                {isVerifyingAuth ? (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
+                    <p className="text-xs font-mono tracking-wider text-slate-400">Verifying Administrative Session...</p>
+                  </div>
+                ) : isAdminLoggedIn ? (
+                  // Active Admin Panel
+                  <AdminDashboard
+                    onLogout={handleAdminLogout}
+                    onSettingsChanged={refreshGlobalSchoolSettings}
+                  />
+                ) : (
+                  // Secure Authentication Form Card
+                  <div className="max-w-md mx-auto mt-16 px-4">
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-md space-y-6">
+                      
+                      {/* Icon & Title */}
+                      <div className="text-center space-y-2">
+                        <div className="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 mx-auto flex items-center justify-center text-slate-800 shadow-sm">
+                          <Lock className="w-6 h-6" />
+                        </div>
+                        <h2 className="text-slate-800 text-xl font-bold tracking-tight">Administrator Login</h2>
+                        <p className="text-xs text-slate-500">Secure access to the School Administration Panel</p>
+                      </div>
+
+                      {/* Form */}
+                      <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1.5">Administrative Email</label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="admin@gsss.edu"
+                            value={loginUser}
+                            onChange={(e) => setLoginUser(e.target.value)}
+                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1.5">Secret Password</label>
+                          <input
+                            type="password"
+                            required
+                            placeholder="••••••••"
+                            value={loginPass}
+                            onChange={(e) => setLoginPass(e.target.value)}
+                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
+                          />
+                        </div>
+
+                        {loginError && (
+                          <p className="text-xs font-semibold text-rose-600 font-sans" id="login-error-message">
+                            {loginError}
+                          </p>
+                        )}
+
+                        <div className="pt-2">
+                          <button
+                            type="submit"
+                            className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg transition-all shadow-md shadow-orange-500/10 cursor-pointer text-center"
+                          >
+                            Login
+                          </button>
+                        </div>
+                      </form>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       {/* 3. DYNAMIC FOOTER */}

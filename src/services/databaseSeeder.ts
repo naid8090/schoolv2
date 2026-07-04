@@ -49,7 +49,7 @@ class DatabaseSeeder {
       }
 
       // 3. Retrieve and validate local dataset
-      const localRoutines = dbService.getRoutines();
+      const localRoutines = dbService.getRoutines(true);
       if (!localRoutines || localRoutines.length === 0) {
         throw new Error('Seeding aborted: No local routines found in cache.');
       }
@@ -126,7 +126,7 @@ class DatabaseSeeder {
       }
 
       // 3. Retrieve local dataset
-      const localEntries = dbService.getRoutineEntries();
+      const localEntries = dbService.getRoutineEntries(true);
       if (!localEntries || localEntries.length === 0) {
         throw new Error('Seeding aborted: No local routine entries found in cache.');
       }

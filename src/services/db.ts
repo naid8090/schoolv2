@@ -1024,8 +1024,8 @@ class DatabaseService {
   }
 
   // Media Library
-  getMediaItems(bucket?: MediaBucket): MediaItem[] {
-    const items = this.getStorageItem<MediaItem[]>('gsss_media_items', DEFAULT_MEDIA_ITEMS);
+  getMediaItems(bucket?: MediaBucket, useDefaultFallback = false): MediaItem[] {
+    const items = this.getStorageItem<MediaItem[]>('gsss_media_items', useDefaultFallback ? DEFAULT_MEDIA_ITEMS : []);
     if (bucket) {
       return items.filter(item => item.bucket === bucket);
     }
@@ -1107,8 +1107,8 @@ class DatabaseService {
   }
 
   // Notices CRM
-  getNotices(): Notice[] {
-    const rawNotices = this.getStorageItem<Notice[]>('gsss_notices', DEFAULT_NOTICES);
+  getNotices(useDefaultFallback = false): Notice[] {
+    const rawNotices = this.getStorageItem<Notice[]>('gsss_notices', useDefaultFallback ? DEFAULT_NOTICES : []);
     return rawNotices.map(n => ({
       ...n,
       id: ensureValidUUID(n.id)
@@ -1185,8 +1185,8 @@ class DatabaseService {
   }
 
   // Faculty Management
-  getFaculty(): Faculty[] {
-    const rawFaculty = this.getStorageItem<Faculty[]>('gsss_faculty_members', DEFAULT_FACULTY);
+  getFaculty(useDefaultFallback = false): Faculty[] {
+    const rawFaculty = this.getStorageItem<Faculty[]>('gsss_faculty_members', useDefaultFallback ? DEFAULT_FACULTY : []);
     return rawFaculty.map(f => ({
       ...f,
       id: ensureValidUUID(f.id)
@@ -1294,8 +1294,8 @@ class DatabaseService {
     return now;
   }
 
-  getRoutines(): Routine[] {
-    const raw = this.getStorageItem<Routine[]>('gsss_routines', DEFAULT_ROUTINES);
+  getRoutines(useDefaultFallback = false): Routine[] {
+    const raw = this.getStorageItem<Routine[]>('gsss_routines', useDefaultFallback ? DEFAULT_ROUTINES : []);
     return raw.map(r => ({
       ...r,
       id: ensureValidUUID(r.id)
@@ -1341,9 +1341,9 @@ class DatabaseService {
     return updated;
   }
 
-  getRoutineEntries(): RoutineEntry[] {
-    const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', DEFAULT_ROUTINE_ENTRIES);
-    const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+  getRoutineEntries(useDefaultFallback = false): RoutineEntry[] {
+    const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', useDefaultFallback ? DEFAULT_ROUTINE_ENTRIES : []);
+    const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', useDefaultFallback ? DEFAULT_PERIODS : []);
     
     let changed = false;
     const mapped = entries.map(ent => {
@@ -1516,8 +1516,8 @@ class DatabaseService {
   }
 
   // Exam Schedules CRM
-  getExamSchedules(): ExamSchedule[] {
-    const raw = this.getStorageItem<ExamSchedule[]>('gsss_exam_schedules', DEFAULT_EXAM_SCHEDULES);
+  getExamSchedules(useDefaultFallback = false): ExamSchedule[] {
+    const raw = this.getStorageItem<ExamSchedule[]>('gsss_exam_schedules', useDefaultFallback ? DEFAULT_EXAM_SCHEDULES : []);
     return raw.map(s => ({
       ...s,
       id: ensureValidUUID(s.id)
@@ -1628,8 +1628,8 @@ class DatabaseService {
     console.log('[SYNC EVENT DISPATCHED] Custom event gsss-data-synced dispatched from deleteExamSchedule');
   }
 
-  getExamEntries(): ExamEntry[] {
-    const raw = this.getStorageItem<ExamEntry[]>('gsss_exam_entries', DEFAULT_EXAM_ENTRIES);
+  getExamEntries(useDefaultFallback = false): ExamEntry[] {
+    const raw = this.getStorageItem<ExamEntry[]>('gsss_exam_entries', useDefaultFallback ? DEFAULT_EXAM_ENTRIES : []);
     return raw.map(e => ({
       ...e,
       id: ensureValidUUID(e.id),
@@ -1735,8 +1735,8 @@ class DatabaseService {
   }
 
   // Academic Calendar Events CRM
-  getCalendarEvents(): CalendarEvent[] {
-    const raw = this.getStorageItem<CalendarEvent[]>('gsss_calendar_events', DEFAULT_CALENDAR_EVENTS);
+  getCalendarEvents(useDefaultFallback = false): CalendarEvent[] {
+    const raw = this.getStorageItem<CalendarEvent[]>('gsss_calendar_events', useDefaultFallback ? DEFAULT_CALENDAR_EVENTS : []);
     return raw.map(e => ({
       ...e,
       id: ensureValidUUID(e.id)
@@ -1839,20 +1839,22 @@ class DatabaseService {
   // EVENTS MANAGEMENT METHODS
   // ==========================================
 
-  getEvents(): SchoolEvent[] {
+  getEvents(useDefaultFallback = false): SchoolEvent[] {
     let loadedEvents: SchoolEvent[] = [];
-    if (this.cachedEvents) {
+    if (this.cachedEvents && !useDefaultFallback) {
       loadedEvents = this.cachedEvents.map(e => ({
         ...e,
         id: ensureValidUUID(e.id)
       }));
     } else {
-      const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', DEFAULT_EVENTS);
+      const rawEvents = this.getStorageItem<SchoolEvent[]>('gsss_events', useDefaultFallback ? DEFAULT_EVENTS : []);
       loadedEvents = rawEvents.map(e => ({
         ...e,
         id: ensureValidUUID(e.id)
       }));
-      this.cachedEvents = loadedEvents;
+      if (!useDefaultFallback) {
+        this.cachedEvents = loadedEvents;
+      }
     }
 
     return loadedEvents.sort((a, b) => {
@@ -1973,21 +1975,23 @@ class DatabaseService {
   }
 
   // Event Album / Gallery Images
-  getEventImages(): SchoolEventImage[] {
-    if (this.cachedEventImages) {
+  getEventImages(useDefaultFallback = false): SchoolEventImage[] {
+    if (this.cachedEventImages && !useDefaultFallback) {
       return this.cachedEventImages.map(img => ({
         ...img,
         id: ensureValidUUID(img.id),
         event_id: ensureValidUUID(img.event_id)
       }));
     }
-    const rawImages = this.getStorageItem<SchoolEventImage[]>('gsss_event_images', DEFAULT_EVENT_IMAGES);
+    const rawImages = this.getStorageItem<SchoolEventImage[]>('gsss_event_images', useDefaultFallback ? DEFAULT_EVENT_IMAGES : []);
     const loadedImages = rawImages.map(img => ({
       ...img,
       id: ensureValidUUID(img.id),
       event_id: ensureValidUUID(img.event_id)
     }));
-    this.cachedEventImages = loadedImages;
+    if (!useDefaultFallback) {
+      this.cachedEventImages = loadedImages;
+    }
     return loadedImages;
   }
 
@@ -2089,8 +2093,8 @@ class DatabaseService {
     this.saveEventImages(updatedImgs); // Syncs full re-ordered images to Supabase
   }
 
-  getPeriodMasters(): PeriodMaster[] {
-    const raw = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', DEFAULT_PERIODS);
+  getPeriodMasters(useDefaultFallback = false): PeriodMaster[] {
+    const raw = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', useDefaultFallback ? DEFAULT_PERIODS : []);
     return raw.map(p => ({
       ...p,
       id: ensureValidUUID(p.id)

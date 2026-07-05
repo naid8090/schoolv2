@@ -554,11 +554,11 @@ export default function App() {
     }
   };
 
-  const handleAdminLogout = async () => {
+  const handleAdminLogout = React.useCallback(async () => {
     await supabase.auth.signOut();
     setIsAdminLoggedIn(false);
     setCurrentView('home');
-  };
+  }, []);
 
   const refreshGlobalSchoolSettings = () => {
     setSchoolSettings(dbService.getSchoolSettings());
@@ -1494,6 +1494,7 @@ export default function App() {
         schoolSettings={schoolSettings}
         isAdminLoggedIn={isAdminLoggedIn}
         onLogout={handleAdminLogout}
+        appInitializationComplete={appInitializationComplete}
       />
 
       {/* 2. PRIMARY VIEWPORT SWITCHBOARD */}
@@ -1673,6 +1674,7 @@ export default function App() {
       <Footer
         schoolSettings={schoolSettings}
         onViewChange={setCurrentView}
+        appInitializationComplete={appInitializationComplete}
       />
     </div>
   );

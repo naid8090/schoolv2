@@ -11,10 +11,16 @@ import { CustomSchoolEmblem } from './CommonAssets';
 interface FooterProps {
   schoolSettings: SchoolSettings;
   onViewChange: (view: string) => void;
+  appInitializationComplete?: boolean;
 }
 
-export const Footer: React.FC<FooterProps> = ({ schoolSettings, onViewChange }) => {
+export const Footer: React.FC<FooterProps> = React.memo(({ 
+  schoolSettings, 
+  onViewChange,
+  appInitializationComplete = true
+}) => {
   const currentYear = new Date().getFullYear();
+  const isSyncing = !appInitializationComplete;
 
   return (
     <footer className="bg-sky-950 text-slate-300 border-t border-sky-900" id="site-footer">
@@ -25,7 +31,9 @@ export const Footer: React.FC<FooterProps> = ({ schoolSettings, onViewChange }) 
           {/* Column 1: School Identity */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
-              {schoolSettings.logo_url === 'school_logo_default' ? (
+              {isSyncing ? (
+                <div className="w-12 h-12 shrink-0 rounded-full bg-sky-900/60 animate-pulse" />
+              ) : schoolSettings.logo_url === 'school_logo_default' ? (
                 <CustomSchoolEmblem className="w-12 h-12" />
               ) : (
                 <img 
@@ -36,22 +44,43 @@ export const Footer: React.FC<FooterProps> = ({ schoolSettings, onViewChange }) 
                 />
               )}
               <div className="flex flex-col">
-                <span className="text-white font-extrabold text-sm sm:text-base tracking-tight uppercase font-sans">
-                  {schoolSettings.school_name}
-                </span>
-                <span className="text-orange-400 text-[10px] sm:text-xs font-mono font-bold tracking-wide uppercase">
-                  {schoolSettings.footer_subtitle || "STATE INFRASTRUCTURE • SECTOR 3"}
-                </span>
+                {isSyncing ? (
+                  <>
+                    <div className="h-5 bg-sky-900/60 animate-pulse rounded-md w-48 sm:w-64 animate-pulse" />
+                    <div className="h-3 bg-sky-900/40 animate-pulse rounded-md w-32 mt-1.5 animate-pulse" />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-white font-extrabold text-sm sm:text-base tracking-tight uppercase font-sans">
+                      {schoolSettings.school_name}
+                    </span>
+                    <span className="text-orange-400 text-[10px] sm:text-xs font-mono font-bold tracking-wide uppercase">
+                      {schoolSettings.footer_subtitle || "STATE INFRASTRUCTURE • SECTOR 3"}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
             
-            <p className="text-xs text-slate-400 leading-relaxed max-w-sm font-medium">
-              {schoolSettings.footer_description || "Established with the vision of offering high-standard secondary education to students across Bihar. Providing dedicated Streams in Science, Commerce, and Arts with certified faculties and modernized educational support."}
-            </p>
+            {isSyncing ? (
+              <div className="space-y-2 max-w-sm">
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-full" />
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-5/6" />
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-4/5" />
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 leading-relaxed max-w-sm font-medium">
+                {schoolSettings.footer_description || "Established with the vision of offering high-standard secondary education to students across Bihar. Providing dedicated Streams in Science, Commerce, and Arts with certified faculties and modernized educational support."}
+              </p>
+            )}
             
-            <div className="text-xs italic text-orange-400 font-medium font-sans">
-              "{schoolSettings.school_motto}"
-            </div>
+            {isSyncing ? (
+              <div className="h-3 bg-sky-900/40 animate-pulse rounded w-36 mt-2" />
+            ) : (
+              <div className="text-xs italic text-orange-400 font-medium font-sans">
+                "{schoolSettings.school_motto}"
+              </div>
+            )}
           </div>
 
           {/* Column 2: Quick Links */}
@@ -116,20 +145,28 @@ export const Footer: React.FC<FooterProps> = ({ schoolSettings, onViewChange }) 
             <h3 className="text-white text-sm font-bold tracking-widest uppercase border-l-2 border-orange-500 pl-2">
               Official Desk
             </h3>
-            <ul className="space-y-3.5 text-xs text-slate-400 font-medium">
-              <li className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
-                <span className="leading-relaxed">{schoolSettings.address}</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Phone className="w-4 h-4 text-orange-500 shrink-0" />
-                <a href={`tel:${schoolSettings.phone}`} className="hover:text-orange-400 transition-colors">{schoolSettings.phone}</a>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Mail className="w-4 h-4 text-orange-500 shrink-0" />
-                <a href={`mailto:${schoolSettings.email}`} className="hover:text-orange-400 transition-colors break-all">{schoolSettings.email}</a>
-              </li>
-            </ul>
+            {isSyncing ? (
+              <div className="space-y-3 mt-4">
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-3/4" />
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-1/2" />
+                <div className="h-3 bg-sky-900/40 animate-pulse rounded w-2/3" />
+              </div>
+            ) : (
+              <ul className="space-y-3.5 text-xs text-slate-400 font-medium">
+                <li className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+                  <span className="leading-relaxed">{schoolSettings.address}</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                  <a href={`tel:${schoolSettings.phone}`} className="hover:text-orange-400 transition-colors">{schoolSettings.phone}</a>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 text-orange-500 shrink-0" />
+                  <a href={`mailto:${schoolSettings.email}`} className="hover:text-orange-400 transition-colors break-all">{schoolSettings.email}</a>
+                </li>
+              </ul>
+            )}
           </div>
 
         </div>
@@ -141,15 +178,19 @@ export const Footer: React.FC<FooterProps> = ({ schoolSettings, onViewChange }) 
         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-[11px] text-slate-500 font-medium text-center">
           <div className="flex items-center justify-center gap-2.5">
             <Award className="w-4 h-4 text-orange-600" />
-            <span>{schoolSettings.school_affiliation || "Ministry of Education, State of Bihar Government Affiliate No: 10230501"}</span>
+            {isSyncing ? (
+              <div className="h-3 bg-sky-900/40 animate-pulse rounded w-64 inline-block" />
+            ) : (
+              <span>{schoolSettings.school_affiliation || "Ministry of Education, State of Bihar Government Affiliate No: 10230501"}</span>
+            )}
           </div>
         </div>
 
         {/* Copyright */}
         <div className="mt-6 text-center text-xs text-slate-550 font-medium">
-          © {currentYear} {schoolSettings.school_name}. Developed in compliance with state secondary guidelines.
+          © {currentYear} {isSyncing ? "School Portal" : schoolSettings.school_name}. Developed in compliance with state secondary guidelines.
         </div>
       </div>
     </footer>
   );
-};
+});

@@ -91,169 +91,183 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Main navigation container */}
       <nav className="w-full bg-white border-b border-slate-100 text-slate-700 shadow-sm relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
+          <div className="flex items-center justify-between h-20 gap-4">
             {/* School Logo & Title */}
             <div 
-              className="flex items-center gap-3 cursor-pointer group min-w-0"
+              className="flex items-center gap-2.5 sm:gap-3.5 cursor-pointer group min-w-0 flex-1 xl:flex-initial transition-all duration-300"
               onClick={() => { onViewChange('home'); setIsMobileMenuOpen(false); }}
               id="brand-container"
             >
               {schoolSettings.logo_url === 'school_logo_default' ? (
-                <CustomSchoolEmblem className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 group-hover:scale-105 transition-transform duration-300" />
+                <CustomSchoolEmblem className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 group-hover:scale-105 transition-transform duration-300" />
               ) : (
                 <img 
                   src={schoolSettings.logo_url} 
                   alt="School Logo" 
-                  className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 object-contain rounded-full border border-orange-500/20 bg-slate-50 p-0.5 group-hover:scale-105 transition-transform duration-300"
+                  className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 object-contain rounded-full border border-orange-500/20 bg-slate-50 p-0.5 group-hover:scale-105 transition-transform duration-300"
                   referrerPolicy="no-referrer"
                 />
               )}
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-xs xs:text-sm md:text-base tracking-tight text-slate-800 group-hover:text-orange-600 transition-colors duration-300 uppercase font-sans line-clamp-1 max-w-[150px] xs:max-w-[200px] sm:max-w-[320px] md:max-w-[420px] lg:max-w-[500px]">
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="font-extrabold text-xs xs:text-sm md:text-base xl:text-lg tracking-tight text-slate-800 group-hover:text-orange-600 transition-colors duration-300 uppercase font-sans truncate pr-2">
                   {schoolSettings.school_name}
                 </span>
-                <span className="text-[9px] sm:text-[10px] md:text-xs text-orange-600 font-medium font-sans italic line-clamp-1">
+                
+                {/* Desktop: Government of Bihar Portal */}
+                <span className="hidden xl:block text-xs text-orange-600 font-semibold font-sans italic truncate">
                   Government of Bihar Portal
                 </span>
+                
+                {/* Tablet: Govt. of Bihar Portal */}
+                <span className="hidden md:block xl:hidden text-[10px] md:text-xs text-orange-600 font-medium font-sans italic truncate">
+                  Govt. of Bihar Portal
+                </span>
+                
+                {/* Mobile: Hidden completely (< md) */}
               </div>
             </div>
 
-            {/* Desktop Nav Items */}
-            <div className="hidden xl:flex items-center space-x-1" id="desktop-menu">
-              {navItemsLeft.map((item) => {
-                const isActive = currentView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    id={`nav-link-${item.id}`}
-                    onClick={() => onViewChange(item.id)}
-                    className={`px-3 py-2 rounded-md text-sm font-medium tracking-wide transition-all duration-200 cursor-pointer ${
-                      isActive 
-                        ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5' 
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
+            {/* Right-side Group: Desktop Nav + Responsive Admin Button + Hamburger */}
+            <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0" id="right-nav-group">
+              
+              {/* Desktop Nav Items */}
+              <div className="hidden xl:flex items-center space-x-1" id="desktop-menu">
+                {navItemsLeft.map((item) => {
+                  const isActive = currentView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      id={`nav-link-${item.id}`}
+                      onClick={() => onViewChange(item.id)}
+                      className={`px-3 py-2 rounded-md text-sm font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
+                        isActive 
+                          ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
 
-              {/* Academics Hover Dropdown */}
-              <div className="relative group/academics shrink-0">
-                <button
-                  id="nav-link-academics"
-                  className={`px-3 py-2 rounded-md text-sm font-medium tracking-wide text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all duration-250 cursor-pointer ${
-                    ['routine', 'exams', 'calendar'].includes(currentView)
-                      ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5 font-semibold'
-                      : ''
-                  }`}
-                >
-                  Academics
-                  <ChevronDown className="w-4 h-4 text-slate-400 group-hover/academics:rotate-180 transition-transform duration-200" />
-                </button>
-                <div className="absolute top-full left-0 w-52 bg-white border border-slate-100 rounded-xl shadow-lg py-1.5 hidden group-hover/academics:block z-50 transition-all duration-200">
+                {/* Academics Hover Dropdown */}
+                <div className="relative group/academics shrink-0">
                   <button
-                    id="dropdown-link-routine"
-                    onClick={() => onViewChange('routine')}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
-                      currentView === 'routine' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
+                    id="nav-link-academics"
+                    className={`px-3 py-2 rounded-md text-sm font-semibold tracking-wide text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all duration-250 cursor-pointer ${
+                      ['routine', 'exams', 'calendar'].includes(currentView)
+                        ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5 font-semibold'
+                        : ''
                     }`}
                   >
-                    Class Routine
+                    Academics
+                    <ChevronDown className="w-4 h-4 text-slate-400 group-hover/academics:rotate-180 transition-transform duration-200" />
                   </button>
-                  <button
-                    id="dropdown-link-exams"
-                    onClick={() => onViewChange('exams')}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
-                      currentView === 'exams' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
-                    }`}
-                  >
-                    Exam Schedule
-                  </button>
-                  <button
-                    id="dropdown-link-calendar"
-                    onClick={() => onViewChange('calendar')}
-                    className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
-                      currentView === 'calendar' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
-                    }`}
-                  >
-                    Academic Calendar
-                  </button>
+                  <div className="absolute top-full left-0 w-52 bg-white border border-slate-100 rounded-xl shadow-lg py-1.5 hidden group-hover/academics:block z-50 transition-all duration-200">
+                    <button
+                      id="dropdown-link-routine"
+                      onClick={() => onViewChange('routine')}
+                      className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
+                        currentView === 'routine' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
+                      }`}
+                    >
+                      Class Routine
+                    </button>
+                    <button
+                      id="dropdown-link-exams"
+                      onClick={() => onViewChange('exams')}
+                      className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
+                        currentView === 'exams' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
+                      }`}
+                    >
+                      Exam Schedule
+                    </button>
+                    <button
+                      id="dropdown-link-calendar"
+                      onClick={() => onViewChange('calendar')}
+                      className={`w-full text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 block cursor-pointer ${
+                        currentView === 'calendar' ? 'text-orange-600 bg-orange-50/50' : 'text-slate-700 hover:bg-slate-50 hover:text-orange-600'
+                      }`}
+                    >
+                      Academic Calendar
+                    </button>
+                  </div>
                 </div>
+
+                {navItemsRight.map((item) => {
+                  const isActive = currentView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      id={`nav-link-${item.id}`}
+                      onClick={() => onViewChange(item.id)}
+                      className={`px-3 py-2 rounded-md text-sm font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
+                        isActive 
+                          ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5' 
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+
+                <span className="h-5 w-[1px] bg-slate-200 mx-2 animate-in fade-in" />
               </div>
 
-              {navItemsRight.map((item) => {
-                const isActive = currentView === item.id;
-                return (
+              {/* Responsive Admin / Dashboard Button */}
+              <div className="flex items-center gap-1.5" id="adaptive-admin-container">
+                {isAdminLoggedIn ? (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      id="nav-link-admin-panel"
+                      onClick={() => onViewChange('admin')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 md:px-3.5 md:py-2 rounded-lg text-xs sm:text-sm font-bold tracking-wide border transition-all duration-200 cursor-pointer ${
+                        currentView === 'admin' 
+                          ? 'bg-sky-900 text-white border-sky-900 font-bold shadow-sm shadow-sky-900/10' 
+                          : 'border-sky-900/35 text-sky-900 bg-sky-50/50 hover:bg-sky-50'
+                      }`}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-sky-700" />
+                      <span className="hidden md:inline">Dashboard</span>
+                      <span className="hidden xs:inline md:hidden">Admin</span>
+                    </button>
+                    
+                    {/* Logout Button (Desktop & Tablet, Hidden on Mobile) */}
+                    <button
+                      id="nav-logout-btn"
+                      onClick={onLogout}
+                      title="Sign Out Admin"
+                      className="hidden xs:flex p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 transition-all duration-200 cursor-pointer shrink-0 border border-slate-100 bg-slate-50"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    key={item.id}
-                    id={`nav-link-${item.id}`}
-                    onClick={() => onViewChange(item.id)}
-                    className={`px-3 py-2 rounded-md text-sm font-medium tracking-wide transition-all duration-200 cursor-pointer ${
-                      isActive 
-                        ? 'text-orange-600 border-b-2 border-orange-500 rounded-none bg-orange-500/5' 
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-
-              <span className="h-5 w-[1px] bg-slate-200 mx-2 animate-in fade-in" />
-
-              {/* Admin Button */}
-              {isAdminLoggedIn ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    id="nav-link-admin-panel"
+                    id="nav-link-admin"
                     onClick={() => onViewChange('admin')}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium tracking-wide border border-sky-900/30 text-sky-900 transition-all duration-200 cursor-pointer ${
-                      currentView === 'admin' ? 'bg-sky-900 text-white font-semibold' : 'hover:bg-sky-50'
+                    className={`flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 md:px-3.5 md:py-2 rounded-lg text-xs sm:text-sm font-bold tracking-wide border transition-all duration-200 cursor-pointer ${
+                      currentView === 'admin'
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-500/10 font-bold'
+                        : 'border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-500/30 hover:bg-orange-50/20'
                     }`}
                   >
-                    <ShieldAlert className="w-4 h-4" />
-                    Dashboard
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden md:inline">Admin Login</span>
+                    <span className="hidden xs:inline md:hidden">Admin</span>
                   </button>
-                  <button
-                    id="nav-logout-btn"
-                    onClick={onLogout}
-                    title="Sign Out Admin"
-                    className="p-2 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 transition-all duration-200 cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  id="nav-link-admin"
-                  onClick={() => onViewChange('admin')}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs sm:text-sm font-medium tracking-wide border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-500/30 hover:bg-orange-50/20 transition-all duration-200 cursor-pointer`}
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  Admin Login
-                </button>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Mobile Menu Button */}
-            <div className="xl:hidden flex items-center gap-2">
-              {isAdminLoggedIn && (
-                <button
-                  id="mobile-admin-dashboard-shortcut"
-                  onClick={() => { onViewChange('admin'); setIsMobileMenuOpen(false); }}
-                  className="p-2 rounded-md text-orange-600 border border-orange-500/15 bg-orange-50 cursor-pointer"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                </button>
-              )}
+              {/* Hamburger Menu Trigger */}
               <button
                 id="mobile-menu-trigger"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 focus:outline-none cursor-pointer"
+                className="xl:hidden inline-flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 focus:outline-none cursor-pointer shrink-0 transition-colors border border-slate-100 bg-slate-50"
                 aria-label="Toggle navigation menu"
               >
-                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {isMobileMenuOpen ? <X className="w-5.5 h-5.5" /> : <Menu className="w-5.5 h-5.5" />}
               </button>
             </div>
           </div>

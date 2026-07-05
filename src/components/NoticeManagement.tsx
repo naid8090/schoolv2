@@ -4,11 +4,12 @@
  */
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit, Save, X, Pin, Eye, EyeOff, FileText, Check, Paperclip, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit, Save, X, Pin, Eye, EyeOff, FileText, Check, Paperclip, ChevronRight, AlertTriangle, Bell, Clock } from 'lucide-react';
 import { Notice, NoticeCategory, NoticePriority, NoticeStatus, MediaItem } from '../types';
 import { dbService } from '../services/db';
 import { MediaSelectorModal } from './MediaLibrary';
 import { useDataSync } from '../hooks/useDataSync';
+import { ResponsiveEntityCard, SharedEmptyState } from './ResponsiveEntityCard';
 
 export const NoticeManagement: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>(() => dbService.getNotices());
@@ -446,138 +447,228 @@ export const NoticeManagement: React.FC = () => {
           </div>
 
           {notices.length === 0 ? (
-            <div className="p-16 text-center">
-              <AlertTriangle className="w-12 h-12 text-slate-350 mx-auto mb-2 animate-pulse" />
-              <p className="text-slate-650 text-sm font-bold">No active notices compiled</p>
-              <p className="text-slate-500 text-xs mt-1 font-medium">Deploy your first circular to populate the bulletin board system.</p>
-              <button
-                onClick={startCreate}
-                className="mt-4 px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold uppercase rounded cursor-pointer shadow-md shadow-orange-500/10"
-              >
-                Create Notice
-              </button>
-            </div>
+            <SharedEmptyState
+              icon={<Bell className="w-10 h-10" />}
+              headline="No active notices compiled"
+              description="Deploy your first circular to populate the bulletin board system."
+              action={{
+                label: "Create Notice",
+                onClick: startCreate,
+                icon: <Plus className="w-4 h-4" />
+              }}
+            />
           ) : (
-            <div className="overflow-x-auto font-sans font-medium">
-              <table className="w-full text-left text-xs min-w-[700px]">
-                <thead>
-                  <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[9.5px]">
-                    <th className="px-5 py-3 font-bold">Flags</th>
-                    <th className="px-4 py-3 font-bold">Title & Summary</th>
-                    <th className="px-4 py-3 font-bold">Category</th>
-                    <th className="px-4 py-3 font-bold">Priority</th>
-                    <th className="px-4 py-3 font-bold">Publish Date</th>
-                    <th className="px-4 py-3 font-bold">Status</th>
-                    <th className="px-5 py-3 text-right font-bold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+            <div>
+              {/* DESKTOP & TABLET ADAPTIVE TABLE */}
+              <div className="hidden md:block overflow-x-auto font-sans font-medium">
+                <table className="w-full text-left text-xs min-w-[700px]">
+                  <thead>
+                    <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[9.5px]">
+                      <th className="px-5 py-3 font-bold">Flags</th>
+                      <th className="px-4 py-3 font-bold">Title & Summary</th>
+                      <th className="px-4 py-3 font-bold">Category</th>
+                      <th className="px-4 py-3 font-bold">Priority</th>
+                      <th className="px-4 py-3 font-bold">Publish Date</th>
+                      <th className="px-4 py-3 font-bold">Status</th>
+                      <th className="px-5 py-3 text-right font-bold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {notices.map((notice) => {
+                      const isDraft = notice.status === 'Draft';
+                      const isArchived = notice.status === 'Archived';
+                      return (
+                        <tr key={notice.id} className="hover:bg-slate-50/50 transition-colors">
+                          {/* Flags indicators */}
+                          <td className="px-5 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {notice.is_pinned ? (
+                                <span className="p-1 bg-orange-50 text-orange-500 border border-orange-100 rounded" title="Pinned to top">
+                                  <Pin className="w-3.5 h-3.5 transform rotate-45 stroke-[2.5]" />
+                                </span>
+                              ) : (
+                                <span className="w-5.5" />
+                              )}
+                              
+                              {notice.show_on_homepage ? (
+                                <span className="p-1 bg-sky-50 text-sky-600 border border-sky-100 rounded" title="Visible on Home">
+                                  <Eye className="w-3.5 h-3.5" />
+                                </span>
+                              ) : (
+                                <span className="p-1 bg-slate-100 text-slate-500 rounded" title="Hidden from Home">
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+
+                              {(notice.pdf_url) ? (
+                                <span className="p-1 bg-red-50 text-red-630 text-red-600 border border-red-100 rounded" title="PDF enclosure attached">
+                                  <Paperclip className="w-3.5 h-3.5" />
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+
+                          {/* Title Info */}
+                          <td className="px-4 py-4 max-w-xs sm:max-w-md">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-bold text-slate-900 truncate leading-relaxed">{notice.title}</span>
+                              <span className="text-slate-450 text-[10px] sm:text-xs truncate">{notice.summary || 'No summary excerpt compiled.'}</span>
+                            </div>
+                          </td>
+
+                          {/* Category */}
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className="px-2 py-0.5 bg-orange-50 text-[10px] text-orange-655 text-orange-600 rounded font-bold border border-orange-100 uppercase tracking-wider">
+                              {notice.category}
+                            </span>
+                          </td>
+
+                          {/* Priority */}
+                          <td className="px-4 py-4 whitespace-nowrap font-sans font-semibold">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                              notice.priority === 'Critical' 
+                                ? 'bg-rose-50 border border-rose-150 text-rose-555 text-rose-600' 
+                                : notice.priority === 'High' 
+                                ? 'bg-orange-50 border border-orange-150 text-orange-605 text-orange-600' 
+                                : 'bg-slate-50 text-slate-500 border border-slate-150'
+                            }`}>
+                              {notice.priority}
+                            </span>
+                          </td>
+
+                          {/* Publish Date */}
+                          <td className="px-4 py-4 whitespace-nowrap font-mono text-[10px] text-slate-500 font-bold">
+                            {notice.publish_date}
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 py-4 whitespace-nowrap font-bold">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
+                              isDraft 
+                                ? 'bg-slate-100 text-slate-500 border border-slate-200' 
+                                : isArchived 
+                                ? 'bg-red-50 text-red-600 border border-red-100' 
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                            }`}>
+                              {notice.status}
+                            </span>
+                          </td>
+
+                          {/* Actions Desk */}
+                          <td className="px-5 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => startEdit(notice)}
+                                className="p-1 px-2.5 bg-slate-50 hover:bg-orange-500 border border-slate-150 hover:border-orange-500 text-slate-600 hover:text-white rounded text-[10px] font-bold uppercase transition cursor-pointer"
+                                title="Edit Circular"
+                              >
+                                <Edit className="w-3 h-3 inline mr-1" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(notice.id)}
+                                className="p-1 bg-slate-50 hover:bg-red-600 border border-slate-150 text-slate-600 hover:text-white rounded cursor-pointer transition"
+                                title="Delete permanently"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE NOTICE CARDS */}
+              <div className="block md:hidden p-4 space-y-4">
+                <div className="grid grid-cols-1 gap-4">
                   {notices.map((notice) => {
-                    const isDraft = notice.status === 'Draft';
-                    const isArchived = notice.status === 'Archived';
+                    const pinBadge = notice.is_pinned ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-50 text-orange-600 border border-orange-100 rounded text-[9px] font-mono font-bold uppercase" title="Pinned">
+                        <Pin className="w-3 h-3 transform rotate-45" />
+                        <span>Pinned</span>
+                      </span>
+                    ) : null;
+
+                    const priorityBadge = (
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${
+                        notice.priority === 'Critical' 
+                          ? 'bg-rose-50 border-rose-150 text-rose-600' 
+                          : notice.priority === 'High' 
+                          ? 'bg-orange-50 border-orange-150 text-orange-600' 
+                          : 'bg-slate-50 text-slate-500 border-slate-150'
+                      }`}>
+                        {notice.priority}
+                      </span>
+                    );
+
+                    const statusBadge = (
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                        notice.status === 'Draft' 
+                          ? 'bg-slate-100 text-slate-500 border-slate-200' 
+                          : notice.status === 'Archived' 
+                          ? 'bg-red-50 text-red-600 border-red-100' 
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      }`}>
+                        {notice.status}
+                      </span>
+                    );
+
+                    const homeBadge = notice.show_on_homepage ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-50 text-sky-600 border border-sky-100 rounded text-[9px] font-mono font-bold uppercase">
+                        <Eye className="w-3 h-3" />
+                        <span>Home</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-150 rounded text-[9px] font-mono font-bold uppercase">
+                        <EyeOff className="w-3 h-3" />
+                        <span>Hidden</span>
+                      </span>
+                    );
+
+                    const pdfBadge = notice.pdf_url ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded text-[9px] font-mono font-bold uppercase">
+                        <Paperclip className="w-3 h-3" />
+                        <span>PDF</span>
+                      </span>
+                    ) : null;
+
+                    const metadataFields = [
+                      { icon: <Bell className="w-3.5 h-3.5" />, label: 'Category', value: notice.category },
+                      { icon: <Clock className="w-3.5 h-3.5" />, label: 'Published', value: notice.publish_date }
+                    ];
+
+                    const cardActions = [
+                      {
+                        label: 'Edit',
+                        icon: <Edit className="w-3.5 h-3.5" />,
+                        onClick: () => startEdit(notice)
+                      },
+                      {
+                        label: 'Delete',
+                        icon: <Trash2 className="w-3.5 h-3.5" />,
+                        onClick: () => handleDelete(notice.id),
+                        variant: 'danger' as const
+                      }
+                    ];
+
                     return (
-                      <tr key={notice.id} className="hover:bg-slate-50/50 transition-colors">
-                        {/* Flags indicators */}
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            {notice.is_pinned ? (
-                              <span className="p-1 bg-orange-50 text-orange-500 border border-orange-100 rounded" title="Pinned to top">
-                                <Pin className="w-3.5 h-3.5 transform rotate-45 stroke-[2.5]" />
-                              </span>
-                            ) : (
-                              <span className="w-5.5" />
-                            )}
-                            
-                            {notice.show_on_homepage ? (
-                              <span className="p-1 bg-sky-50 text-sky-600 border border-sky-100 rounded" title="Visible on Home">
-                                <Eye className="w-3.5 h-3.5" />
-                              </span>
-                            ) : (
-                              <span className="p-1 bg-slate-100 text-slate-500 rounded" title="Hidden from Home">
-                                <EyeOff className="w-3.5 h-3.5" />
-                              </span>
-                            )}
-
-                            {(notice.pdf_url) ? (
-                              <span className="p-1 bg-red-50 text-red-630 text-red-600 border border-red-100 rounded" title="PDF enclosure attached">
-                                <Paperclip className="w-3.5 h-3.5" />
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-
-                        {/* Title Info */}
-                        <td className="px-4 py-4 max-w-xs sm:max-w-md">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-bold text-slate-800 truncate leading-relaxed">{notice.title}</span>
-                            <span className="text-slate-450 text-[10px] sm:text-xs truncate">{notice.summary || 'No summary excerpt compiled.'}</span>
-                          </div>
-                        </td>
-
-                        {/* Category */}
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className="px-2 py-0.5 bg-orange-50 text-[10px] text-orange-655 text-orange-600 rounded font-bold border border-orange-100 uppercase tracking-wider">
-                            {notice.category}
-                          </span>
-                        </td>
-
-                        {/* Priority */}
-                        <td className="px-4 py-4 whitespace-nowrap font-sans font-semibold">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                            notice.priority === 'Critical' 
-                              ? 'bg-rose-50 border border-rose-150 text-rose-555 text-rose-600' 
-                              : notice.priority === 'High' 
-                              ? 'bg-orange-50 border border-orange-150 text-orange-605 text-orange-600' 
-                              : 'bg-slate-50 text-slate-500 border border-slate-150'
-                          }`}>
-                            {notice.priority}
-                          </span>
-                        </td>
-
-                        {/* Publish Date */}
-                        <td className="px-4 py-4 whitespace-nowrap font-mono text-[10px] text-slate-500 font-bold">
-                          {notice.publish_date}
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-4 py-4 whitespace-nowrap font-bold">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
-                            isDraft 
-                              ? 'bg-slate-100 text-slate-500 border border-slate-200' 
-                              : isArchived 
-                              ? 'bg-red-50 text-red-600 border border-red-100' 
-                              : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          }`}>
-                            {notice.status}
-                          </span>
-                        </td>
-
-                        {/* Actions Desk */}
-                        <td className="px-5 py-4 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => startEdit(notice)}
-                              className="p-1 px-2.5 bg-slate-50 hover:bg-orange-500 border border-slate-150 hover:border-orange-500 text-slate-600 hover:text-white rounded text-[10px] font-bold uppercase transition cursor-pointer"
-                              title="Edit Circular"
-                            >
-                              <Edit className="w-3 h-3 inline mr-1" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(notice.id)}
-                              className="p-1 bg-slate-50 hover:bg-red-600 border border-slate-150 text-slate-600 hover:text-white rounded cursor-pointer transition"
-                              title="Delete permanently"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-
-                      </tr>
+                      <ResponsiveEntityCard
+                        key={notice.id}
+                        id={notice.id}
+                        title={notice.title}
+                        description={notice.summary || 'No summary excerpt compiled.'}
+                        badges={[pinBadge, priorityBadge, statusBadge, homeBadge, pdfBadge].filter(Boolean) as React.ReactNode[]}
+                        metadata={metadataFields}
+                        actions={cardActions}
+                      />
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           )}
         </div>

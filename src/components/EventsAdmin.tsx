@@ -9,6 +9,7 @@ import { dbService } from '../services/db';
 import { SchoolEvent, SchoolEventImage, MediaItem } from '../types';
 import { MediaSelectorModal } from './MediaLibrary';
 import { useDataSync } from '../hooks/useDataSync';
+import { ResponsiveEntityCard, SharedEmptyState } from './ResponsiveEntityCard';
 
 export const EventsAdmin: React.FC = () => {
   const [eventsList, setEventsList] = useState<SchoolEvent[]>([]);
@@ -684,145 +685,263 @@ export const EventsAdmin: React.FC = () => {
           </div>
 
           {eventsList.length > 0 ? (
-            <div className="overflow-x-auto border border-slate-100 rounded-xl">
-              <table className="w-full text-left border-collapse font-sans">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                    <th className="p-3.5 pl-4.5">Event Banner</th>
-                    <th className="p-3.5">Details</th>
-                    <th className="p-3.5">Category</th>
-                    <th className="p-3.5">Date & Venue</th>
-                    <th className="p-3.5 text-center">Featured (Home)</th>
-                    <th className="p-3.5 text-center">Status</th>
-                    <th className="p-3.5 pr-4.5 text-right w-36">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                  {eventsList.map((ev) => (
-                    <tr key={ev.id} className="hover:bg-slate-50/50 transition">
-                      {/* Banner */}
-                      <td className="p-3.5 pl-4.5">
-                        {ev.featured_image ? (
-                          <img
-                            src={ev.featured_image}
-                            alt=""
-                            className="w-14 h-9 object-cover rounded-md border border-slate-100 shadow-3xs"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-14 h-9 bg-slate-100 border border-slate-150 rounded-md flex items-center justify-center text-slate-400">
-                            <ImageIcon className="w-4 h-4" />
-                          </div>
-                        )}
-                      </td>
+            <div>
+              {/* DESKTOP & TABLET ADAPTIVE TABLE */}
+              <div className="hidden md:block overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-left border-collapse font-sans">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 font-mono text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      <th className="p-3.5 pl-4.5">Event Banner</th>
+                      <th className="p-3.5">Details</th>
+                      <th className="p-3.5 hidden lg:table-cell">Category</th>
+                      <th className="p-3.5 hidden lg:table-cell">Date & Venue</th>
+                      <th className="p-3.5 text-center">Featured (Home)</th>
+                      <th className="p-3.5 text-center">Status</th>
+                      <th className="p-3.5 pr-4.5 text-right w-36">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+                    {eventsList.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-slate-50/50 transition">
+                        {/* Banner */}
+                        <td className="p-3.5 pl-4.5">
+                          {ev.featured_image ? (
+                            <img
+                              src={ev.featured_image}
+                              alt=""
+                              className="w-14 h-9 object-cover rounded-md border border-slate-100 shadow-3xs"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-14 h-9 bg-slate-100 border border-slate-150 rounded-md flex items-center justify-center text-slate-400">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                          )}
+                        </td>
 
-                      {/* Title */}
-                      <td className="p-3.5">
-                        <span className="font-extrabold text-slate-900 hover:text-orange-600 transition truncate block max-w-xs">{ev.title}</span>
-                        {ev.organizer && (
-                          <span className="text-[10px] text-slate-400 font-mono tracking-tight block mt-0.5">By {ev.organizer}</span>
-                        )}
-                      </td>
-
-                      {/* Category */}
-                      <td className="p-3.5">
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded font-bold font-mono text-[9px] uppercase tracking-wide">
-                          {ev.category}
-                        </span>
-                      </td>
-
-                      {/* Date & Venue */}
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-1 text-[11px] text-slate-900 font-mono">
-                          <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
-                          <span>{ev.event_date}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-450 mt-0.5">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-[120px]">{ev.venue}</span>
-                        </div>
-                      </td>
-
-                      {/* Home Star toggle */}
-                      <td className="p-3.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleHomepageFeature(ev.id)}
-                          className="p-1 hover:bg-amber-50 rounded cursor-pointer transition"
-                          title="Toggle homepage module preview inclusion"
-                        >
-                          <Star className={`w-4 h-4 ${ev.featured_homepage ? 'text-amber-500 fill-amber-500' : 'text-slate-300'}`} />
-                        </button>
-                      </td>
-
-                      {/* Status */}
-                      <td className="p-3.5 text-center">
-                        <span className={`inline-block px-2.5 py-1 rounded font-bold text-[9px] uppercase tracking-wide ${
-                          ev.status === 'Published'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : ev.status === 'Archived'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-slate-100 text-slate-600 border border-slate-150'
-                        }`}>
-                          {ev.status}
-                        </span>
-                      </td>
-
-                      {/* Action controllers */}
-                      <td className="p-3.5 pr-4.5 text-right w-36">
-                        <div className="inline-flex items-center gap-1">
-                          {/* Toggle Draft/Publish */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(ev.id)}
-                            className="p-1.5 text-slate-400 hover:text-orange-500 cursor-pointer transition"
-                            title={ev.status === 'Draft' ? 'Publish Event' : 'Revert to Draft'}
-                          >
-                            {ev.status === 'Draft' ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                          </button>
-
-                          {/* Archive Event */}
-                          {ev.status !== 'Archived' && (
-                            <button
-                              type="button"
-                              onClick={() => handleArchiveEvent(ev.id)}
-                              className="p-1.5 text-slate-400 hover:text-amber-500 cursor-pointer transition"
-                              title="Archive Event"
-                            >
-                              <Archive className="w-4 h-4" />
-                            </button>
+                        {/* Title */}
+                        <td className="p-3.5">
+                          <span className="font-extrabold text-slate-900 hover:text-orange-600 transition truncate block max-w-xs">{ev.title}</span>
+                          {ev.organizer && (
+                            <span className="text-[10px] text-slate-400 font-mono tracking-tight block mt-0.5">By {ev.organizer}</span>
                           )}
 
-                          {/* Edit Event */}
-                          <button
-                            type="button"
-                            onClick={() => handleInitEdit(ev)}
-                            className="p-1.5 text-slate-400 hover:text-sky-900 cursor-pointer transition"
-                            title="Edit Event & Album"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                          {/* Tablet metadata rollup */}
+                          <div className="lg:hidden mt-2 flex flex-wrap gap-1.5 items-center">
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-bold font-mono text-[9px] uppercase tracking-wide">
+                              {ev.category}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono flex items-center gap-0.5">
+                              <Calendar className="w-3 h-3 text-orange-500" />
+                              {ev.event_date}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono flex items-center gap-0.5">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              {ev.venue}
+                            </span>
+                          </div>
+                        </td>
 
-                          {/* Delete Event */}
+                        {/* Category */}
+                        <td className="p-3.5 hidden lg:table-cell">
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-800 rounded font-bold font-mono text-[9px] uppercase tracking-wide">
+                            {ev.category}
+                          </span>
+                        </td>
+
+                        {/* Date & Venue */}
+                        <td className="p-3.5 hidden lg:table-cell">
+                          <div className="flex items-center gap-1 text-[11px] text-slate-900 font-mono">
+                            <Calendar className="w-3 h-3 text-orange-500 shrink-0" />
+                            <span>{ev.event_date}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-450 mt-0.5">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[120px]">{ev.venue}</span>
+                          </div>
+                        </td>
+
+                        {/* Home Star toggle */}
+                        <td className="p-3.5 text-center">
                           <button
                             type="button"
-                            onClick={() => handleDeleteEvent(ev.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 cursor-pointer transition"
-                            title="Delete Event"
+                            onClick={() => handleToggleHomepageFeature(ev.id)}
+                            className="p-1 hover:bg-amber-50 rounded cursor-pointer transition"
+                            title="Toggle homepage module preview inclusion"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Star className={`w-4 h-4 ${ev.featured_homepage ? 'text-amber-500 fill-amber-500' : 'text-slate-300'}`} />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+
+                        {/* Status */}
+                        <td className="p-3.5 text-center">
+                          <span className={`inline-block px-2.5 py-1 rounded font-bold text-[9px] uppercase tracking-wide ${
+                            ev.status === 'Published'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : ev.status === 'Archived'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                              : 'bg-slate-100 text-slate-600 border border-slate-150'
+                          }`}>
+                            {ev.status}
+                          </span>
+                        </td>
+
+                        {/* Action controllers */}
+                        <td className="p-3.5 pr-4.5 text-right w-36">
+                          <div className="inline-flex items-center gap-1">
+                            {/* Toggle Draft/Publish */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(ev.id)}
+                              className="p-1.5 text-slate-400 hover:text-orange-500 cursor-pointer transition"
+                              title={ev.status === 'Draft' ? 'Publish Event' : 'Revert to Draft'}
+                            >
+                              {ev.status === 'Draft' ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                            </button>
+
+                            {/* Archive Event */}
+                            {ev.status !== 'Archived' && (
+                              <button
+                                type="button"
+                                onClick={() => handleArchiveEvent(ev.id)}
+                                className="p-1.5 text-slate-400 hover:text-amber-500 cursor-pointer transition"
+                                title="Archive Event"
+                              >
+                                <Archive className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {/* Edit Event */}
+                            <button
+                              type="button"
+                              onClick={() => handleInitEdit(ev)}
+                              className="p-1.5 text-slate-400 hover:text-sky-900 cursor-pointer transition"
+                              title="Edit Event & Album"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Event */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEvent(ev.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 cursor-pointer transition"
+                              title="Delete Event"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE EVENT CARDS */}
+              <div className="block md:hidden space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  {eventsList.map((ev) => {
+                    const bannerEl = ev.featured_image ? (
+                      <img
+                        src={ev.featured_image}
+                        alt=""
+                        className="w-16 h-12 object-cover rounded-md border border-slate-100 shadow-3xs shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-16 h-12 bg-slate-100 border border-slate-150 rounded-md flex items-center justify-center text-slate-400 shrink-0">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                    );
+
+                    const categoryBadge = (
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[9px] font-bold font-mono uppercase tracking-wide leading-none border border-slate-150">
+                        {ev.category}
+                      </span>
+                    );
+
+                    const statusBadge = (
+                      <span className={`px-2 py-0.5 rounded font-bold text-[9px] uppercase tracking-wide leading-none border ${
+                        ev.status === 'Published'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          : ev.status === 'Archived'
+                          ? 'bg-amber-50 text-amber-700 border-amber-100'
+                          : 'bg-slate-100 text-slate-650 border-slate-150'
+                      }`}>
+                        {ev.status}
+                      </span>
+                    );
+
+                    const featuredBadge = (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHomepageFeature(ev.id)}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-150 hover:bg-amber-50 cursor-pointer transition text-[9px] font-mono font-bold uppercase leading-none"
+                        title="Toggle Homepage Feature"
+                      >
+                        <Star className={`w-3.5 h-3.5 ${ev.featured_homepage ? 'text-amber-500 fill-amber-500' : 'text-slate-300'}`} />
+                        <span className="text-slate-500">{ev.featured_homepage ? 'Featured' : 'Regular'}</span>
+                      </button>
+                    );
+
+                    const metadataFields = [
+                      { icon: <Calendar className="w-3.5 h-3.5 text-orange-500" />, label: 'Date', value: ev.event_date },
+                      { icon: <MapPin className="w-3.5 h-3.5" />, label: 'Venue', value: ev.venue },
+                      ...(ev.organizer ? [{ icon: <User className="w-3.5 h-3.5" />, label: 'By', value: ev.organizer }] : [])
+                    ];
+
+                    const cardActions = [
+                      {
+                        label: ev.status === 'Draft' ? 'Publish' : 'Draft',
+                        icon: ev.status === 'Draft' ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />,
+                        onClick: () => handleToggleStatus(ev.id)
+                      },
+                      ...(ev.status !== 'Archived' ? [{
+                        label: 'Archive',
+                        icon: <Archive className="w-3.5 h-3.5" />,
+                        onClick: () => handleArchiveEvent(ev.id)
+                      }] : []),
+                      {
+                        label: 'Edit',
+                        icon: <Edit2 className="w-3.5 h-3.5" />,
+                        onClick: () => handleInitEdit(ev)
+                      },
+                      {
+                        label: 'Delete',
+                        icon: <Trash2 className="w-3.5 h-3.5" />,
+                        onClick: () => handleDeleteEvent(ev.id),
+                        variant: 'danger' as const
+                      }
+                    ];
+
+                    return (
+                      <ResponsiveEntityCard
+                        key={ev.id}
+                        id={ev.id}
+                        avatar={bannerEl}
+                        title={ev.title}
+                        description={ev.short_description || 'No summary excerpt compiled.'}
+                        badges={[categoryBadge, statusBadge, featuredBadge]}
+                        metadata={metadataFields}
+                        actions={cardActions}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="p-12 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 font-bold text-xs uppercase tracking-wider">
-              No school events registered. Click 'Create School Event' above to begin.
-            </div>
+            <SharedEmptyState
+              icon={<Calendar className="w-10 h-10" />}
+              headline="No school events registered"
+              description="Deploy your first event registry with photo albums for school chronicles."
+              action={{
+                label: "Create School Event",
+                onClick: handleInitCreate,
+                icon: <Plus className="w-4 h-4" />
+              }}
+            />
           )}
         </div>
       )}

@@ -30,6 +30,7 @@ import { dbService } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty } from '../types';
 import { MediaSelectorModal } from './MediaLibrary';
 import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
+import { ResponsiveEntityCard, SharedEmptyState } from './ResponsiveEntityCard';
 
 // Reusable date formats
 const formatShortDate = (dateStr: string) => {
@@ -3612,27 +3613,37 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
       )}
 
       {/* List of Calendar items chronologically */}
-      <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-3xs">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[9.5px] uppercase text-slate-450 tracking-wider">
-                <th className="py-2.5 px-4 w-36">Scheduled Date</th>
-                <th className="py-2.5 px-4 w-40">Agenda Category</th>
-                <th className="py-2.5 px-4">Circular Title</th>
-                <th className="py-2.5 px-4">Remarks / Notes</th>
-                <th className="py-2.5 px-4 w-20 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
-              {events.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-10 italic text-slate-400 font-medium">
-                    No academic calendar events loaded. Create one using the action button above.
-                  </td>
+      {events.length === 0 ? (
+        <SharedEmptyState
+          icon={<Calendar className="w-10 h-10" />}
+          headline="No academic calendar events loaded"
+          description="Create your first agenda entry using the action button above to populate the registry."
+          action={!isAddingEvent ? {
+            label: "Create Calendar Event",
+            onClick: () => {
+              setEditingEventId(null);
+              setEventForm({ event_date: '', title: '', event_type: 'Holiday', description: '' });
+              setIsAddingEvent(true);
+            },
+            icon: <Plus className="w-4 h-4" />
+          } : undefined}
+        />
+      ) : (
+        <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-3xs">
+          {/* DESKTOP & TABLET ADAPTIVE TABLE */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[9.5px] uppercase text-slate-450 tracking-wider">
+                  <th className="py-2.5 px-4 w-36">Scheduled Date</th>
+                  <th className="py-2.5 px-4 w-40">Agenda Category</th>
+                  <th className="py-2.5 px-4">Circular Title</th>
+                  <th className="py-2.5 px-4 hidden lg:table-cell">Remarks / Notes</th>
+                  <th className="py-2.5 px-4 w-20 text-center">Action</th>
                 </tr>
-              ) : (
-                events
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
+                {events
                   .sort((a,b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
                   .map((ev) => (
                     <tr key={ev.id} className="hover:bg-slate-50/50 transition">
@@ -3645,9 +3656,13 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {ev.title}
+                        <div>{ev.title}</div>
+                        {/* Tablet-only remarks rollup */}
+                        <div className="lg:hidden text-[11px] text-slate-500 font-normal leading-normal mt-1">
+                          {ev.description || '—'}
+                        </div>
                       </td>
-                      <td className="py-3 px-4 text-slate-500 leading-normal max-w-sm font-sans font-medium">
+                      <td className="py-3 px-4 text-slate-500 leading-normal max-w-sm font-sans font-medium hidden lg:table-cell">
                         {ev.description || '—'}
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -3669,12 +3684,57 @@ const CalendarAdminModule: React.FC<ModuleSubProps> = () => {
                         </div>
                       </td>
                     </tr>
-                  ))
-              )}
-            </tbody>
-          </table>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* MOBILE ACADEMIC CALENDAR CARDS */}
+          <div className="block md:hidden p-4 space-y-4 bg-slate-50/50">
+            <div className="grid grid-cols-1 gap-4">
+              {events
+                .sort((a,b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
+                .map((ev) => {
+                  const categoryBadge = (
+                    <span className={`px-2 py-0.5 border rounded-full uppercase tracking-wider font-sans text-[9px] font-bold leading-none ${getBadgeStyle(ev.event_type)}`}>
+                      {ev.event_type}
+                    </span>
+                  );
+
+                  const metadataFields = [
+                    { icon: <Calendar className="w-3.5 h-3.5 text-sky-900" />, label: 'Scheduled', value: formatShortDate(ev.event_date) }
+                  ];
+
+                  const cardActions = [
+                    {
+                      label: 'Edit',
+                      icon: <Edit className="w-3.5 h-3.5" />,
+                      onClick: () => handleStartEditEvent(ev)
+                    },
+                    {
+                      label: 'Delete',
+                      icon: <Trash2 className="w-3.5 h-3.5" />,
+                      onClick: () => handleDeleteEvent(ev.id, ev.title),
+                      variant: 'danger' as const
+                    }
+                  ];
+
+                  return (
+                    <ResponsiveEntityCard
+                      key={ev.id}
+                      id={ev.id}
+                      title={ev.title}
+                      description={ev.description || '—'}
+                      badges={[categoryBadge]}
+                      metadata={metadataFields}
+                      actions={cardActions}
+                    />
+                  );
+                })}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

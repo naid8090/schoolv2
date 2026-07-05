@@ -33,7 +33,8 @@ import {
   PhoneCall,
   ChevronDown,
   User,
-  Clock
+  Clock,
+  MapPin
 } from 'lucide-react';
 import { SchoolSettings, HomepageModule, MediaItem, ModuleType, Faculty } from '../types';
 import { dbService } from '../services/db';
@@ -43,6 +44,7 @@ import { CustomSchoolEmblem } from './CommonAssets';
 import { AcademicAdmin } from './AcademicAdmin';
 import { EventsAdmin } from './EventsAdmin';
 import { DatabaseHealth } from './DatabaseHealth';
+import { ResponsiveEntityCard, SharedEmptyState } from './ResponsiveEntityCard';
 
 interface AutocompleteInputProps {
   label: string;
@@ -2332,14 +2334,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto">
+                      {/* DESKTOP & TABLET ADAPTIVE TABLE */}
+                      <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-150 text-slate-500 text-[10px] font-mono uppercase tracking-wider">
                               <th className="p-4 w-12 text-center">Order</th>
                               <th className="p-4">Staff Name</th>
                               <th className="p-4">Designation & Dept</th>
-                              <th className="p-4">Subject</th>
+                              <th className="p-4 lg:table-cell hidden">Subject</th>
                               <th className="p-4 text-center">Status</th>
                               <th className="p-4 text-center">Featured</th>
                               <th className="p-4 text-right w-36">Actions</th>
@@ -2399,6 +2402,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         {fac.designation}
                                       </span>
                                       <span className="block text-slate-500 text-[10px] mt-0.5 font-sans font-semibold uppercase tracking-wide">{fac.department} Department</span>
+                                      {/* Combined/grouped department + subject on tablet */}
+                                      <span className="block lg:hidden text-slate-600 text-[10px] mt-0.5 font-sans font-semibold uppercase tracking-wide">Subject: {fac.subject || '—'}</span>
                                       {(fac.joined_date || fac.room_number) && (
                                         <div className="flex flex-wrap gap-1 mt-1 text-[9.5px] font-mono font-bold uppercase tracking-wide text-gray-500">
                                           {fac.joined_date && <span className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-slate-550">Since: {fac.joined_date}</span>}
@@ -2406,7 +2411,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         </div>
                                       )}
                                     </td>
-                                    <td className="p-4 truncate max-w-[150px] font-sans font-semibold text-slate-600">
+                                    <td className="p-4 truncate max-w-[150px] font-sans font-semibold text-slate-600 lg:table-cell hidden">
                                       {fac.subject || '—'}
                                     </td>
                                     <td className="p-4 text-center">
@@ -2416,7 +2421,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                         title={fac.is_active ? 'Hide Faculty Profile' : 'Show Faculty Profile'}
                                         className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] uppercase font-mono font-bold border transition cursor-pointer ${
                                           fac.is_active 
-                                            ? 'text-emerald-700 bg-emerald-50 border-emerald-110 border-emerald-100 hover:bg-emerald-100/50' 
+                                            ? 'text-emerald-700 bg-emerald-50 border-emerald-100 hover:bg-emerald-100/50' 
                                             : 'text-slate-450 bg-slate-50 border-slate-150 hover:bg-slate-100/50'
                                         }`}
                                       >
@@ -2483,13 +2488,182 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </tbody>
                         </table>
                       </div>
+
+                      {/* MOBILE CARD VIEWS */}
+                      <div className="block md:hidden p-4 space-y-4">
+                        {filteredFaculty.length === 0 ? (
+                          <SharedEmptyState
+                            icon={<GraduationCap className="w-8 h-8" />}
+                            headline="No scholars matched"
+                            description="No faculty members found matching your search presets."
+                            action={{
+                              label: "Clear Search",
+                              onClick: () => {
+                                setFacSearchQuery('');
+                                setFacDeptFilter('ALL');
+                                setFacDesigFilter('ALL');
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 gap-4">
+                            {filteredFaculty.map((fac, idx) => {
+                              const avatarEl = (
+                                <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-150 shrink-0 relative bg-slate-50">
+                                  {fac.photo_url && fac.photo_url.trim() !== '' ? (
+                                    <img src={fac.photo_url} alt={fac.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-450">
+                                      <User className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+
+                              const statusBadge = (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleActive(fac.id, fac.is_active)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] uppercase font-mono font-bold border transition cursor-pointer ${
+                                    fac.is_active 
+                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-100' 
+                                      : 'text-slate-450 bg-slate-50 border-slate-150'
+                                  }`}
+                                >
+                                  {fac.is_active ? 'Active' : 'Hidden'}
+                                </button>
+                              );
+
+                              const featuredBadge = (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleFeatured(fac.id, fac.featured_homepage)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] uppercase font-mono font-bold border transition cursor-pointer ${
+                                    fac.featured_homepage 
+                                      ? 'text-pink-700 bg-pink-50 border-pink-100' 
+                                      : 'text-slate-450 bg-slate-50 border-slate-150'
+                                  }`}
+                                >
+                                  {fac.featured_homepage ? 'Featured' : 'Regular'}
+                                </button>
+                              );
+
+                              const orderControls = (
+                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-[10px] font-mono font-bold text-slate-700">
+                                  <span>Order: {fac.display_order}</span>
+                                  <div className="flex flex-col">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleSwapOrderByIds(fac.id, filteredFaculty[idx - 1].id)}
+                                      className="text-slate-400 hover:text-orange-500 disabled:opacity-20 cursor-pointer p-0"
+                                    >
+                                      <ChevronUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === filteredFaculty.length - 1}
+                                      onClick={() => handleSwapOrderByIds(fac.id, filteredFaculty[idx + 1].id)}
+                                      className="text-slate-400 hover:text-orange-500 disabled:opacity-20 cursor-pointer p-0"
+                                    >
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+
+                              const metadataFields = [
+                                { icon: <GraduationCap className="w-3.5 h-3.5" />, label: 'Role', value: fac.designation },
+                                { icon: <Layers className="w-3.5 h-3.5" />, label: 'Dept', value: fac.department },
+                                { icon: <BookOpen className="w-3.5 h-3.5" />, label: 'Subject', value: fac.subject || '—' }
+                              ];
+
+                              if (fac.joined_date) {
+                                metadataFields.push({ icon: <Clock className="w-3.5 h-3.5" />, label: 'Since', value: fac.joined_date });
+                              }
+                              if (fac.room_number) {
+                                metadataFields.push({ icon: <MapPin className="w-3.5 h-3.5" />, label: 'Loc', value: fac.room_number });
+                              }
+
+                              const cardActions = [
+                                {
+                                  label: 'Edit',
+                                  icon: <Edit className="w-3.5 h-3.5" />,
+                                  onClick: () => {
+                                    setEditingFacultyId(fac.id);
+                                    setOriginalFacName(fac.name);
+                                    setFacName(fac.name);
+                                    setFacPhoto(fac.photo_url || '');
+                                    setFacDesignation(fac.designation);
+                                    setFacDepartment(fac.department);
+                                    setFacSubject(fac.subject);
+                                    setFacQualification(fac.qualification);
+                                    setFacExperience(fac.experience);
+                                    setFacBio(fac.bio || '');
+                                    setFacEmail(fac.email || '');
+                                    setFacPhone(fac.phone || '');
+                                    setFacJoinedDate(fac.joined_date || '');
+                                    setFacRoomNumber(fac.room_number || '');
+                                    setFacDisplayOrder(fac.display_order);
+                                    setFacIsActive(fac.is_active);
+                                    setFacFeatured(fac.featured_homepage);
+                                    setIsEditingFaculty(true);
+                                  }
+                                },
+                                {
+                                  label: 'Delete',
+                                  icon: <Trash2 className="w-3.5 h-3.5" />,
+                                  onClick: () => handleDeleteFaculty(fac.id, fac.name),
+                                  variant: 'danger' as const
+                                }
+                              ];
+
+                              return (
+                                <ResponsiveEntityCard
+                                  key={fac.id}
+                                  id={fac.id}
+                                  avatar={avatarEl}
+                                  title={fac.name}
+                                  subtitle={fac.qualification || '—'}
+                                  badges={[statusBadge, featuredBadge, orderControls]}
+                                  metadata={metadataFields}
+                                  actions={cardActions}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div className="bg-slate-50 border border-slate-150 rounded-2xl p-12 text-center max-w-sm mx-auto animate-none">
-                      <GraduationCap className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                      <h4 className="text-slate-800 font-bold uppercase font-mono text-xs">Profiles Registry Blank</h4>
-                      <p className="text-slate-500 text-xs mt-1 font-sans">Publish scholars to seed your directory page circulars.</p>
-                    </div>
+                    <SharedEmptyState
+                      icon={<GraduationCap className="w-10 h-10" />}
+                      headline="Profiles Registry Blank"
+                      description="Publish scholars to seed your directory page circulars."
+                      action={{
+                        label: "Register New Scholar",
+                        onClick: () => {
+                          setFacDisplayOrder(facultyList.length + 1);
+                          setIsEditingFaculty(false);
+                          setEditingFacultyId(null);
+                          setFacName('');
+                          setFacPhoto('');
+                          setFacDesignation('Assistant Teacher');
+                          setFacDepartment('High School (9-10)');
+                          setFacSubject('');
+                          setFacQualification('');
+                          setFacExperience('');
+                          setFacBio('');
+                          setFacEmail('');
+                          setFacPhone('');
+                          setFacJoinedDate('');
+                          setFacRoomNumber('');
+                          setFacIsActive(true);
+                          setFacFeatured(false);
+                          setIsEditingFaculty(true);
+                        }
+                      }}
+                    />
                   )}
                 </div>
               )}

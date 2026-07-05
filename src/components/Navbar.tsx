@@ -127,9 +127,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               onClick={() => handleViewChange('home')}
               id="brand-container"
             >
-              {isSyncing ? (
-                <div className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-200 animate-pulse" />
-              ) : schoolSettings.logo_url === 'school_logo_default' ? (
+              {schoolSettings.logo_url === 'school_logo_default' ? (
                 <CustomSchoolEmblem className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 shrink-0 group-hover:scale-105 transition-transform duration-300" />
               ) : (
                 <img 
@@ -140,28 +138,19 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 />
               )}
               <div className="flex flex-col min-w-0 flex-1">
-                {isSyncing ? (
-                  <>
-                    <div className="h-5 bg-slate-200 animate-pulse rounded-md w-40 sm:w-56 md:w-64" />
-                    <div className="h-3.5 bg-slate-100 animate-pulse rounded-md w-24 sm:w-32 mt-1.5" />
-                  </>
-                ) : (
-                  <>
-                    <span className="font-extrabold text-xs xs:text-sm md:text-base xl:text-lg tracking-tight text-slate-800 group-hover:text-orange-600 transition-colors duration-300 uppercase font-sans truncate pr-2">
-                      {schoolSettings.school_name}
-                    </span>
-                    
-                    {/* Desktop: Government of Bihar Portal */}
-                    <span className="hidden xl:block text-xs text-orange-600 font-semibold font-sans italic truncate">
-                      Government of Bihar Portal
-                    </span>
-                    
-                    {/* Tablet: Govt. of Bihar Portal */}
-                    <span className="hidden md:block xl:hidden text-[10px] md:text-xs text-orange-600 font-medium font-sans italic truncate">
-                      Govt. of Bihar Portal
-                    </span>
-                  </>
-                )}
+                <span className="font-extrabold text-xs xs:text-sm md:text-base xl:text-lg tracking-tight text-slate-800 group-hover:text-orange-600 transition-colors duration-300 uppercase font-sans truncate pr-2">
+                  {schoolSettings.school_name}
+                </span>
+                
+                {/* Desktop: Government of Bihar Portal */}
+                <span className="hidden xl:block text-xs text-orange-600 font-semibold font-sans italic truncate">
+                  Government of Bihar Portal
+                </span>
+                
+                {/* Tablet: Govt. of Bihar Portal */}
+                <span className="hidden md:block xl:hidden text-[10px] md:text-xs text-orange-600 font-medium font-sans italic truncate">
+                  Govt. of Bihar Portal
+                </span>
               </div>
             </div>
 
@@ -338,36 +327,24 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               {/* Drawer Header */}
               <div className="flex items-center justify-between p-4 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
-                  {isSyncing ? (
-                    <>
-                      <div className="w-9 h-9 shrink-0 rounded-full bg-slate-200 animate-pulse" />
-                      <div className="flex flex-col min-w-0">
-                        <div className="h-4 bg-slate-200 animate-pulse rounded-md w-32" />
-                        <div className="h-3 bg-slate-100 animate-pulse rounded-md w-16 mt-1" />
-                      </div>
-                    </>
+                  {schoolSettings.logo_url === 'school_logo_default' ? (
+                    <CustomSchoolEmblem className="w-9 h-9 shrink-0" />
                   ) : (
-                    <>
-                      {schoolSettings.logo_url === 'school_logo_default' ? (
-                        <CustomSchoolEmblem className="w-9 h-9 shrink-0" />
-                      ) : (
-                        <img 
-                          src={schoolSettings.logo_url} 
-                          alt="School Logo" 
-                          className="w-9 h-9 shrink-0 object-contain rounded-full border border-orange-500/10 bg-slate-50 p-0.5"
-                          referrerPolicy="no-referrer"
-                        />
-                      )}
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-xs tracking-tight text-slate-800 uppercase font-sans line-clamp-1 max-w-[180px]">
-                          {schoolSettings.school_name}
-                        </span>
-                        <span className="text-[9px] text-orange-600 font-medium font-sans italic">
-                          Menu Directory
-                        </span>
-                      </div>
-                    </>
+                    <img 
+                      src={schoolSettings.logo_url} 
+                      alt="School Logo" 
+                      className="w-9 h-9 shrink-0 object-contain rounded-full border border-orange-500/10 bg-slate-50 p-0.5"
+                      referrerPolicy="no-referrer"
+                    />
                   )}
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-xs tracking-tight text-slate-800 uppercase font-sans line-clamp-1 max-w-[180px]">
+                      {schoolSettings.school_name}
+                    </span>
+                    <span className="text-[9px] text-orange-600 font-medium font-sans italic">
+                      Menu Directory
+                    </span>
+                  </div>
                 </div>
 
                 <button

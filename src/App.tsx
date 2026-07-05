@@ -1485,7 +1485,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans text-slate-600">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-600">
       
       {/* 1. STICKY DYNAMIC HEADER NAV */}
       <Navbar

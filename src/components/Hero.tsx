@@ -38,7 +38,42 @@ export const Hero: React.FC<HeroProps> = ({
   const activeEstdText = schoolSettings.hero_estd_text || "ESTD. 1947";
   const activeDiseText = schoolSettings.hero_dise_text || "DISE: 10230501XXX";
   
-  const isDefaultHero = !activeImageUrl || activeImageUrl === 'school_hero_default';
+  // Track currently displayed image URL to enable seamless preloaded transition on change
+  const [displayedImageUrl, setDisplayedImageUrl] = React.useState(activeImageUrl);
+
+  React.useEffect(() => {
+    // If the active URL is a default fallback or empty, switch immediately
+    if (!activeImageUrl || activeImageUrl === 'school_hero_default') {
+      setDisplayedImageUrl(activeImageUrl);
+      return;
+    }
+
+    // If the active URL is already displayed, no action is needed
+    if (activeImageUrl === displayedImageUrl) {
+      return;
+    }
+
+    let active = true;
+    const img = new Image();
+    img.src = activeImageUrl;
+    img.referrerPolicy = 'no-referrer';
+
+    img.onload = () => {
+      if (active) {
+        setDisplayedImageUrl(activeImageUrl);
+      }
+    };
+
+    img.onerror = () => {
+      console.warn(`[Hero Image Preload Failed] Retaining current background: ${displayedImageUrl}`);
+    };
+
+    return () => {
+      active = false;
+    };
+  }, [activeImageUrl, displayedImageUrl]);
+
+  const isDefaultHero = !displayedImageUrl || displayedImageUrl === 'school_hero_default';
 
   if (isDefaultHero) {
     return (
@@ -64,7 +99,7 @@ export const Hero: React.FC<HeroProps> = ({
       {/* Background Image Container (Stretches with dynamic content height) */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <img 
-          src={activeImageUrl} 
+          src={displayedImageUrl} 
           alt="School Campus Banner"
           className="w-full h-full object-cover object-center scale-105 filter brightness-45 blur-[1px]"
           referrerPolicy="no-referrer"

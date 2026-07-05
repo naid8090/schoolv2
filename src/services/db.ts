@@ -88,6 +88,29 @@ const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
   hero_dise_text: 'DISE: 10230501XXX'
 };
 
+// Neutral runtime fallback branding to prevent displaying another school's identity during startup
+const RUNTIME_FALLBACK_SCHOOL_SETTINGS: SchoolSettings = {
+  id: 'site-config',
+  school_name: 'Government Secondary School',
+  school_motto: 'Official School Portal',
+  address: 'State of Bihar, India',
+  phone: '',
+  email: '',
+  logo_url: 'school_logo_default',
+  hero_image_url: 'school_hero_default',
+  footer_subtitle: 'STATE EDUCATION PORTAL',
+  school_affiliation: 'Department of Education, Government of Bihar',
+  footer_description: 'Co-educational intermediate/senior secondary school portal under the directives of the Bihar School Examination Board.',
+  
+  // Custom hero overlay texts (neutral values)
+  hero_title: 'Government Secondary School Portal',
+  hero_subtitle: 'Official Digital Corridor & Student Academic Registrar',
+  hero_description: 'Access official circulars, academic routines, notices, and faculty directories online.',
+  hero_badge_text: 'Government School Portal, Bihar',
+  hero_estd_text: '',
+  hero_dise_text: ''
+};
+
 export const DEFAULT_HOMEPAGE_MODULES: HomepageModule[] = [
   {
     id: '11111111-1111-1111-1111-111111111111',
@@ -844,9 +867,10 @@ class DatabaseService {
   }
 
   // School Settings
-  getSchoolSettings(): SchoolSettings {
-    const loaded = this.getStorageItem<SchoolSettings>('gsss_school_settings', DEFAULT_SCHOOL_SETTINGS);
-    return { ...DEFAULT_SCHOOL_SETTINGS, ...loaded };
+  getSchoolSettings(useSeedFallback = false): SchoolSettings {
+    const fallbackSettings = useSeedFallback ? DEFAULT_SCHOOL_SETTINGS : RUNTIME_FALLBACK_SCHOOL_SETTINGS;
+    const loaded = this.getStorageItem<SchoolSettings>('gsss_school_settings', fallbackSettings);
+    return { ...fallbackSettings, ...loaded };
   }
 
   saveSchoolSettings(settings: SchoolSettings, localOnly = false): void {

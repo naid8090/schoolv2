@@ -38,7 +38,7 @@ export const AboutPage: React.FC<ViewProps> = ({ schoolSettings, onViewChange })
             Empowering Secondary Academic Eminence in Patna
           </h1>
           <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-sans font-medium">
-            Rajendra Prasad Government Senior Secondary School stands as a premier educational establishment under the Ministry of Education, State of Bihar. Anchoring classes from 9 to 12, we specialize in high-caliber instruction formats mapping strict NCERT modules and official Bihar School Examination Board patterns.
+            {schoolSettings.school_name} stands as a premier educational establishment under the Ministry of Education, State of Bihar. Anchoring classes from 9 to 12, we specialize in high-caliber instruction formats mapping strict NCERT modules and official Bihar School Examination Board patterns.
           </p>
           <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
             <span className="font-bold text-sky-900 text-xs uppercase block tracking-wide">Motto Affirmation</span>
@@ -107,7 +107,7 @@ export const AboutPage: React.FC<ViewProps> = ({ schoolSettings, onViewChange })
             "Academic Devotion and Cultural Character"
           </h3>
           <p className="text-slate-605 text-xs sm:text-sm leading-relaxed font-sans italic">
-            "{principal?.bio || "Rajendra Prasad GSSS is dedicated to fostering not just structural scores but deep moral character matching Bihar heritage. Our classrooms ensure students from all sectors achieve independent capacities in physics, mathematics, humanities, and accounting standards. We welcome guardians to inspect and support our academic board schedules."}"
+            "{principal?.bio || `${schoolSettings.school_name} is dedicated to fostering not just structural scores but deep moral character matching Bihar heritage. Our classrooms ensure students from all sectors achieve independent capacities in physics, mathematics, humanities, and accounting standards. We welcome guardians to inspect and support our academic board schedules.`}"
           </p>
           <span className="block text-xs font-semibold text-slate-500 tracking-wide uppercase mt-1">
             — {principal ? `${principal.name}${principal.qualification ? ", " + principal.qualification : ""} (${principal.designation})` : "Shri S.K. Chaudhary, M.Sc., B.Ed. (Principal)"}

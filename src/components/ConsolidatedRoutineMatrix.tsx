@@ -92,7 +92,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
   const handleExportExcel = () => {
     if (!isAdmin) return;
 
-    const schoolName = schoolSettings?.school_name || "Rajendra Prasad Government Senior Secondary School";
+    const schoolName = schoolSettings?.school_name || "Government Secondary School";
     const exportDateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
 
     // Prepare Excel rows (SheetJS format)
@@ -236,7 +236,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
                 GP
               </span>
               <h1 className="text-slate-955 text-base font-black tracking-tight uppercase leading-none">
-                {schoolSettings?.school_name || "Rajendra Prasad Government Senior Secondary School"}
+                {schoolSettings?.school_name || "Government Secondary School"}
               </h1>
             </div>
             <p className="text-slate-500 text-[10px] font-mono font-medium max-w-xl">

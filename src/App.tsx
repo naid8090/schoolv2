@@ -26,7 +26,7 @@ export default function App() {
   // Global View Navigation State
   const [currentView, setCurrentView] = useState<string>('home');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings>(() => dbService.getSchoolSettings());
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings>(() => dbService.getSchoolSettings(false));
   const [homepageModules, setHomepageModules] = useState<HomepageModule[]>(() => dbService.getHomepageModules());
   const [dataSyncVersion, setDataSyncVersion] = useState<number>(0);
 
@@ -69,7 +69,7 @@ export default function App() {
             dbService.saveSchoolSettings(remoteSettings, true);
           } else {
             // Seeding phase: Supabase is empty, read local data and seed Supabase
-            const localSettings = dbService.getSchoolSettings();
+            const localSettings = dbService.getSchoolSettings(true);
             try {
               const saved = await supabaseDbService.saveSchoolSettings(localSettings);
               if (active && saved) {

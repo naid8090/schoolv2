@@ -1629,7 +1629,7 @@ export default function App() {
                             placeholder="admin@gsss.edu"
                             value={loginUser}
                             onChange={(e) => setLoginUser(e.target.value)}
-                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
+                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-base sm:text-xs px-3.5 py-2.5 transition-all"
                           />
                         </div>
 
@@ -1641,7 +1641,7 @@ export default function App() {
                             placeholder="••••••••"
                             value={loginPass}
                             onChange={(e) => setLoginPass(e.target.value)}
-                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-xs px-3.5 py-2.5 transition-all"
+                            className="w-full bg-slate-50/65 border border-slate-200 focus:outline-none focus:border-sky-900 focus:ring-1 focus:ring-sky-900 rounded-lg text-slate-800 text-base sm:text-xs px-3.5 py-2.5 transition-all"
                           />
                         </div>
 

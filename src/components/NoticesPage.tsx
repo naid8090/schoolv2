@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Calendar, Tag, AlertOctagon, Download, X, Pin, ArrowRight, ExternalLink, CalendarDays, ChevronRight, FileText } from 'lucide-react';
+import { Search, Calendar, Tag, AlertOctagon, Download, X, Pin, ArrowRight, ExternalLink, CalendarDays, ChevronRight, FileText, Eye } from 'lucide-react';
 import { Notice, NoticeCategory, NoticePriority, MediaItem } from '../types';
 import { dbService } from '../services/db';
 import { CustomPDFIcon, CustomSchoolEmblem } from './CommonAssets';
@@ -258,29 +258,51 @@ export const NoticesPage: React.FC<NoticesPageProps> = ({
               </div>
 
               {/* Attachment Cards */}
-              {activeNotice.pdf_url && (
-                <div className="mt-8 p-4 rounded-xl bg-slate-50 border border-slate-150 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-red-500/10 rounded-lg border border-red-500/10">
-                      <CustomPDFIcon className="w-8 h-8" />
-                    </div>
-                    <div>
-                      <span className="block text-xs text-slate-500 font-mono uppercase tracking-wider font-bold">PDF Enclosure Enclosed</span>
-                      <span className="block text-slate-800 text-xs sm:text-sm font-bold truncate max-w-[200px] sm:max-w-sm">
-                        {getMediaItem(activeNotice.pdf_url)?.file_name || 'Circular Attachment File'}
-                      </span>
+              {activeNotice.pdf_url && (() => {
+                const mediaItem = getMediaItem(activeNotice.pdf_url);
+                const pdfName = mediaItem?.file_name || 'Circular Attachment File';
+                const pdfUrl = mediaItem?.file_url || activeNotice.pdf_url;
+                
+                return (
+                  <div>
+                    {/* Divider for mobile to clearly segregate the attachment block */}
+                    <div className="block sm:hidden my-6 border-t border-dashed border-slate-200" />
+                    
+                    <div className="mt-6 sm:mt-8 p-4 rounded-xl bg-slate-50 border border-slate-150 flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-red-500/10 rounded-lg border border-red-500/10 shrink-0">
+                          <CustomPDFIcon className="w-8 h-8" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[10px] sm:text-xs text-slate-500 font-mono uppercase tracking-wider font-bold">📄 Attachment</span>
+                          <span className="block text-slate-800 text-xs sm:text-sm font-bold truncate pr-2" title={pdfName}>
+                            {pdfName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 shrink-0">
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold uppercase transition text-center"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View PDF
+                        </a>
+                        <button
+                          onClick={() => triggerDownload(activeNotice.pdf_url)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase transition text-center cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Download
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <button
-                    onClick={() => triggerDownload(activeNotice.pdf_url)}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase transition"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
           </div>

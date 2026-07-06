@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
   Layers, 
@@ -136,6 +136,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSettingsChanged
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const workspaceElement = document.getElementById('admin-content-workspace');
+    if (workspaceElement) {
+      workspaceElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeTab]);
 
   // School Settings bindings
   const [settings, setSettings] = useState<SchoolSettings>(() => dbService.getSchoolSettings());
@@ -782,25 +796,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </nav>
           </div>
 
-          {/* Quick System Stats */}
-          <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-4">
-            <span className="block text-[9px] uppercase font-mono font-bold text-slate-450 tracking-wider">Storage health & indexes</span>
-            <div className="space-y-3 font-mono text-[11px]">
-              {stats.map((stat, idx) => (
-                <div key={idx} className="flex justify-between items-center text-slate-600 bg-white p-2.5 rounded border border-slate-150 shadow-2xs">
-                  <span className="flex items-center gap-1.5 font-sans font-bold text-slate-700 uppercase tracking-wide">
-                    {stat.icon}
-                    {stat.label}
-                  </span>
-                  <span className="font-bold text-orange-650 text-orange-600">{stat.count}</span>
-                </div>
-              ))}
+          {/* Quick System Stats / Database Diagnostics */}
+          <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-3">
+            <div className="flex flex-col gap-1">
+              <span className="block text-[10px] uppercase font-mono font-black text-slate-700 tracking-wider">Database Diagnostics</span>
+              <button
+                type="button"
+                onClick={() => setShowDiagnostics(!showDiagnostics)}
+                className="w-full text-left font-bold text-[11px] text-orange-600 hover:text-orange-700 transition flex items-center gap-1 cursor-pointer outline-none focus:ring-0 select-none"
+              >
+                <span>{showDiagnostics ? '▼' : '▶'}</span>
+                <span>{showDiagnostics ? 'Hide Storage Health & Indexes' : 'Show Storage Health & Indexes'}</span>
+              </button>
             </div>
+            {showDiagnostics && (
+              <div className="space-y-2.5 font-mono text-[11px] pt-1.5 border-t border-slate-200/60 animate-in fade-in duration-200">
+                {stats.map((stat, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-slate-650 bg-white p-2.5 rounded border border-slate-150 shadow-3xs">
+                    <span className="flex items-center gap-1.5 font-sans font-bold text-slate-700 uppercase tracking-wide text-[10px]">
+                      {stat.icon}
+                      {stat.label}
+                    </span>
+                    <span className="font-bold text-orange-600 font-mono">{stat.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Content Workspace (3 Cols) */}
-        <div className="lg:col-span-3 min-h-[500px]">
+        <div className="lg:col-span-3 min-h-[500px]" id="admin-content-workspace">
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -1874,41 +1900,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           }`}
                         >
                           {/* Left Drag handles / titles */}
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1 w-full">
                             <div 
-                              className="p-1 text-slate-450 hover:text-slate-700 cursor-grab active:cursor-grabbing hover:bg-slate-50 rounded"
+                              className="p-1 text-slate-450 hover:text-slate-700 cursor-grab active:cursor-grabbing hover:bg-slate-50 rounded shrink-0 self-center"
                               title="Drag to change display layout height order"
                             >
-                              <GripVertical className="w-4 h-4 text-slate-400 shrink-0" />
+                              <GripVertical className="w-4 h-4 text-slate-400" />
                             </div>
 
-                            <span className="w-6 h-6 rounded-lg bg-slate-50 border border-slate-150 flex items-center justify-center font-mono text-[10.5px] font-bold text-orange-600 shrink-0">
+                            <span className="w-6 h-6 rounded-lg bg-slate-50 border border-slate-150 flex items-center justify-center font-mono text-[10.5px] font-bold text-orange-600 shrink-0 self-center">
                               {index + 1}
                             </span>
 
-                            <div className="p-2 sm:p-2.5 bg-slate-50 border border-slate-150 rounded-xl shrink-0">
+                            <div className="p-2 sm:p-2.5 bg-slate-50 border border-slate-150 rounded-xl shrink-0 self-center">
                               {getModuleIcon(mod.module_type)}
                             </div>
 
-                            <div className="flex flex-col leading-relaxed">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold text-xs uppercase tracking-wider ${mod.is_visible ? 'text-slate-850' : 'text-slate-400'}`}>
+                            <div className="flex flex-col leading-relaxed min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`font-bold text-xs uppercase tracking-wider ${mod.is_visible ? 'text-slate-850' : 'text-slate-400'} truncate max-w-[150px] sm:max-w-none`}>
                                   {mod.title || `${mod.module_type} Segment`}
                                 </span>
-                                <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-sm font-semibold tracking-wide uppercase border border-slate-150">
+                                <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-sm font-semibold tracking-wide uppercase border border-slate-150 shrink-0">
                                   {mod.module_type}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-slate-450 font-medium truncate max-w-[250px] sm:max-w-md">
+                              <span className="text-[10px] text-slate-450 font-medium truncate max-w-full">
                                 {mod.description || 'No specialized paragraph description details populated.'}
                               </span>
                             </div>
                           </div>
 
                           {/* Action Items */}
-                          <div className="flex items-center justify-end gap-2.5">
+                          <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto mt-3 sm:mt-0 pt-3 sm:pt-0 border-t border-slate-100 sm:border-0 shrink-0">
                             {/* Up down sorting helpers */}
-                            <div className="flex items-center bg-white border border-slate-200 rounded p-0.5">
+                            <div className="flex items-center bg-white border border-slate-200 rounded p-0.5 shrink-0">
                               <button
                                 type="button"
                                 disabled={index === 0}
@@ -1933,7 +1959,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button
                               type="button"
                               onClick={() => initEditModule(mod)}
-                              className="p-1 px-3.5 bg-slate-50 hover:bg-orange-500 border border-slate-150 hover:border-orange-500 text-slate-600 hover:text-white rounded text-[10.5px] font-bold uppercase transition-colors cursor-pointer"
+                              className="p-1.5 px-3 bg-slate-50 hover:bg-orange-500 border border-slate-150 hover:border-orange-500 text-slate-600 hover:text-white rounded text-[10.5px] font-bold uppercase transition-colors cursor-pointer flex items-center justify-center shrink-0"
                             >
                               <Edit className="w-3.5 h-3.5 inline mr-1" />
                               Edit
@@ -1943,7 +1969,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button
                               type="button"
                               onClick={(e) => toggleVisibility(mod.id, e)}
-                              className={`px-3 py-1 text-[9.5px] font-semibold uppercase rounded-lg border tracking-wider transition-all cursor-pointer ${
+                              className={`px-3 py-1.5 text-[9.5px] font-semibold uppercase rounded-lg border tracking-wider transition-all cursor-pointer shrink-0 ${
                                 mod.is_visible 
                                   ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-50/80 shadow-2xs' 
                                   : 'bg-slate-100 border-slate-150 text-slate-450 hover:text-slate-650'
@@ -1956,7 +1982,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button
                               type="button"
                               onClick={(e) => deleteModule(mod.id, e)}
-                              className="p-1.5 bg-slate-50 hover:bg-red-600 hover:text-white border border-slate-150 hover:border-red-650 rounded cursor-pointer transition-colors"
+                              className="p-1.5 bg-slate-50 hover:bg-red-600 hover:text-white border border-slate-150 hover:border-red-650 rounded cursor-pointer transition-colors shrink-0"
                               title="Delete permanently"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

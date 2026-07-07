@@ -1048,29 +1048,29 @@ export const DatabaseHealth: React.FC = () => {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto scrollbar-thin" id="database-health-table-scroll">
+          <table className="w-full text-left border-collapse min-w-[850px]" id="database-health-data-table">
             <thead>
-              <tr className="border-b border-slate-100 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
-                <th className="px-5 py-3">Database Module</th>
-                <th className="px-5 py-3 text-center">Local Cache</th>
-                <th className="px-5 py-3 text-center">Cloud Supabase</th>
-                <th className="px-5 py-3 text-center">Health Status</th>
-                <th className="px-5 py-3">Operations Desk</th>
+              <tr className="border-b border-slate-150 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                <th className="px-5 py-3.5 w-[280px]">Database Module</th>
+                <th className="px-4 py-3.5 text-center w-[110px]">Local Cache</th>
+                <th className="px-4 py-3.5 text-center w-[140px]">Cloud Supabase</th>
+                <th className="px-4 py-3.5 text-center w-[140px]">Health Status</th>
+                <th className="px-5 py-3.5">Operations Desk</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {healthModules.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={m.id} className="hover:bg-slate-50/40 transition-colors group">
                   {/* Module Name & Details */}
                   <td className="px-5 py-4">
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-slate-50 rounded-lg border border-slate-150 shrink-0 mt-0.5">
+                      <div className="p-2 bg-slate-50 rounded-lg border border-slate-150 shrink-0 mt-0.5 group-hover:bg-white group-hover:border-slate-200 transition-colors">
                         {m.icon}
                       </div>
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm">{m.name}</div>
-                        <div className="text-slate-400 text-[11px] mt-0.5 leading-relaxed max-w-sm">
+                      <div className="min-w-0">
+                        <div className="font-extrabold text-slate-900 text-sm">{m.name}</div>
+                        <div className="text-slate-450 text-[11px] mt-0.5 leading-relaxed max-w-xs sm:max-w-sm font-sans font-medium">
                           {m.description}
                         </div>
                       </div>
@@ -1078,31 +1078,31 @@ export const DatabaseHealth: React.FC = () => {
                   </td>
 
                   {/* Local Cached Record Count */}
-                  <td className="px-5 py-4 text-center">
-                    <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-full font-mono text-slate-700 font-bold">
+                  <td className="px-4 py-4 text-center">
+                    <span className="inline-block px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-full font-mono text-slate-700 font-bold">
                       {m.localCount}
                     </span>
                   </td>
 
                   {/* Remote Supabase Record Count */}
-                  <td className="px-5 py-4 text-center">
+                  <td className="px-4 py-4 text-center">
                     {m.loading ? (
                       <div className="flex items-center justify-center">
                         <RefreshCw className="w-3.5 h-3.5 text-orange-500 animate-spin shrink-0" />
                       </div>
                     ) : m.remoteCount === null ? (
-                      <span className="text-rose-600 font-mono font-bold">FAIL</span>
+                      <span className="text-rose-600 font-mono font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">FAIL</span>
                     ) : (
-                      <span className="px-2.5 py-1 bg-orange-50 border border-orange-100 rounded-full font-mono text-orange-700 font-bold">
+                      <span className="inline-block px-2.5 py-1 bg-orange-50 border border-orange-150 rounded-full font-mono text-orange-700 font-bold">
                         {m.remoteCount}
                       </span>
                     )}
                   </td>
 
                   {/* Health Status Badge */}
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-4 text-center">
                     <div className="flex items-center justify-center">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusBadgeStyle(m.status)}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-4xs ${getStatusBadgeStyle(m.status)}`}>
                         {getStatusIcon(m.status)}
                         {m.status}
                       </span>
@@ -1111,15 +1111,16 @@ export const DatabaseHealth: React.FC = () => {
 
                   {/* Future Operations Desk */}
                   <td className="px-5 py-4">
-                    <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono font-bold tracking-wider max-w-xs">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono font-bold tracking-tight max-w-md">
                       {/* 1. SEED DEFAULTS (Only shown if module supports seeding defaults) */}
                       {m.seedable && (() => {
                         const btnProps = getSeedButtonProps(m);
                         return (
                           <button
+                            id={`seed-btn-${m.id}`}
                             onClick={() => handleSeed(m.id)}
                             disabled={btnProps.disabled}
-                            className={btnProps.className}
+                            className={`${btnProps.className} !px-3 !py-2 !text-[9.5px] rounded-lg cursor-pointer flex items-center justify-center min-h-[38px]`}
                           >
                             {btnProps.label === 'SEED' ? 'SEED DEFAULTS' : btnProps.label}
                           </button>
@@ -1129,9 +1130,10 @@ export const DatabaseHealth: React.FC = () => {
                       {/* 2. SYNC REPAIR (Only shown when replication discrepancy is detected) */}
                       {(m.status === 'Out of Sync' || m.status === 'Local Only') && (
                         <button
+                          id={`repair-btn-${m.id}`}
                           onClick={() => handleRepair(m.id)}
                           disabled={m.loading || seedingId !== null}
-                          className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 hover:border-indigo-700 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                          className="px-3 py-2 text-[9.5px] font-mono font-bold uppercase tracking-tight rounded-lg border bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 hover:border-indigo-700 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-4xs min-h-[38px] flex items-center justify-center"
                         >
                           SYNC REPAIR
                         </button>
@@ -1139,15 +1141,16 @@ export const DatabaseHealth: React.FC = () => {
 
                       {/* 3. REFRESH (Always present, lightweight and precise) */}
                       <button
+                        id={`refresh-btn-${m.id}`}
                         onClick={() => refreshModule(m.id)}
                         disabled={m.loading || seedingId !== null}
-                        className="px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded-lg border bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                        className="px-3 py-2 text-[9.5px] font-mono font-bold uppercase tracking-tight rounded-lg border bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 select-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 shadow-4xs min-h-[38px] flex items-center justify-center"
                       >
                         {m.loading ? '...' : 'REFRESH'}
                       </button>
                     </div>
                     {m.errorMsg && (
-                      <div className="text-rose-500 text-[10px] mt-1.5 font-mono max-w-xs break-words">
+                      <div className="text-rose-500 text-[10px] mt-1.5 font-mono max-w-xs break-words bg-rose-50 border border-rose-100 p-2 rounded-md">
                         Error: {m.errorMsg}
                       </div>
                     )}

@@ -442,49 +442,77 @@ const PeriodsMasterWorkspace: React.FC<{
             Saved Hours Matrix Registry ({periodMasters.length} defined)
           </span>
 
-          <div className="border border-slate-150 rounded-xl overflow-hidden bg-white">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wide text-slate-450">
-                  <th className="p-3 w-12 col-span-1">No.</th>
-                  <th className="p-3">Period Label</th>
-                  <th className="p-3">Standard Hour Slot</th>
-                  <th className="p-3 text-center w-28">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750 font-medium">
-                {periodMasters.map((pm, i) => (
-                  <tr key={pm.id} className="hover:bg-slate-50/20 transition-colors">
-                    <td className="p-3 font-mono text-slate-400 font-bold text-[10.5px]">{i + 1}</td>
-                    <td className="p-3 font-extrabold text-slate-900 text-sm">{pm.name}</td>
-                    <td className="p-3 font-mono text-orange-600 bg-orange-50/15 py-1 px-2 rounded-md border border-orange-100/30 font-bold w-fit text-[11px] select-all">{pm.time_range}</td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleEdit(pm)}
-                          className="px-2.5 py-1.5 text-[10.5px] bg-slate-50 border border-slate-205 hover:bg-slate-100 font-bold rounded-lg cursor-pointer transition flex items-center justify-center"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(pm.id)}
-                          className="px-2.5 py-1.5 text-[10.5px] border border-red-100 bg-red-50/20 text-red-650 hover:bg-red-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+          <div className="border border-slate-150 rounded-xl overflow-hidden bg-white shadow-3xs" id="period-master-table-container">
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full border-collapse text-left min-w-[550px]" id="period-master-data-table">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wide text-slate-450">
+                    <th className="py-3 px-4 w-12 text-center">No.</th>
+                    <th className="py-3 px-4">Period</th>
+                    <th className="py-3 px-4">Standard Hour Slot</th>
+                    <th className="py-3 px-4 w-28 text-center">Duration</th>
+                    <th className="py-3 px-4 text-center w-36">Actions</th>
                   </tr>
-                ))}
-                {periodMasters.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400 italic font-medium">
-                      No period master rows defined. Add some or click Reset Defaults above.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750 font-medium">
+                  {periodMasters.map((pm, i) => {
+                    const parsed = parseTimeRange(pm.time_range);
+                    const durationVal = parsed ? (parsed.end - parsed.start) : null;
+                    const durationStr = durationVal !== null && durationVal > 0 
+                      ? (durationVal >= 60 
+                          ? `${Math.floor(durationVal / 60)}h ${durationVal % 60 > 0 ? `${durationVal % 60}m` : ''}` 
+                          : `${durationVal} mins`)
+                      : '—';
+
+                    return (
+                      <tr key={pm.id} className="hover:bg-slate-50/40 transition-colors group">
+                        <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-bold text-[10.5px]">
+                          {i + 1}
+                        </td>
+                        <td className="py-3.5 px-4 font-extrabold text-slate-900 text-sm">
+                          {pm.name}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-orange-600 font-bold text-[11px] select-all">
+                          <span className="bg-orange-50/30 px-2 py-1 rounded-md border border-orange-100/50">
+                            {pm.time_range}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-150/60 text-slate-700 rounded-md font-mono font-bold text-[10px] tracking-tight">
+                            {durationStr}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              id={`edit-period-btn-${pm.id}`}
+                              onClick={() => handleEdit(pm)}
+                              className="px-3 py-2 text-[11px] bg-white border border-slate-205 hover:bg-slate-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center text-slate-700 min-h-[40px] min-w-[50px] shadow-4xs hover:border-slate-300"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              id={`delete-period-btn-${pm.id}`}
+                              onClick={() => handleDelete(pm.id)}
+                              className="px-3 py-2 text-[11px] border border-red-200/60 bg-red-50/20 text-red-650 hover:bg-red-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center min-h-[40px] min-w-[50px] shadow-4xs"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {periodMasters.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400 italic font-medium">
+                        No period master rows defined. Add some or click Reset Defaults above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -2389,23 +2417,23 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
         {/* Tab Content A: Teacher Workload Balance */}
         {optimizerTab === 'workload' ? (
-          <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-2xs animate-in fade-in duration-200">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+          <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-2xs animate-in fade-in duration-200" id="teacher-workload-table-container">
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full border-collapse min-w-[650px]" id="teacher-workload-data-table">
                 <thead>
-                  <tr className="bg-slate-50/75 border-b border-slate-100 text-left font-mono text-[9px] uppercase tracking-wider text-slate-450 font-bold">
-                    <th className="py-3 px-5">Instructor Name</th>
-                    <th className="py-3 px-4">Subject Specialty / Department</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4 text-center">Assigned Load / Week</th>
-                    <th className="py-3 px-4">Workload Distribution Guard</th>
-                    <th className="py-3 px-5 text-right font-sans lowercase">details</th>
+                  <tr className="bg-slate-50/75 border-b border-slate-150 text-left font-mono text-[9.5px] uppercase tracking-wider text-slate-450 font-bold">
+                    <th className="py-3.5 px-4 sm:px-5 w-[200px]">Instructor</th>
+                    <th className="py-3.5 px-4">Department / Specialty</th>
+                    <th className="py-3.5 px-4 w-[90px] hidden md:table-cell">Type</th>
+                    <th className="py-3.5 px-3 text-center w-[110px]">Weekly Load</th>
+                    <th className="py-3.5 px-4 w-[180px] sm:w-[220px]">Workload Balance Guard</th>
+                    <th className="py-3.5 px-4 sm:px-5 text-right font-sans lowercase w-[160px] sm:w-[200px]">details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750">
                   {filteredWorkloadData().length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400 italic">
+                      <td colSpan={6} className="py-12 text-center text-slate-400 italic font-medium">
                         {workloadTeacherFilter === 'All'
                           ? "No teachers scheduled yet across routine database."
                           : `No workload data found for "${workloadTeacherFilter}".`}
@@ -2428,45 +2456,45 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       }
 
                       return (
-                        <tr key={t.name} className="hover:bg-slate-50/50 transition duration-100">
-                          <td className="py-4 px-5 font-black text-slate-900 text-xs flex items-center gap-2.5">
-                            <span className="p-1 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] text-slate-500 font-mono font-bold select-none">
+                        <tr key={t.name} className="hover:bg-slate-50/40 transition duration-100 group">
+                          <td className="py-3.5 px-4 sm:px-5 font-black text-slate-900 text-xs flex items-center gap-2.5">
+                            <span className="p-1 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] text-slate-500 font-mono font-bold select-none group-hover:bg-white transition-colors">
                               {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
                             </span>
-                            <div>
-                              <div className="font-sans font-extrabold text-slate-900 text-[12.5px] leading-snug">{t.name}</div>
-                              <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">{t.type}</span>
+                            <div className="min-w-0">
+                              <div className="font-sans font-extrabold text-slate-900 text-[12.5px] leading-snug truncate">{t.name}</div>
+                              <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none block sm:inline">{t.type}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 font-bold text-slate-600">
+                          <td className="py-3.5 px-4 font-bold text-slate-600 font-sans">
                             {t.department}
                           </td>
-                          <td className="py-4 px-4 text-[10.5px]">
+                          <td className="py-3.5 px-4 text-[10.5px] hidden md:table-cell">
                             <span className={`px-2 py-0.5 border text-[9px] font-mono leading-none rounded uppercase ${t.type === 'Regular' ? 'bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-150' : 'bg-slate-50 text-slate-605 border-slate-150'}`}>
                               {t.type}
                             </span>
                           </td>
-                          <td className="py-4 px-4 text-center">
+                          <td className="py-3.5 px-3 text-center">
                             <span className="text-sm font-black font-mono text-slate-950">
                               {t.loadCount}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-semibold pl-1">classes</span>
+                            <span className="text-[10px] text-slate-450 font-semibold pl-1">slots</span>
                           </td>
-                          <td className="py-4 px-4 max-w-xs">
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] font-mono font-bold">
-                                <span className={`font-semibold ${t.loadCount > 12 ? 'text-red-650' : t.loadCount >= 6 ? 'text-sky-655' : 'text-amber-600'}`}>{loadStatus}</span>
-                                <span className="text-slate-500">{Math.round(progressPercent)}% limit</span>
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[10px] font-mono font-bold leading-none">
+                                <span className={`font-semibold ${t.loadCount > 12 ? 'text-red-600' : t.loadCount >= 6 ? 'text-emerald-600' : 'text-amber-600'}`}>{loadStatus}</span>
+                                <span className="text-slate-450">{Math.round(progressPercent)}% limit</span>
                               </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-4xs border border-slate-200/40">
                                 <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-sky-500' : 'bg-amber-500'}`}
+                                  className={`h-full rounded-full transition-all duration-300 ${t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-emerald-500' : 'bg-amber-500'}`}
                                   style={{ width: `${progressPercent}%` }}
                                 />
                               </div>
                             </div>
                           </td>
-                          <td className="py-4 px-5 text-right">
+                          <td className="py-3.5 px-4 sm:px-5 text-right">
                             <div className="flex flex-wrap gap-1 justify-end max-w-sm ml-auto">
                               {t.assignments.length === 0 ? (
                                 <span className="text-slate-350 text-[10px] italic">No active slots assigned</span>

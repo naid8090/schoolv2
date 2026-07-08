@@ -26,7 +26,7 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react';
-import { dbService } from '../services/db';
+import { dbService, generateUUID } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty } from '../types';
 import { MediaSelectorModal } from './MediaLibrary';
 import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
@@ -698,12 +698,26 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     message: string;
     detail: string;
     targetClass: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('gsss_duplication_success_alert');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [duplicationUndoState, setDuplicationUndoState] = useState<{
     createdEntryIds: string[];
     restoredEntries: RoutineEntry[];
     targetClass: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('gsss_duplication_undo_state');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Load Routines and standard configurations
   const fetchLocalData = () => {
@@ -948,8 +962,11 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setDuplicationError(null);
     setDuplicationConflicts([]);
 
+    // Always fetch latest entries from database to ensure absolute transactional integrity
+    const currentEntries = dbService.getRoutineEntries();
+
     // Check if source day has entries
-    const sourceEntries = entries.filter(
+    const sourceEntries = currentEntries.filter(
       ent => ent.routine_id === activeRoutine.id && ent.day === duplicationSourceDay
     );
 
@@ -970,7 +987,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
     // Check if any destination day already has entries
     const hasExistingEntries = duplicationDestDays.some(destDay =>
-      entries.some(ent => ent.routine_id === activeRoutine.id && ent.day === destDay)
+      currentEntries.some(ent => ent.routine_id === activeRoutine.id && ent.day === destDay)
     );
 
     if (hasExistingEntries && destinationStrategy === 'cancel') {
@@ -987,7 +1004,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
     // We do a target-by-target mock clone to do checks
     for (const destDay of duplicationDestDays) {
-      const existingDestEntries = entries.filter(
+      const existingDestEntries = currentEntries.filter(
         ent => ent.routine_id === activeRoutine.id && ent.day === destDay
       );
 
@@ -1049,14 +1066,14 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     }
 
     // Perform actual write operations
-    let updatedEntries = [...entries];
+    let updatedEntries = [...currentEntries];
 
     // Track for undo
     const newlyCreatedIds: string[] = [];
     const newlyCreatedEntries: RoutineEntry[] = [];
 
     for (const destDay of duplicationDestDays) {
-      const existingDestEntries = entries.filter(
+      const existingDestEntries = currentEntries.filter(
         ent => ent.routine_id === activeRoutine.id && ent.day === destDay
       );
 
@@ -1074,8 +1091,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       // Filter prospective entries to this destDay
       const entriesToCreateForThisDay = prospectiveEntriesToCreate.filter(e => e.day === destDay);
       for (const prospectiveEnt of entriesToCreateForThisDay) {
-        // Generate new real UUID
-        const realId = `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}_${Math.random().toString(36).substring(2,7)}`;
+        // Generate new real valid UUID
+        const realId = generateUUID();
         const finalEnt: RoutineEntry = {
           ...prospectiveEnt,
           id: realId
@@ -1100,17 +1117,24 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       detailMessage = `${copiedCount} periods copied successfully.`;
     }
 
-    setDuplicationSuccessAlert({
+    const successAlert = {
       message: `${duplicationSourceDay} successfully duplicated to: ${duplicationDestDays.join(', ')}`,
       detail: detailMessage,
       targetClass: selectedClass as string
-    });
+    };
 
-    setDuplicationUndoState({
+    const undoState = {
       createdEntryIds: newlyCreatedIds,
       restoredEntries: restoredEntriesList,
       targetClass: selectedClass as string
-    });
+    };
+
+    setDuplicationSuccessAlert(successAlert);
+    setDuplicationUndoState(undoState);
+
+    // Persist undo state and success alert to localStorage so that they survive refreshes!
+    localStorage.setItem('gsss_duplication_undo_state', JSON.stringify(undoState));
+    localStorage.setItem('gsss_duplication_success_alert', JSON.stringify(successAlert));
 
     // Reset state & close modal
     setIsDuplicatingDay(false);
@@ -1120,24 +1144,35 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   };
 
   const handleDuplicationUndo = () => {
-    if (!duplicationUndoState) return;
+    const undoState = duplicationUndoState;
+    if (!undoState) return;
 
-    const { createdEntryIds, restoredEntries } = duplicationUndoState;
+    const { createdEntryIds, restoredEntries } = undoState;
+
+    // Get the latest entries directly from the database to guarantee transaction integrity
+    const latestEntries = dbService.getRoutineEntries();
 
     // Remove the newly created entries
-    let updatedEntries = entries.filter(ent => !createdEntryIds.includes(ent.id));
+    let updatedEntries = latestEntries.filter(ent => !createdEntryIds.includes(ent.id));
 
     // Restore the original entries that were replaced
     updatedEntries = [...updatedEntries, ...restoredEntries];
 
     // Save and refresh
     dbService.saveRoutineEntries(updatedEntries);
+    
+    // Clear undo state
     setDuplicationUndoState(null);
-    setDuplicationSuccessAlert({
+    localStorage.removeItem('gsss_duplication_undo_state');
+
+    const successAlert = {
       message: 'Duplication undone successfully!',
       detail: 'Original timetable slots restored.',
       targetClass: selectedClass as string
-    });
+    };
+    setDuplicationSuccessAlert(successAlert);
+    localStorage.setItem('gsss_duplication_success_alert', JSON.stringify(successAlert));
+
     fetchLocalData();
   };
 
@@ -2134,7 +2169,11 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       </button>
                     )}
                     <button
-                      onClick={() => setDuplicationSuccessAlert(null)}
+                      onClick={() => {
+                        setDuplicationSuccessAlert(null);
+                        localStorage.removeItem('gsss_duplication_success_alert');
+                        localStorage.removeItem('gsss_duplication_undo_state');
+                      }}
                       className="text-emerald-500 hover:text-emerald-800 p-1 cursor-pointer"
                     >
                       <X className="w-4 h-4" />

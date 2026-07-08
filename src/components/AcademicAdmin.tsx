@@ -681,6 +681,30 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [quickConflictWarning, setQuickConflictWarning] = useState<string | null>(null);
   const [quickForceConflict, setQuickForceConflict] = useState(false);
 
+  // Day Duplication States
+  const [isDuplicatingDay, setIsDuplicatingDay] = useState(false);
+  const [duplicationSourceDay, setDuplicationSourceDay] = useState<string>('Monday');
+  const [duplicationDestDays, setDuplicationDestDays] = useState<string[]>([]);
+  const [copyTeachers, setCopyTeachers] = useState(true);
+  const [copySubjects, setCopySubjects] = useState(true);
+  const [copyTimeSlots, setCopyTimeSlots] = useState(true);
+  const [destinationStrategy, setDestinationStrategy] = useState<'replace' | 'merge' | 'cancel'>('cancel');
+  const [duplicationConflictBypass, setDuplicationConflictBypass] = useState(false);
+  const [duplicationError, setDuplicationError] = useState<string | null>(null);
+  const [duplicationConflicts, setDuplicationConflicts] = useState<string[]>([]);
+  
+  // Duplication Alert Banner & Undo State
+  const [duplicationSuccessAlert, setDuplicationSuccessAlert] = useState<{
+    message: string;
+    detail: string;
+    targetClass: string;
+  } | null>(null);
+  const [duplicationUndoState, setDuplicationUndoState] = useState<{
+    createdEntryIds: string[];
+    restoredEntries: RoutineEntry[];
+    targetClass: string;
+  } | null>(null);
+
   // Load Routines and standard configurations
   const fetchLocalData = () => {
     setRoutines(dbService.getRoutines());
@@ -914,6 +938,206 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setConflictWarning(null);
     setForceConflict(false);
     setEntryForm({ day: 'Monday', period: 'Period 1', time_range: '09:00 AM - 09:45 AM', subject: '', teacher: '', teacher_id: undefined });
+    fetchLocalData();
+  };
+
+  const handleDuplicateDaySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRoutine) return;
+
+    setDuplicationError(null);
+    setDuplicationConflicts([]);
+
+    // Check if source day has entries
+    const sourceEntries = entries.filter(
+      ent => ent.routine_id === activeRoutine.id && ent.day === duplicationSourceDay
+    );
+
+    if (sourceEntries.length === 0) {
+      setDuplicationError(`No entries found on the source day (${duplicationSourceDay}) to duplicate.`);
+      return;
+    }
+
+    if (duplicationDestDays.length === 0) {
+      setDuplicationError('Please select at least one destination day.');
+      return;
+    }
+
+    if (duplicationDestDays.includes(duplicationSourceDay)) {
+      setDuplicationError('Source day cannot be selected as a destination day.');
+      return;
+    }
+
+    // Check if any destination day already has entries
+    const hasExistingEntries = duplicationDestDays.some(destDay =>
+      entries.some(ent => ent.routine_id === activeRoutine.id && ent.day === destDay)
+    );
+
+    if (hasExistingEntries && destinationStrategy === 'cancel') {
+      setDuplicationError('Destination days already contain routine entries. Please choose "Replace Existing Entries" or "Merge Into Empty Periods" to proceed.');
+      return;
+    }
+
+    // Run Pre-validation & Teacher Conflict checks on all cloned entries to build list of conflicts
+    let conflictsList: string[] = [];
+    const prospectiveEntriesToCreate: RoutineEntry[] = [];
+    const restoredEntriesList: RoutineEntry[] = [];
+    let skippedCount = 0;
+    let copiedCount = 0;
+
+    // We do a target-by-target mock clone to do checks
+    for (const destDay of duplicationDestDays) {
+      const existingDestEntries = entries.filter(
+        ent => ent.routine_id === activeRoutine.id && ent.day === destDay
+      );
+
+      for (const sourceEnt of sourceEntries) {
+        if (existingDestEntries.length > 0 && destinationStrategy === 'merge') {
+          // Check if there's already an entry for this period or overlapping slot
+          const hasOverlap = existingDestEntries.some(
+            ent => ent.period === sourceEnt.period || ent.time_range === sourceEnt.time_range
+          );
+          if (hasOverlap) {
+            skippedCount++;
+            continue;
+          }
+        }
+
+        // Create virtual cloned entry for conflict check
+        const matchedMaster = periodMasters.find(pm => pm.name === sourceEnt.period);
+        const defaultTimeRange = matchedMaster ? matchedMaster.time_range : '00:00 AM - 00:00 AM';
+
+        const teacherName = copyTeachers ? (sourceEnt.teacher || '') : '';
+        const teacherId = copyTeachers ? sourceEnt.teacher_id : undefined;
+
+        const prospectiveEnt: RoutineEntry = {
+          id: `temp_${Math.random()}`,
+          routine_id: activeRoutine.id,
+          day: destDay as any,
+          period: sourceEnt.period,
+          time_range: copyTimeSlots ? (sourceEnt.time_range || '') : defaultTimeRange,
+          subject: copySubjects ? (sourceEnt.subject || '') : '',
+          teacher: teacherName,
+          teacher_id: teacherId
+        };
+
+        prospectiveEntriesToCreate.push(prospectiveEnt);
+
+        // Check teacher conflict on this destination day (only if copyTeachers is true and teacher is set)
+        if (copyTeachers && teacherName) {
+          const conflictClass = checkTeacherConflict(
+            prospectiveEnt.day,
+            prospectiveEnt.period,
+            teacherName,
+            teacherId,
+            undefined, // no editing id
+            selectedClass as string
+          );
+          if (conflictClass) {
+            conflictsList.push(
+              `Teacher "${teacherName}" is already assigned to ${conflictClass} on ${prospectiveEnt.day} during ${prospectiveEnt.period}.`
+            );
+          }
+        }
+      }
+    }
+
+    // If there are conflicts and we haven't bypassed them, show warning and return
+    if (conflictsList.length > 0 && !duplicationConflictBypass) {
+      setDuplicationConflicts(conflictsList);
+      return;
+    }
+
+    // Perform actual write operations
+    let updatedEntries = [...entries];
+
+    // Track for undo
+    const newlyCreatedIds: string[] = [];
+    const newlyCreatedEntries: RoutineEntry[] = [];
+
+    for (const destDay of duplicationDestDays) {
+      const existingDestEntries = entries.filter(
+        ent => ent.routine_id === activeRoutine.id && ent.day === destDay
+      );
+
+      if (existingDestEntries.length > 0) {
+        if (destinationStrategy === 'replace') {
+          // Add existing entries to restored list
+          restoredEntriesList.push(...existingDestEntries);
+          // Remove them from updated entries
+          updatedEntries = updatedEntries.filter(
+            ent => !(ent.routine_id === activeRoutine.id && ent.day === destDay)
+          );
+        }
+      }
+
+      // Filter prospective entries to this destDay
+      const entriesToCreateForThisDay = prospectiveEntriesToCreate.filter(e => e.day === destDay);
+      for (const prospectiveEnt of entriesToCreateForThisDay) {
+        // Generate new real UUID
+        const realId = `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}_${Math.random().toString(36).substring(2,7)}`;
+        const finalEnt: RoutineEntry = {
+          ...prospectiveEnt,
+          id: realId
+        };
+        newlyCreatedIds.push(realId);
+        newlyCreatedEntries.push(finalEnt);
+        updatedEntries.push(finalEnt);
+        copiedCount++;
+      }
+    }
+
+    // Save to DB
+    dbService.saveRoutineEntries(updatedEntries);
+
+    // Setup success message and undo state
+    let detailMessage = '';
+    if (destinationStrategy === 'merge') {
+      detailMessage = `${copiedCount} periods copied. ${skippedCount > 0 ? `${skippedCount} periods skipped because they already existed.` : ''}`;
+    } else if (destinationStrategy === 'replace') {
+      detailMessage = `${restoredEntriesList.length} previous entries replaced. ${copiedCount} new entries created.`;
+    } else {
+      detailMessage = `${copiedCount} periods copied successfully.`;
+    }
+
+    setDuplicationSuccessAlert({
+      message: `${duplicationSourceDay} successfully duplicated to: ${duplicationDestDays.join(', ')}`,
+      detail: detailMessage,
+      targetClass: selectedClass as string
+    });
+
+    setDuplicationUndoState({
+      createdEntryIds: newlyCreatedIds,
+      restoredEntries: restoredEntriesList,
+      targetClass: selectedClass as string
+    });
+
+    // Reset state & close modal
+    setIsDuplicatingDay(false);
+    setDuplicationConflicts([]);
+    setDuplicationConflictBypass(false);
+    fetchLocalData();
+  };
+
+  const handleDuplicationUndo = () => {
+    if (!duplicationUndoState) return;
+
+    const { createdEntryIds, restoredEntries } = duplicationUndoState;
+
+    // Remove the newly created entries
+    let updatedEntries = entries.filter(ent => !createdEntryIds.includes(ent.id));
+
+    // Restore the original entries that were replaced
+    updatedEntries = [...updatedEntries, ...restoredEntries];
+
+    // Save and refresh
+    dbService.saveRoutineEntries(updatedEntries);
+    setDuplicationUndoState(null);
+    setDuplicationSuccessAlert({
+      message: 'Duplication undone successfully!',
+      detail: 'Original timetable slots restored.',
+      targetClass: selectedClass as string
+    });
     fetchLocalData();
   };
 
@@ -1884,6 +2108,297 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           ) : (
             /* ONLINE TIMETABLE GRID MATRIX */
             <div className="space-y-4">
+              {/* Duplication Success Alert with optional Undo */}
+              {duplicationSuccessAlert && duplicationSuccessAlert.targetClass === selectedClass && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start justify-between gap-3 shadow-4xs animate-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-start gap-3">
+                    <span className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold font-mono">
+                      ✓
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-xs font-extrabold text-emerald-900 leading-none">
+                        {duplicationSuccessAlert.message}
+                      </p>
+                      <p className="text-[11px] text-emerald-700 font-medium font-sans">
+                        {duplicationSuccessAlert.detail}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {duplicationUndoState && duplicationUndoState.targetClass === selectedClass && (
+                      <button
+                        onClick={handleDuplicationUndo}
+                        className="px-2.5 py-1.5 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer transition-all shadow-4xs"
+                      >
+                        Undo
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDuplicationSuccessAlert(null)}
+                      className="text-emerald-500 hover:text-emerald-800 p-1 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* DAY DUPLICATION MODAL */}
+              {isDuplicatingDay && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+                  <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5 animate-in zoom-in-95 duration-150 text-left">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-orange-500 animate-pulse" />
+                        <h3 className="text-slate-900 font-black text-sm uppercase tracking-wider">
+                          Smart Day Duplication
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsDuplicatingDay(false);
+                          setDuplicationConflicts([]);
+                        }}
+                        className="text-slate-400 hover:text-slate-600 transition p-1 cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleDuplicateDaySubmit} className="space-y-4 text-xs font-semibold font-sans">
+                      
+                      {/* Source Day Selector */}
+                      <div className="space-y-1.5">
+                        <label className="text-slate-500 block text-[10px] uppercase font-mono font-bold tracking-wider text-left">
+                          Source Day
+                        </label>
+                        <select
+                          value={duplicationSourceDay}
+                          onChange={(e) => {
+                            setDuplicationSourceDay(e.target.value);
+                            setDuplicationDestDays(prev => prev.filter(day => day !== e.target.value));
+                          }}
+                          className="w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:outline-orange-500 text-slate-800 font-bold font-sans text-xs transition animate-none"
+                        >
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-400 italic font-medium leading-none text-left">
+                          All period slots configured on {duplicationSourceDay} will be cloned.
+                        </p>
+                      </div>
+
+                      {/* Destination Days Checkboxes */}
+                      <div className="space-y-2">
+                        <label className="text-slate-500 block text-[10px] uppercase font-mono font-bold tracking-wider text-left">
+                          Destination Days (Target)
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+                            const isSource = day === duplicationSourceDay;
+                            return (
+                              <label
+                                key={day}
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition select-none cursor-pointer ${
+                                  isSource
+                                    ? 'bg-slate-50 border-slate-150 text-slate-400 cursor-not-allowed opacity-60'
+                                    : duplicationDestDays.includes(day)
+                                    ? 'bg-orange-50/50 border-orange-200 text-orange-900 shadow-4xs'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={isSource}
+                                  checked={duplicationDestDays.includes(day)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setDuplicationDestDays([...duplicationDestDays, day]);
+                                    } else {
+                                      setDuplicationDestDays(duplicationDestDays.filter(d => d !== day));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer disabled:cursor-not-allowed"
+                                />
+                                <span>{day}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Copy Options */}
+                      <div className="space-y-2">
+                        <label className="text-slate-500 block text-[10px] uppercase font-mono font-bold tracking-wider text-left">
+                          Copy Options
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-150 text-left">
+                          <label className="flex items-center gap-2 text-[11px] font-bold text-slate-700 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={copyTeachers}
+                              onChange={(e) => setCopyTeachers(e.target.checked)}
+                              className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                            />
+                            <span>Copy Teachers</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-[11px] font-bold text-slate-700 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={copySubjects}
+                              onChange={(e) => setCopySubjects(e.target.checked)}
+                              className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                            />
+                            <span>Copy Subjects</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-[11px] font-bold text-slate-700 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={copyTimeSlots}
+                              onChange={(e) => setCopyTimeSlots(e.target.checked)}
+                              className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                            />
+                            <span>Copy Time Slots</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Check if existing destination days have entries to prompt Strategy selection */}
+                      {duplicationDestDays.length > 0 &&
+                        duplicationDestDays.some(destDay =>
+                          entries.some(ent => ent.routine_id === activeRoutine.id && ent.day === destDay)
+                        ) && (
+                          <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3 text-left">
+                            <div className="flex items-start gap-2 text-amber-900">
+                              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                              <div className="space-y-1">
+                                <p className="text-xs font-black">Destination already contains routine entries.</p>
+                                <p className="text-[10.5px] font-medium text-amber-700 leading-normal">
+                                  One or more selected destination days already have schedules configured. Select a strategy to resolve conflicts:
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                              <label className="flex items-center gap-2 p-2.5 rounded-xl border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 transition cursor-pointer select-none">
+                                <input
+                                  type="radio"
+                                  name="destinationStrategy"
+                                  value="replace"
+                                  checked={destinationStrategy === 'replace'}
+                                  onChange={() => setDestinationStrategy('replace')}
+                                  className="text-orange-500 focus:ring-orange-500"
+                                />
+                                <div className="leading-tight">
+                                  <span className="block text-[11px] font-bold text-slate-900">Replace</span>
+                                  <span className="text-[9px] text-slate-450 font-medium">Clear target entries</span>
+                                </div>
+                              </label>
+
+                              <label className="flex items-center gap-2 p-2.5 rounded-xl border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 transition cursor-pointer select-none">
+                                <input
+                                  type="radio"
+                                  name="destinationStrategy"
+                                  value="merge"
+                                  checked={destinationStrategy === 'merge'}
+                                  onChange={() => setDestinationStrategy('merge')}
+                                  className="text-orange-500 focus:ring-orange-500"
+                                />
+                                <div className="leading-tight">
+                                  <span className="block text-[11px] font-bold text-slate-900">Merge</span>
+                                  <span className="text-[9px] text-slate-450 font-medium">Skip occupied periods</span>
+                                </div>
+                              </label>
+
+                              <label className="flex items-center gap-2 p-2.5 rounded-xl border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 transition cursor-pointer select-none">
+                                <input
+                                  type="radio"
+                                  name="destinationStrategy"
+                                  value="cancel"
+                                  checked={destinationStrategy === 'cancel'}
+                                  onChange={() => setDestinationStrategy('cancel')}
+                                  className="text-orange-500 focus:ring-orange-500"
+                                />
+                                <div className="leading-tight">
+                                  <span className="block text-[11px] font-bold text-slate-900">Cancel</span>
+                                  <span className="text-[9px] text-slate-450 font-medium">Do not duplicate</span>
+                                </div>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
+                      {/* Warnings / Teacher conflicts list */}
+                      {duplicationConflicts.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl space-y-3 text-amber-900 text-left">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                            <div className="space-y-1">
+                              <p className="text-xs font-black">Teacher Collision Warning</p>
+                              <p className="text-[10.5px] font-medium text-amber-700">
+                                The duplication would cause scheduling conflicts for the following teachers:
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="max-h-[120px] overflow-y-auto border border-amber-200/50 bg-white/50 p-2.5 rounded-lg space-y-1 text-[10.5px] font-sans font-medium text-amber-800 list-inside divide-y divide-amber-100/50">
+                            {duplicationConflicts.map((conf, idx) => (
+                              <div key={idx} className="py-1 first:pt-0 last:pb-0 flex items-start gap-1.5 leading-snug text-left">
+                                <span className="text-amber-500 shrink-0 font-mono">•</span>
+                                <span>{conf}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <label className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-amber-800 tracking-wider uppercase cursor-pointer select-none text-left">
+                            <input
+                              type="checkbox"
+                              checked={duplicationConflictBypass}
+                              onChange={(e) => setDuplicationConflictBypass(e.target.checked)}
+                              className="rounded border-amber-300 text-amber-600"
+                            />
+                            <span>Bypass teacher warnings and force save</span>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Strict blocker errors */}
+                      {duplicationError && (
+                        <div className="bg-red-50 border border-red-200 p-3 rounded-xl flex items-start gap-2.5 text-red-800 text-left">
+                          <AlertTriangle className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-[10px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Validation Blocker</p>
+                            <p className="text-[10.5px] leading-normal font-medium">{duplicationError}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Modal Footer / Actions */}
+                      <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDuplicatingDay(false);
+                            setDuplicationConflicts([]);
+                          }}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer transition text-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl flex items-center gap-1.5 font-bold cursor-pointer shadow-xs transition text-xs"
+                        >
+                          <Save className="w-4 h-4" />
+                          Duplicate Day
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
@@ -1895,27 +2410,49 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                 </div>
 
                 {!isAddingEntry && (
-                  <button
-                    onClick={() => {
-                      setEditingEntryId(null);
-                      setEntryForm({
-                        day: 'Monday',
-                        period: 'Period 1',
-                        time_range: '09:00 AM - 09:45 AM',
-                        subject: '',
-                        teacher: ''
-                      });
-                      setIsManualTeacher(false);
-                      setIsAddingEntry(true);
-                      setConflictWarning(null);
-                      setForceConflict(false);
-                      setFormError(null);
-                    }}
-                    className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Append Period Lecture
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      id="trigger-duplicate-day-btn"
+                      onClick={() => {
+                        setDuplicationSourceDay('Monday');
+                        setDuplicationDestDays([]);
+                        setCopyTeachers(true);
+                        setCopySubjects(true);
+                        setCopyTimeSlots(true);
+                        setDestinationStrategy('cancel');
+                        setDuplicationConflictBypass(false);
+                        setDuplicationError(null);
+                        setDuplicationConflicts([]);
+                        setIsDuplicatingDay(true);
+                      }}
+                      className="py-2 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-4xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:border-slate-300"
+                    >
+                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      Duplicate Day
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingEntryId(null);
+                        setEntryForm({
+                          day: 'Monday',
+                          period: 'Period 1',
+                          time_range: '09:00 AM - 09:45 AM',
+                          subject: '',
+                          teacher: ''
+                        });
+                        setIsManualTeacher(false);
+                        setIsAddingEntry(true);
+                        setConflictWarning(null);
+                        setForceConflict(false);
+                        setFormError(null);
+                      }}
+                      className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Append Period Lecture
+                    </button>
+                  </div>
                 )}
               </div>
 

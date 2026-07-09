@@ -52,18 +52,9 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
 
   useDataSync(loadData, 'ConsolidatedRoutineMatrix');
 
-  const dynamicClasses: AcademicClass[] = Array.from(
-    new Set([
-      'Class 9',
-      'Class 10',
-      'Class 11',
-      'Class 12',
-      ...routines.map(r => r.class_name)
-    ] as AcademicClass[])
-  ).filter((cls) => {
-    const val = String(cls).trim();
-    return val && val !== 'FullMatrix' && val !== 'PeriodsMaster' && val !== 'Combined';
-  });
+  const dynamicClasses: AcademicClass[] = dbService.getTimetableGroups()
+    .filter(g => g.is_active)
+    .map(g => g.name);
 
   const dynamicPeriodNames = periodMasters.map(pm => pm.name);
   const foundPeriodNames = entries.map(e => e.period) as string[];

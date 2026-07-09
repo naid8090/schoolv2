@@ -27,7 +27,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { dbService, generateUUID } from '../services/db';
-import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty } from '../types';
+import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty, TimetableGroup } from '../types';
 import { MediaSelectorModal } from './MediaLibrary';
 import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
 import { ResponsiveEntityCard, SharedEmptyState } from './ResponsiveEntityCard';
@@ -520,6 +520,370 @@ const PeriodsMasterWorkspace: React.FC<{
   );
 };
 
+interface GroupsRegistryWorkspaceProps {
+  fetchLocalData: () => void;
+  routines: Routine[];
+  entries: RoutineEntry[];
+}
+
+const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetchLocalData, routines, entries }) => {
+  const [groups, setGroups] = useState<TimetableGroup[]>([]);
+  const [name, setName] = useState('');
+  const [parentGrade, setParentGrade] = useState('');
+  const [stream, setStream] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [displayOrder, setDisplayOrder] = useState<number>(1);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadGroups = () => {
+    setGroups(dbService.getTimetableGroups());
+  };
+
+  useEffect(() => {
+    loadGroups();
+  }, []);
+
+  useEffect(() => {
+    if (!editingId) {
+      setDisplayOrder(groups.length + 1);
+    }
+  }, [groups, editingId]);
+
+  const resetForm = () => {
+    setName('');
+    setParentGrade('');
+    setStream('');
+    setNotes('');
+    setIsActive(true);
+    setDisplayOrder(groups.length + 1);
+    setEditingId(null);
+    setError(null);
+  };
+
+  const handleEditStart = (group: TimetableGroup) => {
+    setEditingId(group.id);
+    setName(group.name);
+    setParentGrade(group.parent_grade || '');
+    setStream(group.stream || '');
+    setNotes(group.notes || '');
+    setIsActive(group.is_active);
+    setDisplayOrder(group.display_order);
+    setError(null);
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim()) {
+      setError('Group display name is required.');
+      return;
+    }
+
+    const isDuplicate = groups.some(
+      g => g.name.toLowerCase() === name.trim().toLowerCase() && g.id !== editingId
+    );
+    if (isDuplicate) {
+      setError('A timetable group with this name already exists.');
+      return;
+    }
+
+    let updatedGroups = [...groups];
+
+    if (editingId) {
+      updatedGroups = updatedGroups.map(g => {
+        if (g.id === editingId) {
+          return {
+            ...g,
+            name: name.trim(),
+            parent_grade: parentGrade.trim() || undefined,
+            stream: stream.trim() || undefined,
+            notes: notes.trim() || undefined,
+            is_active: isActive,
+            display_order: displayOrder,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return g;
+      });
+    } else {
+      const newGroup: TimetableGroup = {
+        id: generateUUID(),
+        name: name.trim(),
+        parent_grade: parentGrade.trim() || undefined,
+        stream: stream.trim() || undefined,
+        notes: notes.trim() || undefined,
+        is_active: isActive,
+        display_order: displayOrder,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      updatedGroups.push(newGroup);
+    }
+
+    updatedGroups.sort((a, b) => a.display_order - b.display_order);
+
+    dbService.saveTimetableGroups(updatedGroups);
+    loadGroups();
+    fetchLocalData();
+    resetForm();
+  };
+
+  const handleToggleActive = (group: TimetableGroup) => {
+    const updated = groups.map(g => {
+      if (g.id === group.id) {
+        return {
+          ...g,
+          is_active: !g.is_active,
+          updated_at: new Date().toISOString()
+        };
+      }
+      return g;
+    });
+    dbService.saveTimetableGroups(updated);
+    loadGroups();
+    fetchLocalData();
+  };
+
+  const handleDelete = (group: TimetableGroup) => {
+    const matchingRoutine = routines.find(r => r.class_name === group.name);
+    if (matchingRoutine) {
+      const hasEntries = entries.some(e => e.routine_id === matchingRoutine.id);
+      if (hasEntries) {
+        setError(`Cannot delete "${group.name}". This timetable group is currently associated with active timetable slots.`);
+        return;
+      }
+      setError(`Cannot delete "${group.name}". A routine grid exists for this timetable group. Please clear the routine structure first.`);
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete "${group.name}"?`)) {
+      dbService.deleteTimetableGroup(group.id);
+      loadGroups();
+      fetchLocalData();
+      resetForm();
+    }
+  };
+
+  return (
+    <div className="bg-white border border-slate-150 rounded-2xl p-6 shadow-3xs animate-in fade-in duration-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-purple-600 animate-pulse" />
+            <h3 className="text-slate-900 text-sm font-black uppercase tracking-wider">
+              Timetable Group Registry
+            </h3>
+          </div>
+          <p className="text-slate-500 text-[11px] font-sans mt-0.5 leading-relaxed">
+            Manage your school's classes, streams, and special course sections dynamically. These groups act as the columns of your active routines.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-6">
+        <div className="xl:col-span-1 bg-slate-50 border border-slate-200/60 rounded-xl p-5 self-start">
+          <h4 className="text-slate-800 text-xs font-black uppercase tracking-wider mb-4">
+            {editingId ? '📝 Edit Timetable Group' : '✨ Add New Group'}
+          </h4>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-600 font-bold leading-relaxed">
+              ⚠️ {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                Display Name *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Class 11 Science, Class 12 Arts"
+                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                  Parent Grade (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={parentGrade}
+                  onChange={(e) => setParentGrade(e.target.value)}
+                  placeholder="e.g., 11, 12"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                  Stream/Section (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={stream}
+                  onChange={(e) => setStream(e.target.value)}
+                  placeholder="e.g., Science, Arts"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                  Display Order
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={displayOrder}
+                  onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 1)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                />
+              </div>
+              <div className="flex items-center pt-6 pl-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                  />
+                  <span>Active</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                Notes
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Provide internal notes or details..."
+                rows={3}
+                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="submit"
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs uppercase cursor-pointer"
+              >
+                {editingId ? 'Update Group' : 'Add Group'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-lg transition text-xs uppercase cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="xl:col-span-2 space-y-4">
+          <div className="overflow-x-auto border border-slate-150 rounded-xl">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
+                  <th className="p-3 w-16 text-center border-r border-slate-150">Order</th>
+                  <th className="p-3 border-r border-slate-150">Display Name</th>
+                  <th className="p-3 border-r border-slate-150">Meta info</th>
+                  <th className="p-3 w-28 text-center border-r border-slate-150">Status</th>
+                  <th className="p-3 w-32 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
+                {groups.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
+                      No timetable groups registered. Seeding default groups...
+                    </td>
+                  </tr>
+                ) : (
+                  groups.map((g) => (
+                    <tr key={g.id} className="hover:bg-slate-50/40">
+                      <td className="p-3 text-center border-r border-slate-150 font-mono font-bold text-slate-500">
+                        {g.display_order}
+                      </td>
+                      <td className="p-3 border-r border-slate-150">
+                        <div className="font-extrabold text-slate-800">{g.name}</div>
+                        {g.notes && <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{g.notes}</div>}
+                      </td>
+                      <td className="p-3 border-r border-slate-150 text-slate-600 font-medium">
+                        <div className="space-y-0.5">
+                          {g.parent_grade && (
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Grade:</span>
+                              <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-mono text-[10px]">{g.parent_grade}</span>
+                            </div>
+                          )}
+                          {g.stream && (
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Stream:</span>
+                              <span className="bg-purple-50 text-purple-700 px-1.5 py-0.2 rounded text-[10px] font-semibold">{g.stream}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-center border-r border-slate-150">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(g)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-sans text-[10px] font-bold uppercase transition cursor-pointer ${
+                            g.is_active
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              : 'bg-red-50 text-red-600 hover:bg-red-100'
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${g.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                          {g.is_active ? 'Active' : 'Inactive'}
+                        </button>
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditStart(g)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-md transition cursor-pointer"
+                            title="Edit Group"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(g)}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 p-1.5 rounded-md transition cursor-pointer"
+                            title="Delete Group"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============================================================================
 // A. ROUTINES ADMINISTRATIVE MODULE
 // ============================================================================
@@ -528,7 +892,8 @@ interface ModuleSubProps {
 }
 
 const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
-  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix'>('Class 9');
+  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry'>('Class 9');
+  const [timetableGroups, setTimetableGroups] = useState<TimetableGroup[]>(dbService.getTimetableGroups());
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
   const [faculty, setFaculty] = useState<Faculty[]>([]);
@@ -725,17 +1090,18 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setEntries(dbService.getRoutineEntries());
     setFaculty(dbService.getFaculty());
     setPeriodMasters(dbService.getPeriodMasters());
+    setTimetableGroups(dbService.getTimetableGroups());
   };
 
   useEffect(() => {
     fetchLocalData();
   }, []);
 
-  const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix') ? routines.find(r => r.class_name === selectedClass) : undefined;
+  const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry') ? routines.find(r => r.class_name === selectedClass) : undefined;
   const classEntries = activeRoutine ? entries.filter(e => e.routine_id === activeRoutine?.id) : [];
 
   const initClassRoutineIfMissing = () => {
-    if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix') return;
+    if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix' || selectedClass === 'GroupsRegistry') return;
     const list = dbService.getRoutines();
     let current = list.find(r => r.class_name === selectedClass);
     if (!current) {
@@ -801,7 +1167,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       `Select PDF for ${selectedClass} Timetable`,
       (url) => {
         if (pdfApplyTarget === 'all') {
-          const classesToApply: AcademicClass[] = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+          const classesToApply = allClasses;
           let currentRoutines = [...routines];
           
           classesToApply.forEach((cls) => {
@@ -1314,8 +1680,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setEditingCombinedCell(null);
   };
 
-  // List of all 4 standard classes
-  const allClasses: AcademicClass[] = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+  // List of active classes from the Timetable Group Registry
+  const allClasses: AcademicClass[] = timetableGroups.filter(g => g.is_active).map(g => g.name);
 
   const getTeacherWorkloadData = () => {
     // 1. Unique faculty members
@@ -1580,21 +1946,21 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
             Academic Grade Division
           </span>
           <div className="space-y-1">
-            {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => (
+            {timetableGroups.filter(g => g.is_active).map((g) => (
               <button
-                key={cls}
+                key={g.id}
                 onClick={() => {
-                  setSelectedClass(cls);
+                  setSelectedClass(g.name);
                   setIsAddingEntry(false);
                   setEditingEntryId(null);
                 }}
                 className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer ${
-                  selectedClass === cls
+                  selectedClass === g.name
                     ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-55 hover:bg-slate-50'
                 }`}
               >
-                {cls}
+                {g.name}
               </button>
             ))}
             
@@ -1637,6 +2003,18 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
               >
                 <span>⏱️ Periods Master</span>
                 <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono font-bold uppercase">Setup</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedClass('GroupsRegistry')}
+                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
+                  selectedClass === 'GroupsRegistry'
+                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/10'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span>📂 Groups Registry</span>
+                <span className="text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold uppercase">CRUD</span>
               </button>
             </div>
           </div>
@@ -1694,7 +2072,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       <div className="lg:col-span-3 space-y-6">
         
         {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
-        {selectedClass === 'PeriodsMaster' ? (
+        {selectedClass === 'GroupsRegistry' ? (
+          <GroupsRegistryWorkspace 
+            fetchLocalData={fetchLocalData} 
+            routines={routines}
+            entries={entries}
+          />
+        ) : selectedClass === 'PeriodsMaster' ? (
           <PeriodsMasterWorkspace 
             periodMasters={periodMasters} 
             setPeriodMasters={setPeriodMasters} 
@@ -1722,10 +2106,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                   <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
                     <th className="p-3 w-28 border-r border-slate-150">Day</th>
                     <th className="p-3 w-32 border-r border-slate-150">Period</th>
-                    <th className="p-3 border-r border-slate-150">Class 9</th>
-                    <th className="p-3 border-r border-slate-150">Class 10</th>
-                    <th className="p-3 border-r border-slate-150">Class 11</th>
-                    <th className="p-3">Class 12</th>
+                    {allClasses.map((cls, idx) => (
+                      <th key={cls} className={`p-3 ${idx < allClasses.length - 1 ? 'border-r border-slate-150' : ''}`}>{cls}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
@@ -1742,7 +2125,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                           <span className="text-[10px] text-slate-400 font-medium leading-tight">{getPeriodTimeCombined(period) || 'Timing unset'}</span>
                         </td>
                         
-                        {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => {
+                        {allClasses.map((cls) => {
                           const matched = getCombinedEntry(cls, day, period);
                           return (
                             <td 
@@ -1989,13 +2372,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       <span className="block text-[10.5px] uppercase font-mono font-bold tracking-wider text-slate-500">
                         Assignment Scope:
                       </span>
-                      {routines.filter(r => r.pdf_url && r.pdf_url === activeRoutine.pdf_url).length === 4 ? (
+                      {routines.filter(r => r.pdf_url && r.pdf_url === activeRoutine.pdf_url).length === allClasses.length ? (
                         <div>
                           <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
                             <span className="text-emerald-600 font-extrabold">✓</span> Applied to <span className="text-orange-600">All Classes</span>
                           </p>
                           <div className="grid grid-cols-2 gap-1.5 mt-2 pl-4">
-                            {['Class 9', 'Class 10', 'Class 11', 'Class 12'].map((cls) => (
+                            {allClasses.map((cls) => (
                               <div key={cls} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
                                 <span className="text-emerald-500 font-bold">✓</span> {cls}
                               </div>
@@ -2008,7 +2391,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                             Applied to custom classes:
                           </p>
                           <div className="flex flex-wrap gap-2.5 mt-1.5">
-                            {['Class 9', 'Class 10', 'Class 11', 'Class 12'].map((cls) => {
+                            {allClasses.map((cls) => {
                               const hasIt = routines.some(r => r.class_name === cls && r.pdf_url === activeRoutine.pdf_url);
                               return (
                                 <div key={cls} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${

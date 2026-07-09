@@ -18,7 +18,8 @@ import {
   ExamEntry, 
   CalendarEvent, 
   SchoolEvent, 
-  SchoolEventImage 
+  SchoolEventImage,
+  TimetableGroup
 } from '../types';
 
 /**
@@ -473,6 +474,36 @@ class SupabaseDbService {
         console.error('[QUERY ERROR AFTER DELETE]:', countError);
       }
     }
+  }
+
+  async getTimetableGroups(): Promise<TimetableGroup[]> {
+    const { data, error } = await supabase
+      .from('timetable_groups')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching timetable groups from Supabase:', error.message);
+      return [];
+    }
+    return data as TimetableGroup[];
+  }
+
+  async saveTimetableGroups(groups: TimetableGroup[]): Promise<void> {
+    const { error } = await supabase
+      .from('timetable_groups')
+      .upsert(groups);
+
+    if (error) throw error;
+  }
+
+  async deleteTimetableGroup(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('timetable_groups')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
   async getTimetableLastUpdated(): Promise<string> {

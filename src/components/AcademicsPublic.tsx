@@ -24,7 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import { dbService } from '../services/db';
-import { Routine, RoutineEntry, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass } from '../types';
+import { Routine, RoutineEntry, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, TimetableGroup } from '../types';
 import { ConsolidatedRoutineMatrix } from './ConsolidatedRoutineMatrix';
 import { useDataSync } from '../hooks/useDataSync';
 
@@ -79,7 +79,11 @@ const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'S
 // 1. CLASS ROUTINE MODULE
 // ==========================================
 export const ClassRoutinePage: React.FC = () => {
-  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'FullMatrix'>('Class 9');
+  const [timetableGroups, setTimetableGroups] = useState<TimetableGroup[]>(dbService.getTimetableGroups());
+  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'FullMatrix'>(() => {
+    const active = dbService.getTimetableGroups().filter(g => g.is_active);
+    return active.length > 0 ? active[0].name : 'Class 9';
+  });
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
   const [faculty, setFaculty] = useState<any[]>([]);
@@ -91,6 +95,7 @@ export const ClassRoutinePage: React.FC = () => {
     console.log('[ACADEMICS STATE UPDATED]');
     setEntries(dbService.getRoutineEntries());
     setFaculty(dbService.getFaculty());
+    setTimetableGroups(dbService.getTimetableGroups());
   };
 
   useEffect(() => {
@@ -142,12 +147,25 @@ export const ClassRoutinePage: React.FC = () => {
 
   const anyClassPdf = routines.some(r => r.display_mode === 'pdf');
 
-  // Recover selected class automatically if state is invalid under PDF constraints
+  // Recover selected class automatically if state is invalid under PDF constraints or dynamic registry changes
+  useEffect(() => {
+    const activeGroups = timetableGroups.filter(g => g.is_active);
+    if (activeGroups.length > 0) {
+      const isSelectedClassValid = activeGroups.some(g => g.name === selectedClass);
+      if (!isSelectedClassValid && selectedClass !== 'FullMatrix') {
+        setSelectedClass(activeGroups[0].name);
+      }
+    }
+  }, [timetableGroups, selectedClass]);
+
   useEffect(() => {
     if (anyClassPdf && selectedClass === 'FullMatrix') {
-      setSelectedClass('Class 9');
+      const activeGroups = timetableGroups.filter(g => g.is_active);
+      if (activeGroups.length > 0) {
+        setSelectedClass(activeGroups[0].name);
+      }
     }
-  }, [routines, selectedClass, anyClassPdf]);
+  }, [routines, selectedClass, anyClassPdf, timetableGroups]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="class-routine-public">
@@ -169,17 +187,17 @@ export const ClassRoutinePage: React.FC = () => {
       {/* Class Level Selection Buttons (Hidden in simplified mode) */}
       {!isSimplifiedPdfMode && (
         <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-100 p-1.5 rounded-xl max-w-xl">
-          {(['Class 9', 'Class 10', 'Class 11', 'Class 12'] as AcademicClass[]).map((cls) => (
+          {timetableGroups.filter(g => g.is_active).map((g) => (
             <button
-              key={cls}
-              onClick={() => setSelectedClass(cls)}
+              key={g.id}
+              onClick={() => setSelectedClass(g.name)}
               className={`flex-1 py-2.5 px-4 text-xs font-bold font-sans tracking-wide uppercase rounded-lg transition-all duration-200 cursor-pointer text-center ${
-                selectedClass === cls
+                selectedClass === g.name
                   ? 'bg-white text-orange-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/45'
               }`}
             >
-              {cls}
+              {g.name}
             </button>
           ))}
 

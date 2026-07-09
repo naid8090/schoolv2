@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage } from '../types';
+import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage, TimetableGroup } from '../types';
 import { supabase } from './supabase';
 import { supabaseDbService } from './supabaseDb';
 
@@ -472,6 +472,37 @@ const DEFAULT_FACULTY: Faculty[] = [
     featured_homepage: true,
     created_at: '2026-06-01T10:20:00Z',
     updated_at: '2026-06-01T10:20:00Z'
+  }
+];
+
+const DEFAULT_TIMETABLE_GROUPS: TimetableGroup[] = [
+  {
+    id: '99999999-9999-9999-9999-999900000009',
+    name: 'Class 9',
+    is_active: true,
+    display_order: 1,
+    parent_grade: '9'
+  },
+  {
+    id: '99999999-9999-9999-9999-999900000010',
+    name: 'Class 10',
+    is_active: true,
+    display_order: 2,
+    parent_grade: '10'
+  },
+  {
+    id: '99999999-9999-9999-9999-999900000011',
+    name: 'Class 11',
+    is_active: true,
+    display_order: 3,
+    parent_grade: '11'
+  },
+  {
+    id: '99999999-9999-9999-9999-999900000012',
+    name: 'Class 12',
+    is_active: true,
+    display_order: 4,
+    parent_grade: '12'
   }
 ];
 
@@ -1307,6 +1338,72 @@ class DatabaseService {
   // ==========================================
   // ACADEMIC MANAGEMENT METHODS
   // ==========================================
+
+  getTimetableGroups(): TimetableGroup[] {
+    const raw = this.getStorageItem<TimetableGroup[]>('gsss_timetable_groups', DEFAULT_TIMETABLE_GROUPS);
+    return raw.map(g => ({
+      ...g,
+      id: ensureValidUUID(g.id)
+    }));
+  }
+
+  saveTimetableGroups(groups: TimetableGroup[], localOnly = false): void {
+    const sanitized = groups.map(g => ({
+      ...g,
+      id: ensureValidUUID(g.id)
+    }));
+    this.setStorageItem('gsss_timetable_groups', sanitized);
+    this.updateTimetableTimestamp();
+
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+
+    if (localOnly) return;
+
+    // Persist to Supabase if timetable_groups table is available
+    // Otherwise, handle gracefully so we don't crash
+    supabase
+      .from('timetable_groups')
+      .upsert(sanitized)
+      .then(
+        ({ error }) => {
+          if (error) {
+            console.warn('[Supabase Timetable Groups Save Info]: table may not exist yet, using Local Storage as source of truth. Error:', error.message);
+          }
+        },
+        err => {
+          console.warn('[Supabase Timetable Groups Save Error Caught]:', err);
+        }
+      );
+  }
+
+  deleteTimetableGroup(id: string): void {
+    const targetId = ensureValidUUID(id);
+    const groups = this.getTimetableGroups();
+    const filtered = groups.filter(g => g.id !== targetId);
+    
+    // re-calculate order
+    filtered.forEach((g, idx) => {
+      g.display_order = idx + 1;
+    });
+
+    this.saveTimetableGroups(filtered);
+
+    // Try deleting from Supabase
+    supabase
+      .from('timetable_groups')
+      .delete()
+      .eq('id', targetId)
+      .then(
+        ({ error }) => {
+          if (error) {
+            console.warn('[Supabase Timetable Groups Delete Info]: table may not exist yet.', error.message);
+          }
+        },
+        err => {
+          console.warn('[Supabase Timetable Groups Delete Error Caught]:', err);
+        }
+      );
+  }
 
   getTimetableLastUpdated(): string {
     return this.getStorageItem<string>('gsss_timetable_last_updated', '2026-06-19T11:47:00.000Z');

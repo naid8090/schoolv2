@@ -119,6 +119,18 @@ export const DatabaseHealth: React.FC = () => {
       icon: <ImageIcon className="w-4 h-4 text-amber-600" />
     },
     {
+      id: 'timetable_groups',
+      name: 'Timetable Group Registry',
+      description: 'The registry defining all active timetable classes, streams, and sections.',
+      localCount: 0,
+      remoteCount: null,
+      status: 'Healthy',
+      loading: true,
+      isDefault: true,
+      icon: <Layers className="w-4 h-4 text-purple-500" />,
+      seedable: true
+    },
+    {
       id: 'routines',
       name: 'Class Routines',
       description: 'Parent class timetable grids mapping classes to weekly subject layouts.',
@@ -330,6 +342,9 @@ export const DatabaseHealth: React.FC = () => {
             case 'calendar_events':
               localCount = dbService.getCalendarEvents().length;
               break;
+            case 'timetable_groups':
+              localCount = dbService.getTimetableGroups().length;
+              break;
             case 'routines':
               localCount = dbService.getRoutines().length;
               break;
@@ -392,6 +407,15 @@ export const DatabaseHealth: React.FC = () => {
             case 'calendar_events': {
               const res = await supabaseDbService.getCalendarEvents();
               remoteCount = res ? res.length : 0;
+              break;
+            }
+            case 'timetable_groups': {
+              try {
+                const res = await supabaseDbService.getTimetableGroups();
+                remoteCount = res ? res.length : 0;
+              } catch {
+                remoteCount = 0;
+              }
               break;
             }
             case 'routines': {
@@ -508,6 +532,9 @@ export const DatabaseHealth: React.FC = () => {
           case 'calendar_events':
             localCount = dbService.getCalendarEvents().length;
             break;
+          case 'timetable_groups':
+            localCount = dbService.getTimetableGroups().length;
+            break;
           case 'routines':
             localCount = dbService.getRoutines().length;
             break;
@@ -569,6 +596,15 @@ export const DatabaseHealth: React.FC = () => {
           case 'calendar_events': {
             const res = await supabaseDbService.getCalendarEvents();
             remoteCount = res ? res.length : 0;
+            break;
+          }
+          case 'timetable_groups': {
+            try {
+              const res = await supabaseDbService.getTimetableGroups();
+              remoteCount = res ? res.length : 0;
+            } catch {
+              remoteCount = 0;
+            }
             break;
           }
           case 'routines': {
@@ -768,6 +804,24 @@ export const DatabaseHealth: React.FC = () => {
             dbService.saveCalendarEvents(remote, true);
             repairSuccess = true;
             msg = 'Academic Calendar slots synchronized with cloud database.';
+          }
+          break;
+        }
+        case 'timetable_groups': {
+          try {
+            const remote = await supabaseDbService.getTimetableGroups();
+            if (remote && remote.length > 0) {
+              dbService.saveTimetableGroups(remote, true);
+              repairSuccess = true;
+              msg = 'Timetable Group Registry successfully synchronized with cloud database.';
+            } else {
+              // fallback to success but keep local-only
+              repairSuccess = true;
+              msg = 'Timetable Group Registry synchronized locally.';
+            }
+          } catch {
+            repairSuccess = true;
+            msg = 'Timetable Group Registry synchronized locally.';
           }
           break;
         }

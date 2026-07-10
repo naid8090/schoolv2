@@ -582,6 +582,21 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
       return;
     }
 
+    const SEEDED_GROUP_IDS = [
+      '99999999-9999-9999-9999-999900000009',
+      '99999999-9999-9999-9999-999900000010',
+      '99999999-9999-9999-9999-999900000011',
+      '99999999-9999-9999-9999-999900000012'
+    ];
+
+    if (editingId && SEEDED_GROUP_IDS.includes(editingId)) {
+      const originalGroup = groups.find(g => g.id === editingId);
+      if (originalGroup && originalGroup.name !== name.trim()) {
+        setError('Class 9, Class 10, Class 11, and Class 12 are core system-level groups. Renaming them is disabled to protect academic structural integrity. Please create a new custom group (e.g., "Class 11 Science" or "Class 11 Arts") instead of mutating the original groups.');
+        return;
+      }
+    }
+
     const isDuplicate = groups.some(
       g => g.name.toLowerCase() === name.trim().toLowerCase() && g.id !== editingId
     );
@@ -648,6 +663,18 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
   };
 
   const handleDelete = (group: TimetableGroup) => {
+    const SEEDED_GROUP_IDS = [
+      '99999999-9999-9999-9999-999900000009',
+      '99999999-9999-9999-9999-999900000010',
+      '99999999-9999-9999-9999-999900000011',
+      '99999999-9999-9999-9999-999900000012'
+    ];
+
+    if (SEEDED_GROUP_IDS.includes(group.id)) {
+      setError('Class 9, Class 10, Class 11, and Class 12 are core system-level groups and cannot be deleted.');
+      return;
+    }
+
     const matchingRoutine = routines.find(r => r.class_name === group.name);
     if (matchingRoutine) {
       const hasEntries = entries.some(e => e.routine_id === matchingRoutine.id);
@@ -655,8 +682,6 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
         setError(`Cannot delete "${group.name}". This timetable group is currently associated with active timetable slots.`);
         return;
       }
-      setError(`Cannot delete "${group.name}". A routine grid exists for this timetable group. Please clear the routine structure first.`);
-      return;
     }
 
     if (window.confirm(`Are you sure you want to delete "${group.name}"?`)) {

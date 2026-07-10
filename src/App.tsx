@@ -270,6 +270,31 @@ export default function App() {
           console.error('[Supabase calendar events sync error]:', err);
         }
 
+        // --- 8B. TIMETABLE GROUPS SYNC ---
+        try {
+          console.log('[TIMETABLE GROUPS SYNC] Starting...');
+          const remoteGroups = await supabaseDbService.getTimetableGroups();
+          console.log('[TIMETABLE GROUPS REMOTE COUNT]', remoteGroups?.length ?? 0);
+
+          if (active) {
+            if (remoteGroups && remoteGroups.length > 0) {
+              dbService.saveTimetableGroups(remoteGroups, true);
+              console.log('[TIMETABLE GROUPS LOCAL COUNT]', dbService.getTimetableGroups().length);
+              console.log('[SYNC COMPLETE]\n[timetable_groups]');
+            } else {
+              console.log('[SYNC EMPTY REMOTE]\n[timetable_groups]');
+              const localGroups = dbService.getTimetableGroups();
+              if (localGroups && localGroups.length > 0) {
+                await supabaseDbService.saveTimetableGroups(localGroups);
+                console.log('[TIMETABLE GROUPS SEEDED TO REMOTE]');
+              }
+              console.log('[SYNC COMPLETE]\n[timetable_groups]');
+            }
+          }
+        } catch (err) {
+          console.error('[Supabase timetable groups sync error]:', err);
+        }
+
         // --- 9. ROUTINES SYNC ---
         try {
           console.log('[ROUTINES SYNC START]');

@@ -477,33 +477,50 @@ class SupabaseDbService {
   }
 
   async getTimetableGroups(): Promise<TimetableGroup[]> {
-    const { data, error } = await supabase
-      .from('timetable_groups')
-      .select('*')
-      .order('display_order', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('timetable_groups')
+        .select('*')
+        .order('display_order', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching timetable groups from Supabase:', error.message);
+      if (error) {
+        console.warn('Error fetching timetable groups from Supabase:', error.message);
+        return [];
+      }
+      return data as TimetableGroup[] || [];
+    } catch (err: any) {
+      console.warn('Exception in getTimetableGroups:', err.message || err);
       return [];
     }
-    return data as TimetableGroup[];
   }
 
   async saveTimetableGroups(groups: TimetableGroup[]): Promise<void> {
-    const { error } = await supabase
-      .from('timetable_groups')
-      .upsert(groups);
+    try {
+      const { error } = await supabase
+        .from('timetable_groups')
+        .upsert(groups);
 
-    if (error) throw error;
+      if (error) {
+        console.warn('Error saving timetable groups to Supabase:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('Exception in saveTimetableGroups:', err.message || err);
+    }
   }
 
   async deleteTimetableGroup(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('timetable_groups')
-      .delete()
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('timetable_groups')
+        .delete()
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) {
+        console.warn('Error deleting timetable group from Supabase:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('Exception in deleteTimetableGroup:', err.message || err);
+    }
   }
 
   async getTimetableLastUpdated(): Promise<string> {

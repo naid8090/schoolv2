@@ -1348,22 +1348,141 @@ class DatabaseService {
   }
 
   saveTimetableGroups(groups: TimetableGroup[], localOnly = false): void {
+    const oldGroups = this.getTimetableGroups();
     const sanitized = groups.map(g => ({
       ...g,
       id: ensureValidUUID(g.id)
     }));
-    this.setStorageItem('gsss_timetable_groups', sanitized);
+
+    // Detect if a group changed its display order or if there is a new group with a display order
+    let targetGroupId: string | null = null;
+    let targetNewOrder = 1;
+    let isNew = false;
+
+    const newGroup = sanitized.find(g => !oldGroups.some(o => o.id === g.id));
+    if (newGroup) {
+      targetGroupId = newGroup.id;
+      targetNewOrder = newGroup.display_order;
+      isNew = true;
+    } else {
+      const changedGroup = sanitized.find(g => {
+        const oldG = oldGroups.find(o => o.id === g.id);
+        return oldG && oldG.display_order !== g.display_order;
+      });
+      if (changedGroup) {
+        targetGroupId = changedGroup.id;
+        targetNewOrder = changedGroup.display_order;
+        isNew = false;
+      }
+    }
+
+    let finalizedGroups = sanitized;
+    if (targetGroupId) {
+      // Helper to shift intervening display orders
+      const list = sanitized.map(g => ({ ...g }));
+      const targetGroup = list.find(g => g.id === targetGroupId);
+
+      if (isNew || !targetGroup) {
+        const maxOrder = list.length;
+        const clampedOrder = Math.max(1, Math.min(targetNewOrder, maxOrder));
+        list.forEach(g => {
+          if (g.id !== targetGroupId && (g.display_order || 0) >= clampedOrder) {
+            g.display_order = (g.display_order || 0) + 1;
+          }
+        });
+        if (targetGroup) {
+          targetGroup.display_order = clampedOrder;
+        }
+      } else {
+        const oldGroup = oldGroups.find(o => o.id === targetGroupId);
+        const oldOrder = oldGroup ? (oldGroup.display_order || 0) : 1;
+        const clampedOrder = Math.max(1, Math.min(targetNewOrder, list.length));
+
+        if (clampedOrder !== oldOrder) {
+          if (clampedOrder < oldOrder) {
+            list.forEach(g => {
+              if (g.id !== targetGroupId) {
+                const ord = g.display_order || 0;
+                if (ord >= clampedOrder && ord < oldOrder) {
+                  g.display_order = ord + 1;
+                }
+              }
+            });
+          } else {
+            list.forEach(g => {
+              if (g.id !== targetGroupId) {
+                const ord = g.display_order || 0;
+                if (ord > oldOrder && ord <= clampedOrder) {
+                  g.display_order = ord - 1;
+                }
+              }
+            });
+          }
+          targetGroup.display_order = clampedOrder;
+        }
+      }
+
+      list.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      list.forEach((g, idx) => {
+        g.display_order = idx + 1;
+      });
+      finalizedGroups = list;
+    } else {
+      finalizedGroups.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+      finalizedGroups.forEach((g, idx) => {
+        g.display_order = idx + 1;
+      });
+    }
+
+    // Detect and propagate renames to corresponding routines
+    const renameMap = new Map<string, string>(); // oldName -> newName
+    finalizedGroups.forEach(newG => {
+      const oldG = oldGroups.find(o => o.id === newG.id);
+      if (oldG && oldG.name !== newG.name) {
+        renameMap.set(oldG.name, newG.name);
+      }
+    });
+
+    this.setStorageItem('gsss_timetable_groups', finalizedGroups);
     this.updateTimetableTimestamp();
+
+    if (renameMap.size > 0) {
+      const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
+      let routinesChanged = false;
+      const updatedRoutines = routines.map(r => {
+        if (renameMap.has(r.class_name)) {
+          routinesChanged = true;
+          return {
+            ...r,
+            class_name: renameMap.get(r.class_name)! as any,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return r;
+      });
+
+      if (routinesChanged) {
+        this.setStorageItem('gsss_routines', updatedRoutines);
+        if (!localOnly) {
+          supabase
+            .from('routines')
+            .upsert(updatedRoutines)
+            .then(({ error }) => {
+              if (error) {
+                console.warn('[Supabase Routines Rename Sync Error caught]:', error.message);
+              }
+            });
+        }
+      }
+    }
 
     window.dispatchEvent(new CustomEvent('gsss-data-synced'));
 
     if (localOnly) return;
 
-    // Persist to Supabase if timetable_groups table is available
-    // Otherwise, handle gracefully so we don't crash
     supabase
       .from('timetable_groups')
-      .upsert(sanitized)
+      .upsert(finalizedGroups)
       .then(
         ({ error }) => {
           if (error) {
@@ -1379,6 +1498,10 @@ class DatabaseService {
   deleteTimetableGroup(id: string): void {
     const targetId = ensureValidUUID(id);
     const groups = this.getTimetableGroups();
+    const groupToDelete = groups.find(g => g.id === targetId);
+
+    if (!groupToDelete) return;
+
     const filtered = groups.filter(g => g.id !== targetId);
     
     // re-calculate order
@@ -1403,6 +1526,45 @@ class DatabaseService {
           console.warn('[Supabase Timetable Groups Delete Error Caught]:', err);
         }
       );
+
+    // Cascade delete associated Routine & Routine Entries
+    const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
+    const matchingRoutine = routines.find(r => r.class_name === groupToDelete.name);
+    if (matchingRoutine) {
+      const remainingRoutines = routines.filter(r => r.id !== matchingRoutine.id);
+      this.setStorageItem('gsss_routines', remainingRoutines);
+      
+      supabase
+        .from('routines')
+        .delete()
+        .eq('id', matchingRoutine.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('[Supabase Routines Cascade Delete Error caught]:', error.message);
+          }
+        });
+
+      // Cascade delete Routine Entries
+      const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', []);
+      const entriesToDelete = entries.filter(e => e.routine_id === matchingRoutine.id);
+      if (entriesToDelete.length > 0) {
+        const remainingEntries = entries.filter(e => e.routine_id !== matchingRoutine.id);
+        this.setStorageItem('gsss_routine_entries', remainingEntries);
+        
+        const entryIds = entriesToDelete.map(e => e.id);
+        supabase
+          .from('routine_entries')
+          .delete()
+          .in('id', entryIds)
+          .then(({ error }) => {
+            if (error) {
+              console.warn('[Supabase Routine Entries Cascade Delete Error caught]:', error.message);
+            }
+          });
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
   }
 
   getTimetableLastUpdated(): string {

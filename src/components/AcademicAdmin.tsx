@@ -698,81 +698,41 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                Display Name *
+                Group Name *
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Class 11 Science, Class 12 Arts"
+                placeholder="e.g., Class 11 Science"
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                required
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                  Parent Grade (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={parentGrade}
-                  onChange={(e) => setParentGrade(e.target.value)}
-                  placeholder="e.g., 11, 12"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                  Stream/Section (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={stream}
-                  onChange={(e) => setStream(e.target.value)}
-                  placeholder="e.g., Science, Arts"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                  Display Order
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={displayOrder}
-                  onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
-                />
-              </div>
-              <div className="flex items-center pt-6 pl-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
-                  />
-                  <span>Active</span>
-                </label>
-              </div>
             </div>
 
             <div>
               <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                Notes
+                Display Order
               </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Provide internal notes or details..."
-                rows={3}
+              <input
+                type="number"
+                min="1"
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 1)}
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
               />
+            </div>
+
+            <div className="flex items-center pl-1 py-1">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                />
+                <span>Active</span>
+              </label>
             </div>
 
             <div className="flex gap-2.5 pt-2">
@@ -780,7 +740,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
                 type="submit"
                 className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs uppercase cursor-pointer"
               >
-                {editingId ? 'Update Group' : 'Add Group'}
+                Save
               </button>
               <button
                 type="button"
@@ -799,8 +759,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
               <thead>
                 <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
                   <th className="p-3 w-16 text-center border-r border-slate-150">Order</th>
-                  <th className="p-3 border-r border-slate-150">Display Name</th>
-                  <th className="p-3 border-r border-slate-150">Meta info</th>
+                  <th className="p-3 border-r border-slate-150">Group Name</th>
                   <th className="p-3 w-28 text-center border-r border-slate-150">Status</th>
                   <th className="p-3 w-32 text-center">Actions</th>
                 </tr>
@@ -808,7 +767,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
               <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
                 {groups.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
+                    <td colSpan={4} className="p-8 text-center text-slate-400 font-medium">
                       No timetable groups registered. Seeding default groups...
                     </td>
                   </tr>
@@ -820,23 +779,6 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
                       </td>
                       <td className="p-3 border-r border-slate-150">
                         <div className="font-extrabold text-slate-800">{g.name}</div>
-                        {g.notes && <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{g.notes}</div>}
-                      </td>
-                      <td className="p-3 border-r border-slate-150 text-slate-600 font-medium">
-                        <div className="space-y-0.5">
-                          {g.parent_grade && (
-                            <div>
-                              <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Grade:</span>
-                              <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-mono text-[10px]">{g.parent_grade}</span>
-                            </div>
-                          )}
-                          {g.stream && (
-                            <div>
-                              <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Stream:</span>
-                              <span className="bg-purple-50 text-purple-700 px-1.5 py-0.2 rounded text-[10px] font-semibold">{g.stream}</span>
-                            </div>
-                          )}
-                        </div>
                       </td>
                       <td className="p-3 text-center border-r border-slate-150">
                         <button
@@ -905,12 +847,15 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   // Form states for adding/editing Entry
-  const [entryForm, setEntryForm] = useState<Partial<RoutineEntry>>({
-    day: 'Monday',
-    period: 'Period 1',
-    time_range: '09:00 AM - 09:45 AM',
-    subject: '',
-    teacher: ''
+  const [entryForm, setEntryForm] = useState<Partial<RoutineEntry>>(() => {
+    const masters = dbService.getPeriodMasters();
+    return {
+      day: 'Monday',
+      period: masters.length > 0 ? masters[0].name : 'Period 1',
+      time_range: masters.length > 0 ? masters[0].time_range : '09:00 AM - 09:45 AM',
+      subject: '',
+      teacher: ''
+    };
   });
 
   const [isManualTeacher, setIsManualTeacher] = useState(false);
@@ -1096,6 +1041,23 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   useEffect(() => {
     fetchLocalData();
   }, []);
+
+  // Keep Time Frame synchronized with the selected Period Slot Template
+  useEffect(() => {
+    if (!isManualPeriod && entryForm.period) {
+      const matchedMaster = periodMasters.find(
+        pm => pm.name.toLowerCase().trim() === entryForm.period?.toLowerCase().trim()
+      );
+      if (matchedMaster) {
+        if (entryForm.time_range !== matchedMaster.time_range) {
+          setEntryForm(prev => ({
+            ...prev,
+            time_range: matchedMaster.time_range
+          }));
+        }
+      }
+    }
+  }, [entryForm.period, periodMasters, isManualPeriod]);
 
   const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry') ? routines.find(r => r.class_name === selectedClass) : undefined;
   const classEntries = activeRoutine ? entries.filter(e => e.routine_id === activeRoutine?.id) : [];
@@ -1317,7 +1279,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setEditingEntryId(null);
     setConflictWarning(null);
     setForceConflict(false);
-    setEntryForm({ day: 'Monday', period: 'Period 1', time_range: '09:00 AM - 09:45 AM', subject: '', teacher: '', teacher_id: undefined });
+    const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
+    const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
+    setEntryForm({ day: 'Monday', period: defaultPeriod, time_range: defaultTimeRange, subject: '', teacher: '', teacher_id: undefined });
     fetchLocalData();
   };
 
@@ -2856,10 +2820,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                     <button
                       onClick={() => {
                         setEditingEntryId(null);
+                        const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
+                        const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
                         setEntryForm({
                           day: 'Monday',
-                          period: 'Period 1',
-                          time_range: '09:00 AM - 09:45 AM',
+                          period: defaultPeriod,
+                          time_range: defaultTimeRange,
                           subject: '',
                           teacher: ''
                         });

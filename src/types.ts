@@ -134,7 +134,19 @@ export interface Faculty {
   updated_at: string;
 }
 
-export type AcademicClass = 'Class 9' | 'Class 10' | 'Class 11' | 'Class 12';
+export interface TimetableGroup {
+  id: string;
+  name: string;
+  is_active: boolean;
+  display_order: number;
+  parent_grade?: string;
+  stream?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AcademicClass = string;
 
 export interface Routine {
   id: string;
@@ -159,6 +171,7 @@ export interface RoutineEntry {
   teacher?: string;
   teacher_id?: string;
   time_range?: string; // Timing of the period, e.g., "09:00 AM - 09:45 AM"
+  shared_lecture_id?: string;
 }
 
 export interface PeriodMaster {

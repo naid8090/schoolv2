@@ -864,6 +864,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [isManualTeacher, setIsManualTeacher] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Shared Lecture states
+  const [lectureType, setLectureType] = useState<'regular' | 'shared'>('regular');
+  const [sharedWithClasses, setSharedWithClasses] = useState<string[]>([]);
+  const [applySharedOption, setApplySharedOption] = useState<'all' | 'single'>('all');
+  const [deleteSharedOption, setDeleteSharedOption] = useState<'all' | 'single'>('all');
+
   // PDF global scope configuration
   const [pdfApplyTarget, setPdfApplyTarget] = useState<'current' | 'all'>('current');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -879,7 +885,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     clsName: string,
     teacherName: string,
     teacherId?: string,
-    excludeEntryId?: string
+    excludeEntryId?: string,
+    sharedLectureId?: string
   ): { valid: boolean; error?: string } => {
     const parsedRange = parseTimeRange(timeRangeStr);
     if (!parsedRange) {
@@ -906,6 +913,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
     for (const ent of entries) {
       if (ent.id === excludeEntryId) continue;
+      // If we are checking in the context of a shared lecture, do not conflict with sibling entries of the same shared lecture
+      if (sharedLectureId && ent.shared_lecture_id === sharedLectureId) continue;
       if (ent.day !== day) continue;
 
       const entRange = parseTimeRange(ent.time_range);
@@ -1104,12 +1113,14 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   }, [selectedClass]);
 
   // Check if a teacher has a conflict on standard day/period in another class
-  const checkTeacherConflict = (day: string, period: string, teacherName: string, teacherId?: string, excludeId?: string, targetClass?: string) => {
+  const checkTeacherConflict = (day: string, period: string, teacherName: string, teacherId?: string, excludeId?: string, targetClass?: string, sharedLectureId?: string) => {
     if ((!teacherName || teacherName.trim() === '') && !teacherId) return null;
     
     // Find matching records in other classes
     const match = entries.find(e => {
       if (e.id === excludeId) return false;
+      // If checking in the context of a shared lecture, ignore conflict with siblings of the same shared lecture
+      if (sharedLectureId && e.shared_lecture_id === sharedLectureId) return false;
       if (e.day !== day) return false;
       if (e.period.toLowerCase().trim() !== period.toLowerCase().trim()) return false;
       
@@ -1239,60 +1250,185 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     const periodVal = entryForm.period || 'Period 1';
     const timeRangeVal = entryForm.time_range || '';
 
-    // Strict validation
-    const validation = validateRoutineCollision(
-      dayVal,
-      timeRangeVal,
-      selectedClass as string,
-      teacherName,
-      entryForm.teacher_id,
-      editingEntryId || undefined
-    );
-    if (!validation.valid) {
-      setFormError(validation.error || 'Conflict detected in timeslots.');
+    if (lectureType === 'shared' && sharedWithClasses.length === 0) {
+      setFormError('Please select at least one other timetable group to share this lecture with.');
+      return;
+    }
+
+    const participatingClasses = lectureType === 'shared'
+      ? Array.from(new Set([selectedClass, ...sharedWithClasses]))
+      : [selectedClass];
+
+    const existingEntry = editingEntryId ? entries.find(ent => ent.id === editingEntryId) : undefined;
+
+    // Resolve target shared lecture ID
+    let targetSharedLectureId: string | undefined = undefined;
+    if (lectureType === 'shared') {
+      if (editingEntryId && existingEntry?.shared_lecture_id && applySharedOption === 'all') {
+        targetSharedLectureId = existingEntry.shared_lecture_id;
+      } else {
+        targetSharedLectureId = `sl_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
+      }
+    }
+
+    // Since we only want to flag as shared if there are actually multiple classes participating,
+    // downgrade back to undefined if only 1 class is involved.
+    const finalSharedLectureId = (targetSharedLectureId && participatingClasses.length > 1) ? targetSharedLectureId : undefined;
+
+    // Validation for all participating classes
+    let validationError: string | null = null;
+    for (const cls of participatingClasses) {
+      let excludeIdForClass: string | undefined = undefined;
+      if (editingEntryId && existingEntry?.shared_lecture_id && applySharedOption === 'all') {
+        const matchedSibling = entries.find(e => {
+          if (e.shared_lecture_id !== existingEntry.shared_lecture_id) return false;
+          const r = routines.find(rt => rt.id === e.routine_id);
+          return r && r.class_name === cls;
+        });
+        if (matchedSibling) {
+          excludeIdForClass = matchedSibling.id;
+        }
+      } else if (cls === selectedClass) {
+        excludeIdForClass = editingEntryId || undefined;
+      }
+
+      const validation = validateRoutineCollision(
+        dayVal,
+        timeRangeVal,
+        cls,
+        teacherName,
+        entryForm.teacher_id,
+        excludeIdForClass,
+        finalSharedLectureId
+      );
+      if (!validation.valid) {
+        validationError = `Class ${cls}: ${validation.error}`;
+        break;
+      }
+    }
+
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
     setFormError(null);
 
-    // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(dayVal, periodVal, teacherName, entryForm.teacher_id, editingEntryId || undefined, selectedClass as string);
+    // Verify teacher conflict for all participating classes
+    let conflictClass: string | null = null;
+    for (const cls of participatingClasses) {
+      let excludeIdForClass: string | undefined = undefined;
+      if (editingEntryId && existingEntry?.shared_lecture_id && applySharedOption === 'all') {
+        const matchedSibling = entries.find(e => {
+          if (e.shared_lecture_id !== existingEntry.shared_lecture_id) return false;
+          const r = routines.find(rt => rt.id === e.routine_id);
+          return r && r.class_name === cls;
+        });
+        if (matchedSibling) {
+          excludeIdForClass = matchedSibling.id;
+        }
+      } else if (cls === selectedClass) {
+        excludeIdForClass = editingEntryId || undefined;
+      }
+
+      const conflict = checkTeacherConflict(
+        dayVal,
+        periodVal,
+        teacherName,
+        entryForm.teacher_id,
+        excludeIdForClass,
+        cls,
+        finalSharedLectureId
+      );
+      if (conflict) {
+        conflictClass = conflict;
+        break;
+      }
+    }
+
     if (conflictClass && !forceConflict) {
       setConflictWarning(`Conflict detected: ${teacherName} is already assigned to lead ${conflictClass} during ${dayVal} ${periodVal}. Proceed anyway?`);
       return;
     }
 
-    if (editingEntryId) {
-      // Edit route
-      const updated = entries.map(ent => ent.id === editingEntryId ? {
-        ...ent,
-        day: dayVal as any,
-        period: periodVal,
-        time_range: timeRangeVal,
-        subject: entryForm.subject || '',
-        teacher: teacherName,
-        teacher_id: entryForm.teacher_id || null
-      } : ent);
-      dbService.saveRoutineEntries(updated);
-    } else {
-      // Add route
-      const newEntry: RoutineEntry = {
-        id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        routine_id: activeRoutine.id,
-        day: dayVal as any,
-        period: periodVal,
-        time_range: timeRangeVal,
-        subject: entryForm.subject || '',
-        teacher: teacherName,
-        teacher_id: entryForm.teacher_id || null
-      };
-      dbService.saveRoutineEntries([...entries, newEntry]);
+    // Construct next list of entries
+    let nextEntries = [...entries];
+
+    if (editingEntryId && existingEntry) {
+      if (existingEntry.shared_lecture_id) {
+        if (applySharedOption === 'all') {
+          // Remove all old entries of the shared lecture
+          nextEntries = nextEntries.filter(e => e.shared_lecture_id !== existingEntry.shared_lecture_id);
+        } else {
+          // Remove only this entry
+          nextEntries = nextEntries.filter(e => e.id !== editingEntryId);
+          // Clean up sibling if only 1 remains in the old shared lecture
+          const siblings = nextEntries.filter(e => e.shared_lecture_id === existingEntry.shared_lecture_id);
+          if (siblings.length === 1) {
+            siblings[0].shared_lecture_id = undefined;
+          }
+        }
+      } else {
+        // Remove only this entry
+        nextEntries = nextEntries.filter(e => e.id !== editingEntryId);
+      }
     }
 
-    // Reset forms
+    // Generate fresh entries for all participating classes
+    let currentRoutines = dbService.getRoutines();
+    let routinesUpdated = false;
+    const entriesToInsert: RoutineEntry[] = [];
+
+    const getOrCreateRoutineForClass = (clsName: string, routinesList: Routine[]) => {
+      let matched = routinesList.find(r => r.class_name === clsName);
+      if (matched) return { routine: matched, list: routinesList };
+      const newRoutine: Routine = {
+        id: `routine-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
+        class_name: clsName as any,
+        display_mode: 'online',
+        pdf_url: '',
+        override_active: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      return { routine: newRoutine, list: [...routinesList, newRoutine] };
+    };
+
+    for (const cls of participatingClasses) {
+      const res = getOrCreateRoutineForClass(cls, currentRoutines);
+      if (res.routine.id !== currentRoutines.find(r => r.class_name === cls)?.id) {
+        currentRoutines = res.list;
+        routinesUpdated = true;
+      }
+
+      const newEntry: RoutineEntry = {
+        id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+        routine_id: res.routine.id,
+        day: dayVal as any,
+        period: periodVal,
+        time_range: timeRangeVal,
+        subject: entryForm.subject || '',
+        teacher: teacherName,
+        teacher_id: entryForm.teacher_id || null,
+        shared_lecture_id: finalSharedLectureId
+      };
+      entriesToInsert.push(newEntry);
+    }
+
+    if (routinesUpdated) {
+      dbService.saveRoutines(currentRoutines);
+    }
+
+    dbService.saveRoutineEntries([...nextEntries, ...entriesToInsert]);
+
+    // Reset forms and states
     setIsAddingEntry(false);
     setEditingEntryId(null);
     setConflictWarning(null);
     setForceConflict(false);
+    setLectureType('regular');
+    setSharedWithClasses([]);
+    setApplySharedOption('all');
+    
     const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
     const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
     setEntryForm({ day: 'Monday', period: defaultPeriod, time_range: defaultTimeRange, subject: '', teacher: '', teacher_id: undefined });
@@ -1379,7 +1515,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           time_range: copyTimeSlots ? (sourceEnt.time_range || '') : defaultTimeRange,
           subject: copySubjects ? (sourceEnt.subject || '') : '',
           teacher: teacherName,
-          teacher_id: teacherId
+          teacher_id: teacherId,
+          shared_lecture_id: sourceEnt.shared_lecture_id ? `sl_dup_${sourceEnt.shared_lecture_id.replace('sl_', '')}_${destDay.toLowerCase()}` : undefined
         };
 
         prospectiveEntriesToCreate.push(prospectiveEnt);
@@ -1392,7 +1529,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
             teacherName,
             teacherId,
             undefined, // no editing id
-            selectedClass as string
+            selectedClass as string,
+            prospectiveEnt.shared_lecture_id
           );
           if (conflictClass) {
             conflictsList.push(
@@ -1532,15 +1670,47 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     });
     setIsManualTeacher(ent.teacher_id ? false : (ent.teacher ? !faculty.some(f => f.name === ent.teacher) : false));
     setIsManualPeriod(ent.period ? !periodMasters.some(pm => pm.name.toLowerCase().trim() === ent.period.toLowerCase().trim()) : false);
+    
+    // Initialize Shared Lecture states
+    if (ent.shared_lecture_id) {
+      setLectureType('shared');
+      const siblings = entries.filter(e => e.shared_lecture_id === ent.shared_lecture_id && e.id !== ent.id);
+      const otherClasses = siblings.map(e => {
+        const r = routines.find(rt => rt.id === e.routine_id);
+        return r ? r.class_name : '';
+      }).filter(Boolean);
+      setSharedWithClasses(otherClasses);
+      setApplySharedOption('all');
+    } else {
+      setLectureType('regular');
+      setSharedWithClasses([]);
+      setApplySharedOption('all');
+    }
+
     setIsAddingEntry(true);
     setFormError(null);
     setConflictWarning(null);
     window.scrollTo({ top: 320, behavior: 'smooth' });
   };
 
-  const handleDeleteEntryInline = async (entryId: string) => {
+  const handleDeleteEntryInline = async (entryId: string, sharedLectureId?: string) => {
     try {
-      await dbService.deleteRoutineEntry(entryId);
+      if (sharedLectureId && deleteSharedOption === 'all') {
+        const allEntries = dbService.getRoutineEntries();
+        const filtered = allEntries.filter(e => e.shared_lecture_id !== sharedLectureId);
+        dbService.saveRoutineEntries(filtered);
+      } else {
+        await dbService.deleteRoutineEntry(entryId);
+        
+        if (sharedLectureId) {
+          const allEntries = dbService.getRoutineEntries();
+          const siblings = allEntries.filter(e => e.shared_lecture_id === sharedLectureId);
+          if (siblings.length === 1) {
+            siblings[0].shared_lecture_id = undefined;
+            dbService.saveRoutineEntries(allEntries);
+          }
+        }
+      }
     } catch (err) {
       console.error('[ROUTINE ENTRY DELETE] Direct delete inline failed:', err);
     }
@@ -1605,7 +1775,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       className,
       teacher,
       teacher_id,
-      entry?.id || undefined
+      entry?.id || undefined,
+      entry?.shared_lecture_id || undefined
     );
     if (!validation.valid) {
       setCombinedError(validation.error || 'Conflict detected in timeslots.');
@@ -1614,7 +1785,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     setCombinedError(null);
 
     // Verify teacher conflict
-    const conflictClass = checkTeacherConflict(day, period, teacher, teacher_id, entry?.id || undefined, className);
+    const conflictClass = checkTeacherConflict(day, period, teacher, teacher_id, entry?.id || undefined, className, entry?.shared_lecture_id || undefined);
     if (conflictClass && !combinedForceConflict) {
       setCombinedConflictWarning(`Teacher Conflict: ${teacher} is already occupying ${conflictClass} during ${day} ${period}. Bypass warning and confirm?`);
       return;
@@ -1622,7 +1793,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
     if (entry) {
       // Edit in place
-      const updated = entries.map(e => e.id === entry.id ? { ...e, subject, teacher, teacher_id: teacher_id || null, time_range } : e);
+      const updated = entries.map(e => {
+        if (entry.shared_lecture_id && e.shared_lecture_id === entry.shared_lecture_id) {
+          return { ...e, subject, teacher, teacher_id: teacher_id || null, time_range };
+        }
+        return e.id === entry.id ? { ...e, subject, teacher, teacher_id: teacher_id || null, time_range } : e;
+      });
       dbService.saveRoutineEntries(updated);
     } else {
       // Create fresh
@@ -1648,8 +1824,18 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
   const handleClearCombinedCell = async () => {
     if (editingCombinedCell?.entry) {
+      const entryId = editingCombinedCell.entry.id;
+      const sharedLectureId = editingCombinedCell.entry.shared_lecture_id;
       try {
-        await dbService.deleteRoutineEntry(editingCombinedCell.entry.id);
+        await dbService.deleteRoutineEntry(entryId);
+        if (sharedLectureId) {
+          const allEntries = dbService.getRoutineEntries();
+          const siblings = allEntries.filter(e => e.shared_lecture_id === sharedLectureId);
+          if (siblings.length === 1) {
+            siblings[0].shared_lecture_id = undefined;
+            dbService.saveRoutineEntries(allEntries);
+          }
+        }
       } catch (err) {
         console.error('[ROUTINE ENTRY DELETE] Clear combined cell failed:', err);
       }
@@ -1727,12 +1913,25 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         };
       });
 
+      let loadCount = 0;
+      const countedSharedIds = new Set<string>();
+      assigned.forEach(e => {
+        if (e.shared_lecture_id) {
+          if (!countedSharedIds.has(e.shared_lecture_id)) {
+            countedSharedIds.add(e.shared_lecture_id);
+            loadCount += 1;
+          }
+        } else {
+          loadCount += 1;
+        }
+      });
+
       return {
         id: t.id,
         name: t.name,
         department: t.department,
         type: t.isFaculty ? 'Regular' : 'Temp / Guest',
-        loadCount: assigned.length,
+        loadCount: loadCount,
         assignments: details
       };
     });
@@ -3105,6 +3304,114 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       </div>
                     )}
 
+                    {/* Shared Lecture Section */}
+                    <div className="sm:col-span-3 border-t border-dashed border-slate-200 pt-4 mt-2 space-y-4">
+                      <div>
+                        <span className="text-[10px] uppercase font-mono font-bold text-slate-450 tracking-wider">Lecture Configuration</span>
+                        <div className="flex flex-wrap items-center gap-6 mt-2">
+                          <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700">
+                            <input
+                              type="radio"
+                              name="lectureType"
+                              value="regular"
+                              checked={lectureType === 'regular'}
+                              onChange={() => setLectureType('regular')}
+                              className="text-orange-500 focus:ring-orange-500"
+                            />
+                            <span>Standard Single-Group Lecture</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700">
+                            <input
+                              type="radio"
+                              name="lectureType"
+                              value="shared"
+                              checked={lectureType === 'shared'}
+                              onChange={() => setLectureType('shared')}
+                              className="text-orange-500 focus:ring-orange-500"
+                            />
+                            <span className="flex items-center gap-1.5 font-bold text-orange-600">
+                              <Sparkles className="w-3.5 h-3.5" /> Shared Lecture (Co-teaching/Joint groups)
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {lectureType === 'shared' && (
+                        <div className="bg-orange-50/15 border border-orange-100 rounded-xl p-4 space-y-3.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                          <div>
+                            <label className="text-slate-650 block text-[10.5px] uppercase font-mono font-bold">
+                              Select Timetable Groups to share this lecture with:
+                            </label>
+                            <p className="text-slate-500 text-[10px] font-sans mt-0.5">
+                              The teacher, subject, day, and timeslot will be perfectly shared across all selected classes with zero conflicts.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2.5">
+                            {allClasses.filter(cls => cls !== selectedClass).map(cls => {
+                              const isChecked = sharedWithClasses.includes(cls);
+                              return (
+                                <label
+                                  key={cls}
+                                  className={`px-3 py-1.5 border rounded-lg flex items-center gap-1.5 cursor-pointer text-xs font-bold transition-all select-none ${
+                                    isChecked
+                                      ? 'border-orange-500 bg-orange-500/5 text-orange-700'
+                                      : 'border-slate-200 bg-white text-slate-650 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSharedWithClasses([...sharedWithClasses, cls]);
+                                      } else {
+                                        setSharedWithClasses(sharedWithClasses.filter(x => x !== cls));
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 h-3.5 w-3.5"
+                                  />
+                                  <span>{cls}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+
+                          {editingEntryId && entries.find(e => e.id === editingEntryId)?.shared_lecture_id && (
+                            <div className="border-t border-orange-100 pt-3 mt-1.5">
+                              <label className="text-slate-650 block text-[10.5px] uppercase font-mono font-bold">
+                                Edit Scope:
+                              </label>
+                              <div className="flex items-center gap-4 mt-1.5">
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 text-xs font-semibold">
+                                  <input
+                                    type="radio"
+                                    name="applySharedOption"
+                                    value="all"
+                                    checked={applySharedOption === 'all'}
+                                    onChange={() => setApplySharedOption('all')}
+                                    className="text-orange-500 focus:ring-orange-500"
+                                  />
+                                  <span>Apply Changes to Entire Shared Lecture</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 text-xs font-semibold">
+                                  <input
+                                    type="radio"
+                                    name="applySharedOption"
+                                    value="single"
+                                    checked={applySharedOption === 'single'}
+                                    onChange={() => setApplySharedOption('single')}
+                                    className="text-orange-500 focus:ring-orange-500"
+                                  />
+                                  <span>Only This Timetable Group ({selectedClass})</span>
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="sm:col-span-3 pt-3 flex justify-end gap-2 border-t border-slate-200/55 mt-2">
                       <button
                         type="button"
@@ -3185,19 +3492,50 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                               </td>
                               <td className="py-3 px-4 text-center">
                                 {deletingId === ent.id ? (
-                                  <div className="flex items-center justify-center gap-1 animate-in fade-in duration-100">
-                                    <button
-                                      onClick={() => handleDeleteEntryInline(ent.id)}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                                    >
-                                      Confirm
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingId(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
-                                    >
-                                      No
-                                    </button>
+                                  <div className="flex flex-col items-center gap-1.5 animate-in fade-in duration-100 p-1">
+                                    {ent.shared_lecture_id && (
+                                      <div className="flex flex-col items-start gap-1 bg-orange-50/50 p-1.5 rounded border border-orange-100 mb-1">
+                                        <span className="text-[8px] font-bold text-orange-600 uppercase">Shared Lecture Scope:</span>
+                                        <div className="flex items-center gap-2 text-[9px] font-semibold text-slate-700">
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`deleteOpt-${ent.id}`}
+                                              value="all"
+                                              checked={deleteSharedOption === 'all'}
+                                              onChange={() => setDeleteSharedOption('all')}
+                                              className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
+                                            />
+                                            All Groups
+                                          </label>
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`deleteOpt-${ent.id}`}
+                                              value="single"
+                                              checked={deleteSharedOption === 'single'}
+                                              onChange={() => setDeleteSharedOption('single')}
+                                              className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
+                                            />
+                                            Only This
+                                          </label>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleDeleteEntryInline(ent.id, ent.shared_lecture_id)}
+                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        onClick={() => setDeletingId(null)}
+                                        className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
+                                      >
+                                        No
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center gap-1.5">
@@ -3209,7 +3547,10 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                                       <Edit className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                      onClick={() => setDeletingId(ent.id)}
+                                      onClick={() => {
+                                        setDeletingId(ent.id);
+                                        setDeleteSharedOption('all');
+                                      }}
                                       className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 hover:border-red-500/20 text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                                       title="Delete Period Slot"
                                     >

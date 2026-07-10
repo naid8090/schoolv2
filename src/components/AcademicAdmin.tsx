@@ -834,7 +834,10 @@ interface ModuleSubProps {
 }
 
 const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
-  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry'>('Class 9');
+  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry'>(() => {
+    const active = dbService.getTimetableGroups().filter(g => g.is_active);
+    return active.length > 0 ? active[0].name : 'Class 9';
+  });
   const [timetableGroups, setTimetableGroups] = useState<TimetableGroup[]>(dbService.getTimetableGroups());
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
@@ -1041,6 +1044,17 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   useEffect(() => {
     fetchLocalData();
   }, []);
+
+  // Recover selected class if active groups change or state is invalid
+  useEffect(() => {
+    const activeGroups = timetableGroups.filter(g => g.is_active);
+    if (activeGroups.length > 0) {
+      const isSelectedClassValid = activeGroups.some(g => g.name === selectedClass);
+      if (!isSelectedClassValid && selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry') {
+        setSelectedClass(activeGroups[0].name);
+      }
+    }
+  }, [timetableGroups, selectedClass]);
 
   // Keep Time Frame synchronized with the selected Period Slot Template
   useEffect(() => {

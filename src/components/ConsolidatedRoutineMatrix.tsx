@@ -66,11 +66,11 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
     });
 
   const getPeriodTime = (p: string) => {
-    const matched = entries.find(e => e.period === p && e.time_range);
-    if (matched?.time_range) return matched.time_range;
-    
     const master = periodMasters.find(pm => pm.name.toLowerCase().trim() === p.toLowerCase().trim());
-    return master?.time_range || '';
+    if (master) return master.time_range;
+    
+    const matched = entries.find(e => e.period === p && e.time_range);
+    return matched?.time_range || '';
   };
 
   const getMatrixEntry = (cls: AcademicClass, day: string, period: string) => {

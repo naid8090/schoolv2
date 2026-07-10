@@ -1344,7 +1344,7 @@ class DatabaseService {
     return raw.map(g => ({
       ...g,
       id: ensureValidUUID(g.id)
-    }));
+    })).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
   }
 
   saveTimetableGroups(groups: TimetableGroup[], localOnly = false): void {

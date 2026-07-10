@@ -879,6 +879,38 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [combinedError, setCombinedError] = useState<string | null>(null);
   const [quickError, setQuickError] = useState<string | null>(null);
 
+  const resetLectureDialogState = () => {
+    setIsAddingEntry(false);
+    setEditingEntryId(null);
+    setLectureType('regular');
+    setSharedWithClasses([]);
+    setApplySharedOption('all');
+    setFormError(null);
+    setConflictWarning(null);
+    setForceConflict(false);
+
+    const masters = dbService.getPeriodMasters();
+    setEntryForm({
+      day: 'Monday',
+      period: masters.length > 0 ? masters[0].name : 'Period 1',
+      time_range: masters.length > 0 ? masters[0].time_range : '09:00 AM - 09:45 AM',
+      subject: '',
+      teacher: ''
+    });
+    setIsManualPeriod(false);
+    setIsManualTeacher(false);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAddingEntry) {
+        resetLectureDialogState();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAddingEntry]);
+
   const validateRoutineCollision = (
     day: string,
     timeRangeStr: string,
@@ -3065,10 +3097,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                       {editingEntryId ? 'Modify Timetable Slot Details' : 'Create Timetable Slot Entry'}
                     </span>
                     <button 
-                      onClick={() => {
-                        setIsAddingEntry(false);
-                        setEditingEntryId(null);
-                      }} 
+                      onClick={resetLectureDialogState} 
                       className="text-slate-400 hover:text-slate-700 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
@@ -3415,10 +3444,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
                     <div className="sm:col-span-3 pt-3 flex justify-end gap-2 border-t border-slate-200/55 mt-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setIsAddingEntry(false);
-                          setEditingEntryId(null);
-                        }}
+                        onClick={resetLectureDialogState}
                         className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg inline-block font-bold cursor-pointer"
                       >
                         Cancel

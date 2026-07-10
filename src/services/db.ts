@@ -1417,10 +1417,62 @@ class DatabaseService {
 
   getRoutines(useDefaultFallback = false): Routine[] {
     const raw = this.getStorageItem<Routine[]>('gsss_routines', useDefaultFallback ? DEFAULT_ROUTINES : []);
-    return raw.map(r => ({
+    let routines = raw.map(r => ({
       ...r,
       id: ensureValidUUID(r.id)
     }));
+
+    if (!useDefaultFallback) {
+      const activeGroups = this.getTimetableGroups().filter(g => g.is_active);
+      const activeGroupNames = new Set(activeGroups.map(g => g.name));
+
+      let changed = false;
+
+      // Filter out routines that do not correspond to any active timetable group name
+      const initialLength = routines.length;
+      routines = routines.filter(r => activeGroupNames.has(r.class_name));
+      if (routines.length !== initialLength) {
+        changed = true;
+      }
+
+      // Ensure every active timetable group has exactly one corresponding routine
+      activeGroups.forEach(g => {
+        const exists = routines.some(r => r.class_name === g.name);
+        if (!exists) {
+          routines.push({
+            id: generateUUID(),
+            class_name: g.name as any,
+            display_mode: 'online',
+            pdf_url: '',
+            override_active: false,
+            override_title: '',
+            override_pdf_url: '',
+            override_start: '',
+            override_end: '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        this.setStorageItem('gsss_routines', routines);
+        this.updateTimetableTimestamp();
+
+        // Also sync to Supabase if table exists
+        supabase
+          .from('routines')
+          .upsert(routines)
+          .then(({ error }) => {
+            if (error) {
+              console.warn('[Supabase Routines Sync Error Caught]:', error.message);
+            }
+          });
+      }
+    }
+
+    return routines;
   }
 
   saveRoutines(routines: Routine[], localOnly = false): void {
@@ -1466,8 +1518,15 @@ class DatabaseService {
     const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', useDefaultFallback ? DEFAULT_ROUTINE_ENTRIES : []);
     const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', useDefaultFallback ? DEFAULT_PERIODS : []);
     
-    let changed = false;
-    const mapped = entries.map(ent => {
+    // Obtain active routines to ensure we only return entries for active timetable groups
+    const routines = this.getRoutines(useDefaultFallback);
+    const activeRoutineIds = new Set(routines.map(r => r.id));
+
+    // Filter to only entries belonging to active routines
+    const filteredEntries = entries.filter(ent => activeRoutineIds.has(ensureValidUUID(ent.routine_id)));
+    
+    let changed = entries.length !== filteredEntries.length;
+    const mapped = filteredEntries.map(ent => {
       const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
       let entId = ent.id;
       if (!isUuid) {
@@ -1496,7 +1555,7 @@ class DatabaseService {
     });
 
     if (changed) {
-      // Save mapped entries back to local storage
+      // Save mapped/filtered entries back to local storage
       const localDataToSave = mapped.map(ent => ({
         id: ent.id,
         routine_id: ent.routine_id,
@@ -1505,9 +1564,20 @@ class DatabaseService {
         subject: ent.subject,
         teacher: ent.teacher || null,
         teacher_id: ent.teacher_id || null,
-        time_range: ent.time_range || null
+        time_range: ent.time_range || null,
+        shared_lecture_id: ent.shared_lecture_id || null
       }));
       this.setStorageItem('gsss_routine_entries', localDataToSave);
+
+      // Also sync back to Supabase
+      supabase
+        .from('routine_entries')
+        .upsert(localDataToSave)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('[Supabase Routine Entries Sync Error Caught]:', error.message);
+          }
+        });
     }
 
     return mapped;

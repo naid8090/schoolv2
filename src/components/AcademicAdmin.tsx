@@ -943,7 +943,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     teacherName: string,
     teacherId?: string,
     excludeEntryId?: string,
-    sharedLectureId?: string
+    sharedLectureId?: string,
+    customEntries?: RoutineEntry[],
+    customRoutines?: Routine[]
   ): { valid: boolean; error?: string } => {
     const parsedRange = parseTimeRange(timeRangeStr);
     if (!parsedRange) {
@@ -968,7 +970,10 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       };
     }
 
-    for (const ent of entries) {
+    const entriesSource = customEntries || entries;
+    const routinesSource = customRoutines || routines;
+
+    for (const ent of entriesSource) {
       if (ent.id === excludeEntryId) continue;
       // If we are checking in the context of a shared lecture, do not conflict with sibling entries of the same shared lecture
       if (sharedLectureId && ent.shared_lecture_id === sharedLectureId) continue;
@@ -987,7 +992,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         }
 
         if (isTeacherConflict) {
-          const conflictRoutine = routines.find(r => r.id === ent.routine_id);
+          const conflictRoutine = routinesSource.find(r => r.id === ent.routine_id);
           const conflictClass = conflictRoutine ? conflictRoutine.class_name : 'another class';
           return {
             valid: false,
@@ -995,7 +1000,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           };
         }
 
-        const targetRoutine = routines.find(r => r.class_name === clsName);
+        const targetRoutine = routinesSource.find(r => r.class_name === clsName);
         if (targetRoutine && ent.routine_id === targetRoutine.id) {
           return {
             valid: false,
@@ -1170,11 +1175,24 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   }, [selectedClass]);
 
   // Check if a teacher has a conflict on standard day/period in another class
-  const checkTeacherConflict = (day: string, period: string, teacherName: string, teacherId?: string, excludeId?: string, targetClass?: string, sharedLectureId?: string) => {
+  const checkTeacherConflict = (
+    day: string,
+    period: string,
+    teacherName: string,
+    teacherId?: string,
+    excludeId?: string,
+    targetClass?: string,
+    sharedLectureId?: string,
+    customEntries?: RoutineEntry[],
+    customRoutines?: Routine[]
+  ) => {
     if ((!teacherName || teacherName.trim() === '') && !teacherId) return null;
     
+    const entriesSource = customEntries || entries;
+    const routinesSource = customRoutines || routines;
+
     // Find matching records in other classes
-    const match = entries.find(e => {
+    const match = entriesSource.find(e => {
       if (e.id === excludeId) return false;
       // If checking in the context of a shared lecture, ignore conflict with siblings of the same shared lecture
       if (sharedLectureId && e.shared_lecture_id === sharedLectureId) return false;
@@ -1188,7 +1206,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     });
     
     if (match) {
-      const conflictRoutine = routines.find(r => r.id === match.routine_id);
+      const conflictRoutine = routinesSource.find(r => r.id === match.routine_id);
       if (conflictRoutine && conflictRoutine.class_name !== targetClass) {
         return conflictRoutine.class_name;
       }
@@ -1332,82 +1350,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     // downgrade back to undefined if only 1 class is involved.
     const finalSharedLectureId = (targetSharedLectureId && participatingClasses.length > 1) ? targetSharedLectureId : undefined;
 
-    // Validation for all participating classes
-    let validationError: string | null = null;
-    for (const cls of participatingClasses) {
-      let excludeIdForClass: string | undefined = undefined;
-      if (editingEntryId && existingEntry?.shared_lecture_id && applySharedOption === 'all') {
-        const matchedSibling = entries.find(e => {
-          if (e.shared_lecture_id !== existingEntry.shared_lecture_id) return false;
-          const r = routines.find(rt => rt.id === e.routine_id);
-          return r && r.class_name === cls;
-        });
-        if (matchedSibling) {
-          excludeIdForClass = matchedSibling.id;
-        }
-      } else if (cls === selectedClass) {
-        excludeIdForClass = editingEntryId || undefined;
-      }
-
-      const validation = validateRoutineCollision(
-        dayVal,
-        timeRangeVal,
-        cls,
-        teacherName,
-        entryForm.teacher_id,
-        excludeIdForClass,
-        finalSharedLectureId
-      );
-      if (!validation.valid) {
-        validationError = `Class ${cls}: ${validation.error}`;
-        break;
-      }
-    }
-
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
-    setFormError(null);
-
-    // Verify teacher conflict for all participating classes
-    let conflictClass: string | null = null;
-    for (const cls of participatingClasses) {
-      let excludeIdForClass: string | undefined = undefined;
-      if (editingEntryId && existingEntry?.shared_lecture_id && applySharedOption === 'all') {
-        const matchedSibling = entries.find(e => {
-          if (e.shared_lecture_id !== existingEntry.shared_lecture_id) return false;
-          const r = routines.find(rt => rt.id === e.routine_id);
-          return r && r.class_name === cls;
-        });
-        if (matchedSibling) {
-          excludeIdForClass = matchedSibling.id;
-        }
-      } else if (cls === selectedClass) {
-        excludeIdForClass = editingEntryId || undefined;
-      }
-
-      const conflict = checkTeacherConflict(
-        dayVal,
-        periodVal,
-        teacherName,
-        entryForm.teacher_id,
-        excludeIdForClass,
-        cls,
-        finalSharedLectureId
-      );
-      if (conflict) {
-        conflictClass = conflict;
-        break;
-      }
-    }
-
-    if (conflictClass && !forceConflict) {
-      setConflictWarning(`Conflict detected: ${teacherName} is already assigned to lead ${conflictClass} during ${dayVal} ${periodVal}. Proceed anyway?`);
-      return;
-    }
-
-    // Construct next list of entries
+    // Construct next list of entries (future transaction in-memory state)
     let nextEntries = [...entries];
 
     if (editingEntryId && existingEntry) {
@@ -1421,7 +1364,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           // Clean up sibling if only 1 remains in the old shared lecture
           const siblings = nextEntries.filter(e => e.shared_lecture_id === existingEntry.shared_lecture_id);
           if (siblings.length === 1) {
-            siblings[0].shared_lecture_id = undefined;
+            const siblingId = siblings[0].id;
+            nextEntries = nextEntries.map(ent => ent.id === siblingId ? { ...ent, shared_lecture_id: undefined } : ent);
           }
         }
       } else {
@@ -1471,11 +1415,82 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       entriesToInsert.push(newEntry);
     }
 
-    if (routinesUpdated) {
-      dbService.saveRoutines(currentRoutines);
+    // Create the fully resolved prospective in-memory dataset
+    const proposedEntries = [...nextEntries, ...entriesToInsert];
+    const proposedRoutines = currentRoutines;
+
+    // Validation for all participating classes against proposed dataset
+    let validationError: string | null = null;
+    for (const cls of participatingClasses) {
+      // Find the corresponding entry being inserted for this class
+      const targetEntry = entriesToInsert.find(e => {
+        const r = proposedRoutines.find(rt => rt.id === e.routine_id);
+        return r && r.class_name === cls;
+      });
+
+      if (!targetEntry) continue;
+
+      const validation = validateRoutineCollision(
+        dayVal,
+        timeRangeVal,
+        cls,
+        teacherName,
+        entryForm.teacher_id,
+        targetEntry.id,
+        finalSharedLectureId,
+        proposedEntries,
+        proposedRoutines
+      );
+      if (!validation.valid) {
+        validationError = `Class ${cls}: ${validation.error}`;
+        break;
+      }
     }
 
-    dbService.saveRoutineEntries([...nextEntries, ...entriesToInsert]);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    setFormError(null);
+
+    // Verify teacher conflict for all participating classes against proposed dataset
+    let conflictClass: string | null = null;
+    for (const cls of participatingClasses) {
+      const targetEntry = entriesToInsert.find(e => {
+        const r = proposedRoutines.find(rt => rt.id === e.routine_id);
+        return r && r.class_name === cls;
+      });
+
+      if (!targetEntry) continue;
+
+      const conflict = checkTeacherConflict(
+        dayVal,
+        periodVal,
+        teacherName,
+        entryForm.teacher_id,
+        targetEntry.id,
+        cls,
+        finalSharedLectureId,
+        proposedEntries,
+        proposedRoutines
+      );
+      if (conflict) {
+        conflictClass = conflict;
+        break;
+      }
+    }
+
+    if (conflictClass && !forceConflict) {
+      setConflictWarning(`Conflict detected: ${teacherName} is already assigned to lead ${conflictClass} during ${dayVal} ${periodVal}. Proceed anyway?`);
+      return;
+    }
+
+    // After all checks succeed, commit to storage/state atomically
+    if (routinesUpdated) {
+      dbService.saveRoutines(proposedRoutines);
+    }
+
+    dbService.saveRoutineEntries(proposedEntries);
 
     // Reset forms and states
     setIsAddingEntry(false);

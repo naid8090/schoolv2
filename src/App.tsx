@@ -167,7 +167,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase notice sync error]:', err);
+          console.warn('[Supabase notice sync error]:', err);
         }
 
         // --- 4. FACULTY SYNC ---
@@ -185,7 +185,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase faculty sync error]:', err);
+          console.warn('[Supabase faculty sync error]:', err);
         }
 
         // --- 5. EVENTS SYNC ---
@@ -203,7 +203,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase events sync error]:', err);
+          console.warn('[Supabase events sync error]:', err);
         }
 
         // --- 6. EVENT IMAGES SYNC ---
@@ -221,7 +221,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase event images sync error]:', err);
+          console.warn('[Supabase event images sync error]:', err);
         }
 
         // --- 7. PERIOD MASTERS SYNC ---
@@ -244,7 +244,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase period masters sync error]:', err);
+          console.warn('[Supabase period masters sync error]:', err);
         }
 
         // --- 8. CALENDAR EVENTS SYNC ---
@@ -267,7 +267,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase calendar events sync error]:', err);
+          console.warn('[Supabase calendar events sync error]:', err);
         }
 
         // --- 8B. TIMETABLE GROUPS SYNC ---
@@ -292,7 +292,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase timetable groups sync error]:', err);
+          console.warn('[Supabase timetable groups sync error]:', err);
         }
 
         // --- 9. ROUTINES SYNC ---
@@ -316,7 +316,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase routines sync error]:', err);
+          console.warn('[Supabase routines sync error]:', err);
         }
 
         // --- 10. ROUTINE ENTRIES SYNC ---
@@ -338,7 +338,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase routine entries sync error]:', err);
+          console.warn('[Supabase routine entries sync error]:', err);
         }
 
         // --- 11. EXAM SCHEDULES SYNC ---
@@ -359,7 +359,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase exam schedules sync error]:', err);
+          console.warn('[Supabase exam schedules sync error]:', err);
         }
 
         // --- 12. EXAM ENTRIES SYNC ---
@@ -380,7 +380,7 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase exam entries sync error]:', err);
+          console.warn('[Supabase exam entries sync error]:', err);
         }
 
         // --- 13. MEDIA ITEMS SYNC ---
@@ -399,14 +399,14 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.error('[Supabase media items sync error]:', err);
+          console.warn('[Supabase media items sync error]:', err);
         }
 
         if (active) {
           localStorage.setItem('gsss_is_synchronized', 'true');
         }
       } catch (err) {
-        console.error('Failed to sync school settings and modules with Supabase:', err);
+        console.warn('Failed to sync school settings and modules with Supabase:', err);
       } finally {
         if (active) {
           if (skeletonTimer) clearTimeout(skeletonTimer);

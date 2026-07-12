@@ -1476,6 +1476,56 @@ class DatabaseService {
       }
     }
 
+    // EAGER ROUTINE LIFECYCLE MANAGEMENT: Ensure every active timetable group has exactly one corresponding routine
+    {
+      const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
+      const activeGroups = finalizedGroups.filter(g => g.is_active);
+      const activeGroupNames = new Set(activeGroups.map(g => g.name));
+
+      let routinesChanged = false;
+
+      // Filter out routines that do not correspond to any active timetable group name anymore
+      let updatedRoutines = routines.filter(r => activeGroupNames.has(r.class_name));
+      if (updatedRoutines.length !== routines.length) {
+        routinesChanged = true;
+      }
+
+      // Add missing routines for newly created active groups
+      activeGroups.forEach(g => {
+        const exists = updatedRoutines.some(r => r.class_name === g.name);
+        if (!exists) {
+          updatedRoutines.push({
+            id: generateUUID(),
+            class_name: g.name as any,
+            display_mode: 'online',
+            pdf_url: '',
+            override_active: false,
+            override_title: '',
+            override_pdf_url: '',
+            override_start: '',
+            override_end: '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          routinesChanged = true;
+        }
+      });
+
+      if (routinesChanged) {
+        this.setStorageItem('gsss_routines', updatedRoutines);
+        if (!localOnly) {
+          supabase
+            .from('routines')
+            .upsert(updatedRoutines)
+            .then(({ error }) => {
+              if (error) {
+                console.warn('[Supabase Routines Eager Sync Error caught]:', error.message);
+              }
+            });
+        }
+      }
+    }
+
     window.dispatchEvent(new CustomEvent('gsss-data-synced'));
 
     if (localOnly) return;

@@ -410,12 +410,8 @@ export const DatabaseHealth: React.FC = () => {
               break;
             }
             case 'timetable_groups': {
-              try {
-                const res = await supabaseDbService.getTimetableGroups();
-                remoteCount = res ? res.length : 0;
-              } catch {
-                remoteCount = 0;
-              }
+              const res = await supabaseDbService.getTimetableGroups();
+              remoteCount = res ? res.length : 0;
               break;
             }
             case 'routines': {
@@ -599,12 +595,8 @@ export const DatabaseHealth: React.FC = () => {
             break;
           }
           case 'timetable_groups': {
-            try {
-              const res = await supabaseDbService.getTimetableGroups();
-              remoteCount = res ? res.length : 0;
-            } catch {
-              remoteCount = 0;
-            }
+            const res = await supabaseDbService.getTimetableGroups();
+            remoteCount = res ? res.length : 0;
             break;
           }
           case 'routines': {

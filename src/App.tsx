@@ -430,6 +430,22 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
+    const seedIfRemoteEmpty = async () => {
+      try {
+        const remoteGroups = await supabaseDbService.getTimetableGroups();
+        if (!remoteGroups || remoteGroups.length === 0) {
+          const localGroups = dbService.getTimetableGroups();
+          if (localGroups && localGroups.length > 0) {
+            await supabaseDbService.saveTimetableGroups(localGroups);
+            console.log('[SEED SUCCESS] Timetable groups seeded successfully on admin session detection!');
+            window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+          }
+        }
+      } catch (err) {
+        console.warn('[SEED FAILURE] Error checking/seeding timetable groups:', err);
+      }
+    };
+
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -442,7 +458,12 @@ export default function App() {
             .single();
 
           if (active) {
-            setIsAdminLoggedIn(!roleError && roleData?.role === 'admin');
+            const isAdmin = !roleError && roleData?.role === 'admin';
+            setIsAdminLoggedIn(isAdmin);
+            if (isAdmin) {
+              console.log('[checkSession] Admin verified, checking/seeding timetable groups...');
+              seedIfRemoteEmpty();
+            }
           }
         } else {
           if (active) setIsAdminLoggedIn(false);
@@ -467,8 +488,13 @@ export default function App() {
             .single();
 
           if (active) {
-            setIsAdminLoggedIn(!roleError && roleData?.role === 'admin');
+            const isAdmin = !roleError && roleData?.role === 'admin';
+            setIsAdminLoggedIn(isAdmin);
             setIsVerifyingAuth(false);
+            if (isAdmin) {
+              console.log('[onAuthStateChange] Admin verified, checking/seeding timetable groups...');
+              seedIfRemoteEmpty();
+            }
           }
         } catch (err) {
           console.error(err);

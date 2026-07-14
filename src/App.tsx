@@ -39,6 +39,7 @@ export default function App() {
   // Administration Auth States
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState<boolean>(true);
+  const [authInitializationComplete, setAuthInitializationComplete] = useState<boolean>(false);
 
   // Authorization Form bindings
   const [loginUser, setLoginUser] = useState('');
@@ -47,6 +48,10 @@ export default function App() {
 
   // Load and sync School Settings & Homepage Modules on Startup
   useEffect(() => {
+    if (!authInitializationComplete) {
+      return;
+    }
+
     let active = true;
     let skeletonTimer: any = null;
 
@@ -424,7 +429,7 @@ export default function App() {
       active = false;
       if (skeletonTimer) clearTimeout(skeletonTimer);
     };
-  }, []);
+  }, [authInitializationComplete]);
 
   // Active session and authentication state persistence listener
   useEffect(() => {
@@ -471,7 +476,10 @@ export default function App() {
       } catch (err) {
         console.error('Session verification check failed', err);
       } finally {
-        if (active) setIsVerifyingAuth(false);
+        if (active) {
+          setIsVerifyingAuth(false);
+          setAuthInitializationComplete(true);
+        }
       }
     };
 
@@ -491,6 +499,7 @@ export default function App() {
             const isAdmin = !roleError && roleData?.role === 'admin';
             setIsAdminLoggedIn(isAdmin);
             setIsVerifyingAuth(false);
+            setAuthInitializationComplete(true);
             if (isAdmin) {
               console.log('[onAuthStateChange] Admin verified, checking/seeding timetable groups...');
               seedIfRemoteEmpty();
@@ -501,12 +510,14 @@ export default function App() {
           if (active) {
             setIsAdminLoggedIn(false);
             setIsVerifyingAuth(false);
+            setAuthInitializationComplete(true);
           }
         }
       } else {
         if (active) {
           setIsAdminLoggedIn(false);
           setIsVerifyingAuth(false);
+          setAuthInitializationComplete(true);
         }
       }
     });
@@ -575,6 +586,40 @@ export default function App() {
         setLoginError(error.message || 'Invalid Email or Password.');
         return;
       }
+
+      // Logging for session verification
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      console.log("AUTH.USER", authUser);
+      console.log("SESSION.USER", session?.user);
+
+      console.log("ACCESS TOKEN");
+      console.log(session?.access_token);
+
+      let payload: any = {};
+      if (session?.access_token) {
+        try {
+          const base64Url = session.access_token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          payload = JSON.parse(window.atob(base64));
+        } catch (e) {
+          console.error("Failed to decode JWT:", e);
+        }
+      }
+
+      console.log({
+        sub: payload.sub,
+        email: payload.email,
+        role: payload.role
+      });
+
+      console.log(window.location.href);
 
       const user = data.user;
       if (user) {

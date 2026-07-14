@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { supabase } from './supabase';
+import { supabase, traceAuth, normalizeRoutine, normalizeRoutines } from './supabase';
 import { 
   SchoolSettings, 
   HomepageModule, 
@@ -358,21 +358,32 @@ class SupabaseDbService {
   }
 
   async saveRoutines(routines: Routine[]): Promise<void> {
-    const { error } = await supabase
+    await traceAuth('routines');
+    console.log("ROUTINE_UPSERT_START", { count: routines.length });
+    const normalized = normalizeRoutines(routines);
+    const { data, error } = await supabase
       .from('routines')
-      .upsert(routines);
+      .upsert(normalized)
+      .select();
 
+    console.log("ROUTINE_UPSERT_RESULT");
+    console.log({ data, error });
     if (error) throw error;
   }
 
   async updateRoutine(id: string, fields: Partial<Routine>): Promise<Routine> {
+    await traceAuth('routines');
+    console.log("ROUTINE_UPDATE_START", { id, fields });
+    const normalizedFields = normalizeRoutine({ ...fields, updated_at: new Date().toISOString() });
     const { data, error } = await supabase
       .from('routines')
-      .update({ ...fields, updated_at: new Date().toISOString() })
+      .update(normalizedFields)
       .eq('id', id)
       .select()
       .single();
 
+    console.log("ROUTINE_UPDATE_RESULT");
+    console.log({ data, error });
     if (error) throw error;
     return data as Routine;
   }
@@ -390,26 +401,37 @@ class SupabaseDbService {
   }
 
   async saveRoutineEntries(entries: RoutineEntry[]): Promise<void> {
+    await traceAuth('routine_entries');
+    console.log("ROUTINE_ENTRY_UPSERT_START", { count: entries.length });
     // Replaces / upserts multiple routine entries
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('routine_entries')
-      .upsert(entries);
+      .upsert(entries)
+      .select();
 
+    console.log("ROUTINE_ENTRY_UPSERT_RESULT");
+    console.log({ data, error });
     if (error) throw error;
   }
 
   async createRoutineEntry(entry: Omit<RoutineEntry, 'id'>): Promise<RoutineEntry> {
+    await traceAuth('routine_entries');
+    console.log("ROUTINE_ENTRY_CREATE_START", { entry });
     const { data, error } = await supabase
       .from('routine_entries')
       .insert([entry])
       .select()
       .single();
 
+    console.log("ROUTINE_ENTRY_CREATE_RESULT");
+    console.log({ data, error });
     if (error) throw error;
     return data as RoutineEntry;
   }
 
   async updateRoutineEntry(id: string, fields: Partial<RoutineEntry>): Promise<RoutineEntry> {
+    await traceAuth('routine_entries');
+    console.log("ROUTINE_ENTRY_UPDATE_START", { id, fields });
     const { data, error } = await supabase
       .from('routine_entries')
       .update(fields)
@@ -417,16 +439,23 @@ class SupabaseDbService {
       .select()
       .single();
 
+    console.log("ROUTINE_ENTRY_UPDATE_RESULT");
+    console.log({ data, error });
     if (error) throw error;
     return data as RoutineEntry;
   }
 
   async deleteRoutineEntry(id: string): Promise<void> {
-    const { error } = await supabase
+    await traceAuth('routine_entries');
+    console.log("ROUTINE_ENTRY_DELETE_START", { id });
+    const { data, error } = await supabase
       .from('routine_entries')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
+    console.log("ROUTINE_ENTRY_DELETE_RESULT");
+    console.log({ data, error });
     if (error) throw error;
   }
 
@@ -490,10 +519,15 @@ class SupabaseDbService {
   }
 
   async saveTimetableGroups(groups: TimetableGroup[]): Promise<void> {
-    const { error } = await supabase
+    await traceAuth('timetable_groups');
+    console.log("TIMETABLE_GROUP_UPSERT_START", { count: groups.length });
+    const { data, error } = await supabase
       .from('timetable_groups')
-      .upsert(groups);
+      .upsert(groups)
+      .select();
 
+    console.log("TIMETABLE_GROUP_UPSERT_RESULT");
+    console.log({ data, error });
     if (error) {
       console.warn('Error saving timetable groups to Supabase:', error.message);
       throw error;
@@ -501,11 +535,16 @@ class SupabaseDbService {
   }
 
   async deleteTimetableGroup(id: string): Promise<void> {
-    const { error } = await supabase
+    await traceAuth('timetable_groups');
+    console.log("TIMETABLE_GROUP_DELETE_START", { id });
+    const { data, error } = await supabase
       .from('timetable_groups')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
+    console.log("TIMETABLE_GROUP_DELETE_RESULT");
+    console.log({ data, error });
     if (error) {
       console.warn('Error deleting timetable group from Supabase:', error.message);
       throw error;

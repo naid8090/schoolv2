@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { supabase } from './supabase';
+import { supabase, normalizeRoutines } from './supabase';
 import { dbService, ensureValidUUID, generateUUID } from './db';
 import { supabaseDbService } from './supabaseDb';
 import { Routine, RoutineEntry } from '../types';
@@ -78,9 +78,10 @@ class DatabaseSeeder {
       }
 
       // 4. Perform upload upsert/insert
+      const normalizedRoutines = normalizeRoutines(validatedRoutines);
       const { error: insertError } = await supabase
         .from('routines')
-        .insert(validatedRoutines);
+        .insert(normalizedRoutines);
 
       if (insertError) {
         throw new Error(`Seeding failed during upload: ${insertError.message}`);

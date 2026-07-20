@@ -640,7 +640,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
   };
 
-  const handleSaveFaculty = (e: React.FormEvent) => {
+  const handleSaveFaculty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!facName.trim()) {
       triggerAlert('Validation Warning', 'Faculty Member Scholarly Name is required.');
@@ -678,7 +678,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }
           return re;
         });
-        dbService.saveRoutineEntries(updatedEntries);
+        await dbService.saveRoutineEntries(updatedEntries);
       }
     } else {
       dbService.createFaculty(payload);

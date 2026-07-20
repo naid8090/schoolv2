@@ -29,12 +29,12 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
-  const loadData = () => {
+  const loadData = async () => {
     const allRoutines = dbService.getRoutines();
     // Clean up any polluted 'FullMatrix' routine key if any legacy bug polluted it
     const cleanRoutines = allRoutines.filter(r => r.class_name as string !== 'FullMatrix');
     if (allRoutines.length !== cleanRoutines.length) {
-      dbService.saveRoutines(cleanRoutines);
+      await dbService.saveRoutines(cleanRoutines);
       setRoutines(cleanRoutines);
     } else {
       setRoutines(allRoutines);

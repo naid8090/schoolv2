@@ -24,6 +24,7 @@ import { dbService } from '../services/db';
 import { supabaseDbService } from '../services/supabaseDb';
 import { databaseSeeder } from '../services/databaseSeeder';
 import { referenceService, IntegrityDiagnostics } from '../services/referenceService';
+import { supabase, traceAuth, normalizeRoutines } from '../services/supabase';
 
 interface ModuleHealthData {
   id: string;
@@ -37,6 +38,55 @@ interface ModuleHealthData {
   isDefault: boolean;
   icon: React.ReactNode;
   seedable?: boolean;
+}
+
+function isDeeplyInSync(local: any[], remote: any[]): boolean {
+  if (local.length !== remote.length) return false;
+  
+  const remoteMap = new Map<string, any>();
+  remote.forEach(item => {
+    if (item && item.id) {
+      remoteMap.set(item.id, item);
+    }
+  });
+
+  for (const localItem of local) {
+    if (!localItem) continue;
+    
+    // For arrays without id field (e.g. single config objects or custom arrays)
+    if (!localItem.id) {
+      // Direct comparison with corresponding index or keys
+      const remoteItem = remote.find(r => r && !r.id);
+      if (!remoteItem) return false;
+      const lKeys = Object.keys(localItem).sort();
+      for (const k of lKeys) {
+        if (k === 'updated_at' || k === 'created_at') continue;
+        if (JSON.stringify(localItem[k]) !== JSON.stringify(remoteItem[k])) {
+          return false;
+        }
+      }
+      continue;
+    }
+
+    const remoteItem = remoteMap.get(localItem.id);
+    if (!remoteItem) return false;
+
+    if (localItem.updated_at && remoteItem.updated_at) {
+      if (localItem.updated_at !== remoteItem.updated_at) {
+        return false;
+      }
+    } else {
+      const lKeys = Object.keys(localItem).sort();
+      for (const k of lKeys) {
+        if (k === 'updated_at' || k === 'created_at') continue;
+        if (JSON.stringify(localItem[k]) !== JSON.stringify(remoteItem[k])) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 export const DatabaseHealth: React.FC = () => {
@@ -315,143 +365,152 @@ export const DatabaseHealth: React.FC = () => {
         let status: 'Healthy' | 'Needs Seeding' | 'Local Only' | 'Out of Sync' | 'Error' = 'Healthy';
         let errorMsg: string | undefined = undefined;
 
-        // Retrieve local count
+        let localItems: any[] = [];
+        let remoteItems: any[] = [];
+
+        // Retrieve local count and items
         try {
           switch (m.id) {
-            case 'school_settings':
-              localCount = dbService.getSchoolSettings() ? 1 : 0;
+            case 'school_settings': {
+              const settings = dbService.getSchoolSettings();
+              localItems = settings ? [settings] : [];
               break;
+            }
             case 'homepage_modules':
-              localCount = dbService.getHomepageModules().length;
+              localItems = dbService.getHomepageModules();
               break;
             case 'notices':
-              localCount = dbService.getNotices().length;
+              localItems = dbService.getNotices();
               break;
             case 'faculty':
-              localCount = dbService.getFaculty().length;
+              localItems = dbService.getFaculty();
               break;
             case 'events':
-              localCount = (dbService.getEvents() || []).length;
+              localItems = dbService.getEvents() || [];
               break;
             case 'event_images':
-              localCount = (dbService.getEventImages() || []).length;
+              localItems = dbService.getEventImages() || [];
               break;
             case 'period_masters':
-              localCount = dbService.getPeriodMasters().length;
+              localItems = dbService.getPeriodMasters();
               break;
             case 'calendar_events':
-              localCount = dbService.getCalendarEvents().length;
+              localItems = dbService.getCalendarEvents();
               break;
             case 'timetable_groups':
-              localCount = dbService.getTimetableGroups().length;
+              localItems = dbService.getTimetableGroups();
               break;
             case 'routines':
-              localCount = dbService.getRoutines().length;
+              localItems = dbService.getRoutines();
               break;
             case 'routine_entries':
-              localCount = dbService.getRoutineEntries().length;
+              localItems = dbService.getRoutineEntries();
               break;
             case 'exam_schedules':
-              localCount = dbService.getExamSchedules().length;
+              localItems = dbService.getExamSchedules();
               break;
             case 'exam_entries':
-              localCount = dbService.getExamEntries().length;
+              localItems = dbService.getExamEntries();
               break;
             case 'media_library':
-              localCount = dbService.getMediaItems().length;
+              localItems = dbService.getMediaItems();
               break;
           }
+          localCount = localItems.length;
         } catch (err: any) {
           console.error(`Local read error for ${m.id}:`, err);
           localCount = 0;
+          localItems = [];
         }
 
-        // Retrieve remote count
+        // Retrieve remote count and items
         try {
           switch (m.id) {
             case 'school_settings': {
               const res = await supabaseDbService.getSchoolSettings();
-              remoteCount = res ? 1 : 0;
+              remoteItems = res ? [res] : [];
               break;
             }
             case 'homepage_modules': {
               const res = await supabaseDbService.getHomepageModules();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'notices': {
               const res = await supabaseDbService.getNotices();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'faculty': {
               const res = await supabaseDbService.getFaculty();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'events': {
               const res = await supabaseDbService.getEvents();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'event_images': {
               const res = await supabaseDbService.getEventImages();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'period_masters': {
               const res = await supabaseDbService.getPeriodMasters();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'calendar_events': {
               const res = await supabaseDbService.getCalendarEvents();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'timetable_groups': {
               const res = await supabaseDbService.getTimetableGroups();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'routines': {
               const res = await supabaseDbService.getRoutines();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'routine_entries': {
               const res = await supabaseDbService.getRoutineEntries();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'exam_schedules': {
               const res = await supabaseDbService.getExamSchedules();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'exam_entries': {
               const res = await supabaseDbService.getExamEntries();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
             case 'media_library': {
               const res = await supabaseDbService.getMediaItems();
-              remoteCount = res ? res.length : 0;
+              remoteItems = res || [];
               break;
             }
           }
+          remoteCount = remoteItems.length;
         } catch (err: any) {
           console.error(`Remote read error for ${m.id}:`, err);
           remoteCount = null;
+          remoteItems = [];
           errorMsg = err.message || 'Supabase Connection Error';
         }
 
-        // Compute Status
+        // Compute Status using deep comparison
         if (remoteCount === null) {
           status = 'Error';
         } else if (remoteCount === 0 && localCount > 0) {
           status = m.isDefault ? 'Needs Seeding' : 'Local Only';
-        } else if (remoteCount !== localCount) {
+        } else if (!isDeeplyInSync(localItems, remoteItems)) {
           status = 'Out of Sync';
         } else {
           status = 'Healthy';
@@ -706,6 +765,62 @@ export const DatabaseHealth: React.FC = () => {
     setHealthModules(prev => prev.map(m => m.id === moduleId ? { ...m, loading: true, errorMsg: undefined } : m));
     setOperationResult(null);
 
+    const performNonDestructiveMerge = async (
+      localItems: any[],
+      remoteItems: any[],
+      saveLocalFn: (items: any[], localOnly: boolean) => Promise<void> | void,
+      tableName: string
+    ) => {
+      const mergedMap = new Map<string, any>();
+
+      // Add remote first
+      remoteItems.forEach(item => {
+        if (item && item.id) {
+          mergedMap.set(item.id, item);
+        }
+      });
+
+      // Merge local
+      localItems.forEach(localItem => {
+        if (!localItem || !localItem.id) return;
+        const remoteItem = mergedMap.get(localItem.id);
+        if (!remoteItem) {
+          mergedMap.set(localItem.id, localItem);
+        } else {
+          const localTime = localItem.updated_at ? new Date(localItem.updated_at).getTime() : 0;
+          const remoteTime = remoteItem.updated_at ? new Date(remoteItem.updated_at).getTime() : 0;
+
+          if (localTime > remoteTime) {
+            mergedMap.set(localItem.id, localItem);
+          } else {
+            const mergedItem = { ...remoteItem };
+            // Preserve shared_lecture_id if local has it and remote doesn't
+            if (localItem.shared_lecture_id && !remoteItem.shared_lecture_id) {
+              mergedItem.shared_lecture_id = localItem.shared_lecture_id;
+            }
+            mergedMap.set(localItem.id, mergedItem);
+          }
+        }
+      });
+
+      const mergedList = Array.from(mergedMap.values());
+
+      // 1. Save to local cache
+      await saveLocalFn(mergedList, true);
+
+      // 2. Save to cloud database
+      await traceAuth(tableName);
+      const payload = tableName === 'routines' ? normalizeRoutines(mergedList) : mergedList;
+      const { error } = await supabase
+        .from(tableName)
+        .upsert(payload);
+
+      if (error) {
+        console.error(`[Non-Destructive Repair Error] Failed to upsert to ${tableName}:`, error.message);
+        throw error;
+      }
+    };
+
     try {
       let repairSuccess = false;
       let msg = '';
@@ -713,153 +828,136 @@ export const DatabaseHealth: React.FC = () => {
       switch (moduleId) {
         case 'school_settings': {
           const remote = await supabaseDbService.getSchoolSettings();
-          if (remote) {
-            dbService.saveSchoolSettings(remote, true);
+          const local = dbService.getSchoolSettings();
+          if (remote && local) {
+            const remoteTime = (remote as any).updated_at ? new Date((remote as any).updated_at).getTime() : 0;
+            const localTime = (local as any).updated_at ? new Date((local as any).updated_at).getTime() : 0;
+            const merged = localTime > remoteTime ? local : remote;
+            await dbService.saveSchoolSettings(merged, true);
+            await traceAuth('school_settings');
+            const { error } = await supabase
+              .from('school_settings')
+              .upsert(merged);
+            if (error) throw error;
             repairSuccess = true;
-            msg = 'School settings synchronized from cloud database to local system cache successfully.';
+            msg = 'School settings non-destructively merged and synchronized successfully.';
           } else {
-            const local = dbService.getSchoolSettings();
-            if (local) {
-              const saved = await supabaseDbService.saveSchoolSettings(local);
-              if (saved) {
-                repairSuccess = true;
-                msg = 'Local school settings uploaded to cloud database successfully.';
-              }
+            const finalSettings = remote || local;
+            if (finalSettings) {
+              await dbService.saveSchoolSettings(finalSettings, true);
+              await traceAuth('school_settings');
+              const { error } = await supabase
+                .from('school_settings')
+                .upsert(finalSettings);
+              if (error) throw error;
+              repairSuccess = true;
+              msg = 'School settings synchronized successfully.';
             }
           }
           break;
         }
         case 'homepage_modules': {
-          const remote = await supabaseDbService.getHomepageModules();
-          if (remote && remote.length > 0) {
-            dbService.saveHomepageModules(remote, true);
-            repairSuccess = true;
-            msg = 'Homepage configuration synchronized from cloud database successfully.';
-          } else {
-            const local = dbService.getHomepageModules();
-            if (local && local.length > 0) {
-              await supabaseDbService.saveHomepageModules(local);
-              repairSuccess = true;
-              msg = 'Local homepage configuration uploaded to cloud database successfully.';
-            }
-          }
+          const remote = await supabaseDbService.getHomepageModules() || [];
+          const local = dbService.getHomepageModules();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveHomepageModules(items, true), 'homepage_modules');
+          repairSuccess = true;
+          msg = 'Homepage configurations successfully merged and synchronized.';
           break;
         }
         case 'notices': {
-          const remote = await supabaseDbService.getNotices();
-          if (remote) {
-            dbService.saveNotices(remote, true);
-            repairSuccess = true;
-            msg = 'Notices archive synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getNotices() || [];
+          const local = dbService.getNotices();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveNotices(items, true), 'notices');
+          repairSuccess = true;
+          msg = 'Notices archive successfully merged and synchronized.';
           break;
         }
         case 'faculty': {
-          const remote = await supabaseDbService.getFaculty();
-          if (remote) {
-            dbService.saveFaculty(remote, true);
-            repairSuccess = true;
-            msg = 'Faculty roster successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getFaculty() || [];
+          const local = dbService.getFaculty();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveFaculty(items, true), 'faculty');
+          repairSuccess = true;
+          msg = 'Faculty roster successfully merged and synchronized.';
           break;
         }
         case 'events': {
-          const remote = await supabaseDbService.getEvents();
-          if (remote) {
-            dbService.saveEvents(remote, true);
-            repairSuccess = true;
-            msg = 'Events Board synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getEvents() || [];
+          const local = dbService.getEvents() || [];
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveEvents(items, true), 'events');
+          repairSuccess = true;
+          msg = 'Events Board successfully merged and synchronized.';
           break;
         }
         case 'event_images': {
-          const remote = await supabaseDbService.getEventImages();
-          if (remote) {
-            dbService.saveEventImages(remote, true);
-            repairSuccess = true;
-            msg = 'Event photo gallery mapping synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getEventImages() || [];
+          const local = dbService.getEventImages() || [];
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveEventImages(items, true), 'event_images');
+          repairSuccess = true;
+          msg = 'Event photo gallery mapping successfully merged and synchronized.';
           break;
         }
         case 'period_masters': {
-          const remote = await supabaseDbService.getPeriodMasters();
-          if (remote) {
-            dbService.savePeriodMasters(remote, true);
-            repairSuccess = true;
-            msg = 'Period Masters bell timings synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getPeriodMasters() || [];
+          const local = dbService.getPeriodMasters();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.savePeriodMasters(items, true), 'period_masters');
+          repairSuccess = true;
+          msg = 'Period Masters bell timings successfully merged and synchronized.';
           break;
         }
         case 'calendar_events': {
-          const remote = await supabaseDbService.getCalendarEvents();
-          if (remote) {
-            dbService.saveCalendarEvents(remote, true);
-            repairSuccess = true;
-            msg = 'Academic Calendar slots synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getCalendarEvents() || [];
+          const local = dbService.getCalendarEvents();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveCalendarEvents(items, true), 'calendar_events');
+          repairSuccess = true;
+          msg = 'Academic Calendar slots successfully merged and synchronized.';
           break;
         }
         case 'timetable_groups': {
-          try {
-            const remote = await supabaseDbService.getTimetableGroups();
-            if (remote && remote.length > 0) {
-              dbService.saveTimetableGroups(remote, true);
-              repairSuccess = true;
-              msg = 'Timetable Group Registry successfully synchronized with cloud database.';
-            } else {
-              // fallback to success but keep local-only
-              repairSuccess = true;
-              msg = 'Timetable Group Registry synchronized locally.';
-            }
-          } catch {
-            repairSuccess = true;
-            msg = 'Timetable Group Registry synchronized locally.';
-          }
+          const remote = await supabaseDbService.getTimetableGroups() || [];
+          const local = dbService.getTimetableGroups();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveTimetableGroups(items, true), 'timetable_groups');
+          repairSuccess = true;
+          msg = 'Timetable Group Registry successfully merged and synchronized.';
           break;
         }
         case 'routines': {
-          const remote = await supabaseDbService.getRoutines();
-          if (remote) {
-            dbService.saveRoutines(remote, true);
-            repairSuccess = true;
-            msg = 'Class Routines successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getRoutines() || [];
+          const local = dbService.getRoutines();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveRoutines(items, true), 'routines');
+          repairSuccess = true;
+          msg = 'Class Routines successfully merged and synchronized.';
           break;
         }
         case 'routine_entries': {
-          const remote = await supabaseDbService.getRoutineEntries();
-          if (remote) {
-            dbService.saveRoutineEntries(remote, true);
-            repairSuccess = true;
-            msg = 'Timetable entries successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getRoutineEntries() || [];
+          const local = dbService.getRoutineEntries();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveRoutineEntries(items, true), 'routine_entries');
+          repairSuccess = true;
+          msg = 'Timetable entries successfully merged and synchronized, preserving shared lectures.';
           break;
         }
         case 'exam_schedules': {
-          const remote = await supabaseDbService.getExamSchedules();
-          if (remote) {
-            dbService.saveExamSchedules(remote, true);
-            repairSuccess = true;
-            msg = 'Exam Schedules database successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getExamSchedules() || [];
+          const local = dbService.getExamSchedules();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveExamSchedules(items, true), 'exam_schedules');
+          repairSuccess = true;
+          msg = 'Exam schedules successfully merged and synchronized.';
           break;
         }
         case 'exam_entries': {
-          const remote = await supabaseDbService.getExamEntries();
-          if (remote) {
-            dbService.saveExamEntries(remote, true);
-            repairSuccess = true;
-            msg = 'Exam slot entries successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getExamEntries() || [];
+          const local = dbService.getExamEntries();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveExamEntries(items, true), 'exam_entries');
+          repairSuccess = true;
+          msg = 'Exam slot entries successfully merged and synchronized.';
           break;
         }
         case 'media_library': {
-          const remote = await supabaseDbService.getMediaItems();
-          if (remote) {
-            dbService.saveMediaItems(remote, true);
-            repairSuccess = true;
-            msg = 'Media Library metadata successfully synchronized with cloud database.';
-          }
+          const remote = await supabaseDbService.getMediaItems() || [];
+          const local = dbService.getMediaItems();
+          await performNonDestructiveMerge(local, remote, (items) => dbService.saveMediaItems(items, true), 'media_library');
+          repairSuccess = true;
+          msg = 'Media library mapping successfully merged and synchronized.';
           break;
         }
       }

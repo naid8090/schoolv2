@@ -199,7 +199,7 @@ const PeriodsMasterWorkspace: React.FC<{
     }
   }, [timeRange]);
 
-  const handleAddOrUpdate = (e: React.FormEvent) => {
+  const handleAddOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     if (!timeRange.trim()) return;
@@ -253,34 +253,38 @@ const PeriodsMasterWorkspace: React.FC<{
       }
     }
 
-    // 5. Apply save or update
-    if (editingId) {
-      // Edit
-      const updated = periodMasters.map(pm => pm.id === editingId ? { ...pm, name: name.trim(), time_range: timeRange.trim() } : pm);
-      dbService.savePeriodMasters(updated);
-      setPeriodMasters(updated);
-      setEditingId(null);
-    } else {
-      // Create
-      const newPm: PeriodMaster = {
-        id: `pm_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        name: name.trim(),
-        time_range: timeRange.trim()
-      };
-      const updated = [...periodMasters, newPm].sort((a, b) => {
-        const numA = parseInt(a.name.replace(/\D/g, '')) || 99;
-        const numB = parseInt(b.name.replace(/\D/g, '')) || 99;
-        return numA - numB;
-      });
-      dbService.savePeriodMasters(updated);
-      setPeriodMasters(updated);
-    }
+    try {
+      // 5. Apply save or update
+      if (editingId) {
+        // Edit
+        const updated = periodMasters.map(pm => pm.id === editingId ? { ...pm, name: name.trim(), time_range: timeRange.trim() } : pm);
+        await dbService.savePeriodMasters(updated);
+        setPeriodMasters(updated);
+        setEditingId(null);
+      } else {
+        // Create
+        const newPm: PeriodMaster = {
+          id: `pm_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+          name: name.trim(),
+          time_range: timeRange.trim()
+        };
+        const updated = [...periodMasters, newPm].sort((a, b) => {
+          const numA = parseInt(a.name.replace(/\D/g, '')) || 99;
+          const numB = parseInt(b.name.replace(/\D/g, '')) || 99;
+          return numA - numB;
+        });
+        await dbService.savePeriodMasters(updated);
+        setPeriodMasters(updated);
+      }
 
-    setName('');
-    setTimeRange('');
-    setError(null);
-    setWarning(null);
-    fetchLocalData();
+      setName('');
+      setTimeRange('');
+      setError(null);
+      setWarning(null);
+      fetchLocalData();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while saving the period.');
+    }
   };
 
   const handleEdit = (pm: PeriodMaster) => {
@@ -298,39 +302,43 @@ const PeriodsMasterWorkspace: React.FC<{
 
     const deletedPm = periodMasters.find(pm => pm.id === id);
     
-    // Call the dedicated dbService delete method
-    dbService.deletePeriodMaster(id);
-    
-    // Cascading clean up of associated routine entries to prevent empty/orphaned placeholders
-    if (deletedPm) {
-      const allEntries = dbService.getRoutineEntries();
-      const entriesToRemove = allEntries.filter(
-        e => e.period.toLowerCase().trim() === deletedPm.name.toLowerCase().trim()
-      );
-      const idsToRemove = entriesToRemove.map(e => e.id);
+    try {
+      // Call the dedicated dbService delete method
+      await dbService.deletePeriodMaster(id);
       
-      console.log('[CASCADE DELETE] Period Master cascade delete started for period:', deletedPm.name);
-      console.log('[CASCADE DELETE] Found routine entries to remove:', idsToRemove);
+      // Cascading clean up of associated routine entries to prevent empty/orphaned placeholders
+      if (deletedPm) {
+        const allEntries = dbService.getRoutineEntries();
+        const entriesToRemove = allEntries.filter(
+          e => e.period.toLowerCase().trim() === deletedPm.name.toLowerCase().trim()
+        );
+        const idsToRemove = entriesToRemove.map(e => e.id);
+        
+        console.log('[CASCADE DELETE] Period Master cascade delete started for period:', deletedPm.name);
+        console.log('[CASCADE DELETE] Found routine entries to remove:', idsToRemove);
 
-      if (idsToRemove.length > 0) {
-        // Delete those IDs remotely and update local cache
-        try {
-          await dbService.deleteRoutineEntries(idsToRemove);
-          console.log('[CASCADE DELETE] Remote cascade delete successful.');
-        } catch (err) {
-          console.error('[CASCADE DELETE] Remote cascade delete failed:', err);
+        if (idsToRemove.length > 0) {
+          // Delete those IDs remotely and update local cache
+          try {
+            await dbService.deleteRoutineEntries(idsToRemove);
+            console.log('[CASCADE DELETE] Remote cascade delete successful.');
+          } catch (err) {
+            console.error('[CASCADE DELETE] Remote cascade delete failed:', err);
+          }
+        } else {
+          console.log('[CASCADE DELETE] No routine entries found using this period. No remote deletes needed.');
         }
-      } else {
-        console.log('[CASCADE DELETE] No routine entries found using this period. No remote deletes needed.');
       }
+      
+      // Refresh local lists and dispatch sync event to update the UI
+      fetchLocalData();
+      window.dispatchEvent(new CustomEvent('gsss-data-synced'));
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while deleting the period.');
     }
-    
-    // Refresh local lists and dispatch sync event to update the UI
-    fetchLocalData();
-    window.dispatchEvent(new CustomEvent('gsss-data-synced'));
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     if (window.confirm('Are you sure you want to reset study periods to default Bihar summer timings?')) {
       const defaults: PeriodMaster[] = [
         { id: 'p_1', name: 'Period 1', time_range: '09:00 AM - 09:45 AM' },
@@ -340,9 +348,13 @@ const PeriodsMasterWorkspace: React.FC<{
         { id: 'p_5', name: 'Period 5', time_range: '12:45 PM - 01:30 PM' },
         { id: 'p_6', name: 'Period 6', time_range: '01:30 PM - 02:15 PM' },
       ];
-      dbService.savePeriodMasters(defaults);
-      setPeriodMasters(defaults);
-      fetchLocalData();
+      try {
+        await dbService.savePeriodMasters(defaults);
+        setPeriodMasters(defaults);
+        fetchLocalData();
+      } catch (err: any) {
+        setError(err.message || 'Failed to reset study periods to defaults.');
+      }
     }
   };
 
@@ -573,7 +585,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
     setError(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -640,13 +652,17 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
 
     updatedGroups.sort((a, b) => a.display_order - b.display_order);
 
-    dbService.saveTimetableGroups(updatedGroups);
-    loadGroups();
-    fetchLocalData();
-    resetForm();
+    try {
+      await dbService.saveTimetableGroups(updatedGroups);
+      loadGroups();
+      fetchLocalData();
+      resetForm();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while saving the timetable group.');
+    }
   };
 
-  const handleToggleActive = (group: TimetableGroup) => {
+  const handleToggleActive = async (group: TimetableGroup) => {
     const updated = groups.map(g => {
       if (g.id === group.id) {
         return {
@@ -657,12 +673,16 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
       }
       return g;
     });
-    dbService.saveTimetableGroups(updated);
-    loadGroups();
-    fetchLocalData();
+    try {
+      await dbService.saveTimetableGroups(updated);
+      loadGroups();
+      fetchLocalData();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while toggling the timetable group active state.');
+    }
   };
 
-  const handleDelete = (group: TimetableGroup) => {
+  const handleDelete = async (group: TimetableGroup) => {
     const SEEDED_GROUP_IDS = [
       '99999999-9999-9999-9999-999900000009',
       '99999999-9999-9999-9999-999900000010',
@@ -685,10 +705,14 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
     }
 
     if (window.confirm(`Are you sure you want to delete "${group.name}"?`)) {
-      dbService.deleteTimetableGroup(group.id);
-      loadGroups();
-      fetchLocalData();
-      resetForm();
+      try {
+        await dbService.deleteTimetableGroup(group.id);
+        loadGroups();
+        fetchLocalData();
+        resetForm();
+      } catch (err: any) {
+        setError(err.message || 'An error occurred while deleting the timetable group.');
+      }
     }
   };
 
@@ -903,6 +927,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const [formError, setFormError] = useState<string | null>(null);
   const [combinedError, setCombinedError] = useState<string | null>(null);
   const [quickError, setQuickError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const resetLectureDialogState = () => {
     setIsAddingEntry(false);
@@ -1147,7 +1172,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry') ? routines.find(r => r.class_name === selectedClass) : undefined;
   const classEntries = activeRoutine ? entries.filter(e => e.routine_id === activeRoutine?.id) : [];
 
-  const initClassRoutineIfMissing = () => {
+  const initClassRoutineIfMissing = async () => {
     if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix' || selectedClass === 'GroupsRegistry') return;
     const list = dbService.getRoutines();
     let current = list.find(r => r.class_name === selectedClass);
@@ -1165,8 +1190,12 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      dbService.saveRoutines([...list, newRoutine]);
-      fetchLocalData();
+      try {
+        await dbService.saveRoutines([...list, newRoutine]);
+        fetchLocalData();
+      } catch (err) {
+        console.error("Failed to initialize class routine:", err);
+      }
     }
   };
 
@@ -1215,11 +1244,15 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   };
 
   // Handle Display Mode Change
-  const updateDisplayMode = (mode: 'online' | 'pdf') => {
+  const updateDisplayMode = async (mode: 'online' | 'pdf') => {
     if (!activeRoutine) return;
     const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, display_mode: mode, updated_at: new Date().toISOString() } : r);
-    dbService.saveRoutines(updated);
-    fetchLocalData();
+    try {
+      await dbService.saveRoutines(updated);
+      fetchLocalData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update display mode.');
+    }
   };
 
   // Handle Routine PDF assignment
@@ -1227,7 +1260,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     if (!activeRoutine) return;
     triggerMedia(
       `Select PDF for ${selectedClass} Timetable`,
-      (url) => {
+      async (url) => {
         if (pdfApplyTarget === 'all') {
           const classesToApply = allClasses;
           let currentRoutines = [...routines];
@@ -1259,10 +1292,18 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
             }
           });
           
-          dbService.saveRoutines(currentRoutines);
+          try {
+            await dbService.saveRoutines(currentRoutines);
+          } catch (err: any) {
+            setError(err.message || 'Failed to assign PDF to all classes.');
+          }
         } else {
           const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: url, updated_at: new Date().toISOString() } : r);
-          dbService.saveRoutines(updated);
+          try {
+            await dbService.saveRoutines(updated);
+          } catch (err: any) {
+            setError(err.message || 'Failed to assign PDF.');
+          }
         }
         fetchLocalData();
       }
@@ -1291,7 +1332,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     }
   };
 
-  const handleDeletePDF = () => {
+  const handleDeletePDF = async () => {
     if (!activeRoutine || !activeRoutine.pdf_url) return;
     
     const sharedWith = routines.filter(r => r.pdf_url && r.pdf_url === activeRoutine.pdf_url);
@@ -1303,20 +1344,24 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       
     if (!confirm(message)) return;
     
-    if (isShared) {
-      const urlToDelete = activeRoutine.pdf_url;
-      const updated = routines.map(r => r.pdf_url === urlToDelete ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
-      dbService.saveRoutines(updated);
-    } else {
-      const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
-      dbService.saveRoutines(updated);
+    try {
+      if (isShared) {
+        const urlToDelete = activeRoutine.pdf_url;
+        const updated = routines.map(r => r.pdf_url === urlToDelete ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
+        await dbService.saveRoutines(updated);
+      } else {
+        const updated = routines.map(r => r.id === activeRoutine.id ? { ...r, pdf_url: '', updated_at: new Date().toISOString() } : r);
+        await dbService.saveRoutines(updated);
+      }
+      setShowPdfPreview(false);
+      fetchLocalData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove PDF timetable assignment.');
     }
-    setShowPdfPreview(false);
-    fetchLocalData();
   };
 
   // Form Submit for Routine Grid Entry (Add & Edit)
-  const handleAddEntrySubmit = (e: React.FormEvent) => {
+  const handleAddEntrySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeRoutine) return;
 
@@ -1486,11 +1531,15 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     }
 
     // After all checks succeed, commit to storage/state atomically
-    if (routinesUpdated) {
-      dbService.saveRoutines(proposedRoutines);
+    try {
+      if (routinesUpdated) {
+        await dbService.saveRoutines(proposedRoutines);
+      }
+      await dbService.saveRoutineEntries(proposedEntries);
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to save timetable entries.');
+      return;
     }
-
-    dbService.saveRoutineEntries(proposedEntries);
 
     // Reset forms and states
     setIsAddingEntry(false);
@@ -1507,7 +1556,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     fetchLocalData();
   };
 
-  const handleDuplicateDaySubmit = (e: React.FormEvent) => {
+  const handleDuplicateDaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeRoutine) return;
 
@@ -1658,8 +1707,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       }
     }
 
-    // Save to DB
-    dbService.saveRoutineEntries(updatedEntries);
+    try {
+      // Save to DB
+      await dbService.saveRoutineEntries(updatedEntries);
+    } catch (err: any) {
+      setDuplicationError(err.message || 'Failed to save duplicated timetable slots.');
+      return;
+    }
 
     // Setup success message and undo state
     let detailMessage = '';
@@ -1697,7 +1751,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     fetchLocalData();
   };
 
-  const handleDuplicationUndo = () => {
+  const handleDuplicationUndo = async () => {
     const undoState = duplicationUndoState;
     if (!undoState) return;
 
@@ -1712,22 +1766,26 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     // Restore the original entries that were replaced
     updatedEntries = [...updatedEntries, ...restoredEntries];
 
-    // Save and refresh
-    dbService.saveRoutineEntries(updatedEntries);
-    
-    // Clear undo state
-    setDuplicationUndoState(null);
-    localStorage.removeItem('gsss_duplication_undo_state');
+    try {
+      // Save and refresh
+      await dbService.saveRoutineEntries(updatedEntries);
+      
+      // Clear undo state
+      setDuplicationUndoState(null);
+      localStorage.removeItem('gsss_duplication_undo_state');
 
-    const successAlert = {
-      message: 'Duplication undone successfully!',
-      detail: 'Original timetable slots restored.',
-      targetClass: selectedClass as string
-    };
-    setDuplicationSuccessAlert(successAlert);
-    localStorage.setItem('gsss_duplication_success_alert', JSON.stringify(successAlert));
+      const successAlert = {
+        message: 'Duplication undone successfully!',
+        detail: 'Original timetable slots restored.',
+        targetClass: selectedClass as string
+      };
+      setDuplicationSuccessAlert(successAlert);
+      localStorage.setItem('gsss_duplication_success_alert', JSON.stringify(successAlert));
 
-    fetchLocalData();
+      fetchLocalData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to undo duplication.');
+    }
   };
 
   const handleEditClick = (ent: RoutineEntry) => {
@@ -1770,7 +1828,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       if (sharedLectureId && deleteSharedOption === 'all') {
         const allEntries = dbService.getRoutineEntries();
         const filtered = allEntries.filter(e => e.shared_lecture_id !== sharedLectureId);
-        dbService.saveRoutineEntries(filtered);
+        await dbService.saveRoutineEntries(filtered);
       } else {
         await dbService.deleteRoutineEntry(entryId);
         
@@ -1779,7 +1837,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           const siblings = allEntries.filter(e => e.shared_lecture_id === sharedLectureId);
           if (siblings.length === 1) {
             siblings[0].shared_lecture_id = undefined;
-            dbService.saveRoutineEntries(allEntries);
+            await dbService.saveRoutineEntries(allEntries);
           }
         }
       }
@@ -1833,7 +1891,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     return master?.time_range || '';
   };
 
-  const handleSaveCombinedCell = (e: React.FormEvent) => {
+  const handleSaveCombinedCell = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCombinedCell) return;
 
@@ -1863,35 +1921,39 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       return;
     }
 
-    if (entry) {
-      // Edit in place
-      const updated = entries.map(e => {
-        if (entry.shared_lecture_id && e.shared_lecture_id === entry.shared_lecture_id) {
-          return { ...e, subject, teacher, teacher_id: teacher_id || null, time_range };
+    try {
+      if (entry) {
+        // Edit in place
+        const updated = entries.map(e => {
+          if (entry.shared_lecture_id && e.shared_lecture_id === entry.shared_lecture_id) {
+            return { ...e, subject, teacher, teacher_id: teacher_id || null, time_range };
+          }
+          return e.id === entry.id ? { ...e, subject, teacher, teacher_id: teacher_id || null, time_range } : e;
+        });
+        await dbService.saveRoutineEntries(updated);
+      } else {
+        // Create fresh
+        const targetRoutine = routines.find(r => r.class_name === className);
+        if (targetRoutine) {
+          const newEntry: RoutineEntry = {
+            id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+            routine_id: targetRoutine.id,
+            day: day as any,
+            period,
+            subject,
+            teacher,
+            teacher_id: teacher_id || null,
+            time_range
+          };
+          await dbService.saveRoutineEntries([...entries, newEntry]);
         }
-        return e.id === entry.id ? { ...e, subject, teacher, teacher_id: teacher_id || null, time_range } : e;
-      });
-      dbService.saveRoutineEntries(updated);
-    } else {
-      // Create fresh
-      const targetRoutine = routines.find(r => r.class_name === className);
-      if (targetRoutine) {
-        const newEntry: RoutineEntry = {
-          id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-          routine_id: targetRoutine.id,
-          day: day as any,
-          period,
-          subject,
-          teacher,
-          teacher_id: teacher_id || null,
-          time_range
-        };
-        dbService.saveRoutineEntries([...entries, newEntry]);
       }
-    }
 
-    setEditingCombinedCell(null);
-    fetchLocalData();
+      setEditingCombinedCell(null);
+      fetchLocalData();
+    } catch (err: any) {
+      setCombinedError(err.message || 'Failed to save combined cell.');
+    }
   };
 
   const handleClearCombinedCell = async () => {
@@ -1905,7 +1967,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           const siblings = allEntries.filter(e => e.shared_lecture_id === sharedLectureId);
           if (siblings.length === 1) {
             siblings[0].shared_lecture_id = undefined;
-            dbService.saveRoutineEntries(allEntries);
+            await dbService.saveRoutineEntries(allEntries);
           }
         }
       } catch (err) {
@@ -2091,7 +2153,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
     });
   };
 
-  const handleQuickAssignSubmit = (e: React.FormEvent) => {
+  const handleQuickAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickAssignSlot) return;
 
@@ -2126,53 +2188,57 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
       return;
     }
     
-    if (!targetRoutine) {
-      const newRoutine: Routine = {
-        id: `routine-${Date.now()}`,
-        class_name: className,
-        display_mode: 'online',
-        pdf_url: '',
-        override_active: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      dbService.saveRoutines([...routines, newRoutine]);
-      targetRoutine = newRoutine;
+    try {
+      if (!targetRoutine) {
+        const newRoutine: Routine = {
+          id: `routine-${Date.now()}`,
+          class_name: className,
+          display_mode: 'online',
+          pdf_url: '',
+          override_active: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        await dbService.saveRoutines([...routines, newRoutine]);
+        targetRoutine = newRoutine;
+      }
+
+      const finalExistingEntry = existingEntry || (targetRoutine ? entries.find(ent => 
+        ent.routine_id === targetRoutine?.id && 
+        ent.day === day && 
+        ent.period === period
+      ) : null);
+
+      if (finalExistingEntry) {
+        const updated = entries.map(ent => 
+          ent.id === finalExistingEntry.id 
+            ? { ...ent, subject: subject.trim() || ent.subject, teacher, teacher_id: teacher_id || null } 
+            : ent
+        );
+        await dbService.saveRoutineEntries(updated);
+      } else {
+        const newEntry: RoutineEntry = {
+          id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+          routine_id: targetRoutine.id,
+          day: day as any,
+          period,
+          subject: subject.trim() || 'General Studies',
+          teacher,
+          teacher_id: teacher_id || null,
+          time_range: timeRange
+        };
+        await dbService.saveRoutineEntries([...entries, newEntry]);
+      }
+
+      setQuickAssignSlot(null);
+      setQuickForm({ subject: '', teacher: '', teacher_id: undefined, isManual: false });
+      setQuickConflictWarning(null);
+      setQuickForceConflict(false);
+      fetchLocalData();
+    } catch (err: any) {
+      setQuickError(err.message || 'Failed to assign timetable slot.');
     }
-
-    const finalExistingEntry = existingEntry || (targetRoutine ? entries.find(ent => 
-      ent.routine_id === targetRoutine?.id && 
-      ent.day === day && 
-      ent.period === period
-    ) : null);
-
-    if (finalExistingEntry) {
-      const updated = entries.map(ent => 
-        ent.id === finalExistingEntry.id 
-          ? { ...ent, subject: subject.trim() || ent.subject, teacher, teacher_id: teacher_id || null } 
-          : ent
-      );
-      dbService.saveRoutineEntries(updated);
-    } else {
-      const newEntry: RoutineEntry = {
-        id: `re_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
-        routine_id: targetRoutine.id,
-        day: day as any,
-        period,
-        subject: subject.trim() || 'General Studies',
-        teacher,
-        teacher_id: teacher_id || null,
-        time_range: timeRange
-      };
-      dbService.saveRoutineEntries([...entries, newEntry]);
-    }
-
-    setQuickAssignSlot(null);
-    setQuickForm({ subject: '', teacher: '', teacher_id: undefined, isManual: false });
-    setQuickConflictWarning(null);
-    setQuickForceConflict(false);
-    fetchLocalData();
   };
 
   const workloadData = getTeacherWorkloadData();
@@ -2186,6 +2252,24 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
 
   return (
     <div className="space-y-8 pb-10">
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <span className="text-red-500">⚠️</span>
+            </div>
+            <div className="ml-3 flex-1 md:flex md:justify-between">
+              <p className="text-xs font-medium text-red-700">{error}</p>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-xs font-medium text-red-700 hover:text-red-900 underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="routines-administrative-boundary">
       {/* LEFT SIDEBAR: Selected Classes and Timetable Modes */}
       <div className="lg:col-span-1 space-y-4">

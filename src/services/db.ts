@@ -4,7 +4,7 @@
  */
 
 import { SchoolSettings, HomepageModule, MediaItem, Notice, SupabaseConfig, MediaBucket, NoticeCategory, NoticePriority, NoticeStatus, Faculty, AcademicClass, Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEventType, CalendarEvent, SchoolEvent, SchoolEventImage, TimetableGroup } from '../types';
-import { supabase } from './supabase';
+import { supabase, traceAuth, normalizeRoutines } from './supabase';
 import { supabaseDbService } from './supabaseDb';
 
 export function generateUUID(): string {
@@ -1347,7 +1347,7 @@ class DatabaseService {
     })).sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
   }
 
-  saveTimetableGroups(groups: TimetableGroup[], localOnly = false): void {
+  async saveTimetableGroups(groups: TimetableGroup[], localOnly = false): Promise<void> {
     const oldGroups = this.getTimetableGroups();
     const sanitized = groups.map(g => ({
       ...g,
@@ -1446,10 +1446,11 @@ class DatabaseService {
     this.setStorageItem('gsss_timetable_groups', finalizedGroups);
     this.updateTimetableTimestamp();
 
+    let updatedRoutines = this.getStorageItem<Routine[]>('gsss_routines', []);
+    let routinesChanged = false;
+
     if (renameMap.size > 0) {
-      const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
-      let routinesChanged = false;
-      const updatedRoutines = routines.map(r => {
+      updatedRoutines = updatedRoutines.map(r => {
         if (renameMap.has(r.class_name)) {
           routinesChanged = true;
           return {
@@ -1460,92 +1461,68 @@ class DatabaseService {
         }
         return r;
       });
-
-      if (routinesChanged) {
-        this.setStorageItem('gsss_routines', updatedRoutines);
-        if (!localOnly) {
-          supabase
-            .from('routines')
-            .upsert(updatedRoutines)
-            .then(({ error }) => {
-              if (error) {
-                console.warn('[Supabase Routines Rename Sync Error caught]:', error.message);
-              }
-            });
-        }
-      }
     }
 
     // EAGER ROUTINE LIFECYCLE MANAGEMENT: Ensure every active timetable group has exactly one corresponding routine
-    {
-      const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
-      const activeGroups = finalizedGroups.filter(g => g.is_active);
-      const activeGroupNames = new Set(activeGroups.map(g => g.name));
+    const activeGroups = finalizedGroups.filter(g => g.is_active);
+    const activeGroupNames = new Set(activeGroups.map(g => g.name));
 
-      let routinesChanged = false;
+    // Filter out routines that do not correspond to any active timetable group name anymore
+    const initialRoutineCount = updatedRoutines.length;
+    updatedRoutines = updatedRoutines.filter(r => activeGroupNames.has(r.class_name));
+    if (updatedRoutines.length !== initialRoutineCount) {
+      routinesChanged = true;
+    }
 
-      // Filter out routines that do not correspond to any active timetable group name anymore
-      let updatedRoutines = routines.filter(r => activeGroupNames.has(r.class_name));
-      if (updatedRoutines.length !== routines.length) {
+    // Add missing routines for newly created active groups
+    activeGroups.forEach(g => {
+      const exists = updatedRoutines.some(r => r.class_name === g.name);
+      if (!exists) {
+        updatedRoutines.push({
+          id: generateUUID(),
+          class_name: g.name as any,
+          display_mode: 'online',
+          pdf_url: '',
+          override_active: false,
+          override_title: '',
+          override_pdf_url: '',
+          override_start: '',
+          override_end: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
         routinesChanged = true;
       }
+    });
 
-      // Add missing routines for newly created active groups
-      activeGroups.forEach(g => {
-        const exists = updatedRoutines.some(r => r.class_name === g.name);
-        if (!exists) {
-          updatedRoutines.push({
-            id: generateUUID(),
-            class_name: g.name as any,
-            display_mode: 'online',
-            pdf_url: '',
-            override_active: false,
-            override_title: '',
-            override_pdf_url: '',
-            override_start: '',
-            override_end: '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          routinesChanged = true;
-        }
-      });
-
-      if (routinesChanged) {
-        this.setStorageItem('gsss_routines', updatedRoutines);
-        if (!localOnly) {
-          supabase
-            .from('routines')
-            .upsert(updatedRoutines)
-            .then(({ error }) => {
-              if (error) {
-                console.warn('[Supabase Routines Eager Sync Error caught]:', error.message);
-              }
-            });
-        }
-      }
+    if (routinesChanged) {
+      await this.saveRoutines(updatedRoutines, localOnly);
     }
 
     window.dispatchEvent(new CustomEvent('gsss-data-synced'));
 
     if (localOnly) return;
 
-    supabase
-      .from('timetable_groups')
-      .upsert(finalizedGroups)
-      .then(
-        ({ error }) => {
-          if (error) {
-            console.warn('[Supabase Timetable Groups Save Info]: table may not exist yet, using Local Storage as source of truth. Error:', error.message);
-          }
-        },
-        err => {
-          console.warn('[Supabase Timetable Groups Save Error Caught]:', err);
-        }
-      );
+    console.log("TIMETABLE_GROUP_UPSERT_START (DB)", { count: finalizedGroups.length });
+    try {
+      await traceAuth('timetable_groups');
+      const { data, error } = await supabase
+        .from('timetable_groups')
+        .upsert(finalizedGroups)
+        .select();
+
+      console.log("TIMETABLE_GROUP_UPSERT_RESULT (DB)", { data, error });
+      if (error) {
+        console.warn('[Supabase Timetable Groups Save Error]:', error.message);
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("TIMETABLE_GROUP_UPSERT_FATAL (DB)", err);
+      throw err;
+    }
   }
 
-  deleteTimetableGroup(id: string): void {
+  async deleteTimetableGroup(id: string): Promise<void> {
     const targetId = ensureValidUUID(id);
     const groups = this.getTimetableGroups();
     const groupToDelete = groups.find(g => g.id === targetId);
@@ -1559,23 +1536,26 @@ class DatabaseService {
       g.display_order = idx + 1;
     });
 
-    this.saveTimetableGroups(filtered);
+    await this.saveTimetableGroups(filtered);
 
-    // Try deleting from Supabase
-    supabase
-      .from('timetable_groups')
-      .delete()
-      .eq('id', targetId)
-      .then(
-        ({ error }) => {
-          if (error) {
-            console.warn('[Supabase Timetable Groups Delete Info]: table may not exist yet.', error.message);
-          }
-        },
-        err => {
-          console.warn('[Supabase Timetable Groups Delete Error Caught]:', err);
-        }
-      );
+    console.log("TIMETABLE_GROUP_DELETE_START (DB)", { id: targetId });
+    try {
+      await traceAuth('timetable_groups');
+      const { data, error } = await supabase
+        .from('timetable_groups')
+        .delete()
+        .eq('id', targetId)
+        .select();
+
+      console.log("TIMETABLE_GROUP_DELETE_RESULT (DB)", { data, error });
+      if (error) {
+        console.warn('[Supabase Timetable Groups Delete Info]: table may not exist yet.', error.message);
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("TIMETABLE_GROUP_DELETE_FATAL_REJECTION (DB)", err);
+      throw err;
+    }
 
     // Cascade delete associated Routine & Routine Entries
     const routines = this.getStorageItem<Routine[]>('gsss_routines', []);
@@ -1584,15 +1564,24 @@ class DatabaseService {
       const remainingRoutines = routines.filter(r => r.id !== matchingRoutine.id);
       this.setStorageItem('gsss_routines', remainingRoutines);
       
-      supabase
-        .from('routines')
-        .delete()
-        .eq('id', matchingRoutine.id)
-        .then(({ error }) => {
-          if (error) {
-            console.warn('[Supabase Routines Cascade Delete Error caught]:', error.message);
-          }
-        });
+      console.log("ROUTINES_CASCADE_DELETE_START", { id: matchingRoutine.id });
+      try {
+        await traceAuth('routines');
+        const { data, error } = await supabase
+          .from('routines')
+          .delete()
+          .eq('id', matchingRoutine.id)
+          .select();
+
+        console.log("ROUTINES_CASCADE_DELETE_RESULT", { data, error });
+        if (error) {
+          console.warn('[Supabase Routines Cascade Delete Error caught]:', error.message);
+          throw error;
+        }
+      } catch (err: any) {
+        console.error("ROUTINES_CASCADE_DELETE_FATAL", err);
+        throw err;
+      }
 
       // Cascade delete Routine Entries
       const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', []);
@@ -1602,15 +1591,24 @@ class DatabaseService {
         this.setStorageItem('gsss_routine_entries', remainingEntries);
         
         const entryIds = entriesToDelete.map(e => e.id);
-        supabase
-          .from('routine_entries')
-          .delete()
-          .in('id', entryIds)
-          .then(({ error }) => {
-            if (error) {
-              console.warn('[Supabase Routine Entries Cascade Delete Error caught]:', error.message);
-            }
-          });
+        console.log("ROUTINE_ENTRIES_CASCADE_DELETE_START", { ids: entryIds });
+        try {
+          await traceAuth('routine_entries');
+          const { data, error } = await supabase
+            .from('routine_entries')
+            .delete()
+            .in('id', entryIds)
+            .select();
+
+          console.log("ROUTINE_ENTRIES_CASCADE_DELETE_RESULT", { data, error });
+          if (error) {
+            console.warn('[Supabase Routine Entries Cascade Delete Error caught]:', error.message);
+            throw error;
+          }
+        } catch (err: any) {
+          console.error("ROUTINE_ENTRIES_CASCADE_DELETE_FATAL", err);
+          throw err;
+        }
       }
     }
 
@@ -1629,65 +1627,13 @@ class DatabaseService {
 
   getRoutines(useDefaultFallback = false): Routine[] {
     const raw = this.getStorageItem<Routine[]>('gsss_routines', useDefaultFallback ? DEFAULT_ROUTINES : []);
-    let routines = raw.map(r => ({
+    return raw.map(r => ({
       ...r,
       id: ensureValidUUID(r.id)
     }));
-
-    if (!useDefaultFallback) {
-      const activeGroups = this.getTimetableGroups().filter(g => g.is_active);
-      const activeGroupNames = new Set(activeGroups.map(g => g.name));
-
-      let changed = false;
-
-      // Filter out routines that do not correspond to any active timetable group name
-      const initialLength = routines.length;
-      routines = routines.filter(r => activeGroupNames.has(r.class_name));
-      if (routines.length !== initialLength) {
-        changed = true;
-      }
-
-      // Ensure every active timetable group has exactly one corresponding routine
-      activeGroups.forEach(g => {
-        const exists = routines.some(r => r.class_name === g.name);
-        if (!exists) {
-          routines.push({
-            id: generateUUID(),
-            class_name: g.name as any,
-            display_mode: 'online',
-            pdf_url: '',
-            override_active: false,
-            override_title: '',
-            override_pdf_url: '',
-            override_start: '',
-            override_end: '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          changed = true;
-        }
-      });
-
-      if (changed) {
-        this.setStorageItem('gsss_routines', routines);
-        this.updateTimetableTimestamp();
-
-        // Also sync to Supabase if table exists
-        supabase
-          .from('routines')
-          .upsert(routines)
-          .then(({ error }) => {
-            if (error) {
-              console.warn('[Supabase Routines Sync Error Caught]:', error.message);
-            }
-          });
-      }
-    }
-
-    return routines;
   }
 
-  saveRoutines(routines: Routine[], localOnly = false): void {
+  async saveRoutines(routines: Routine[], localOnly = false): Promise<void> {
     const sanitized = routines.map(r => ({
       ...r,
       id: ensureValidUUID(r.id)
@@ -1701,17 +1647,27 @@ class DatabaseService {
     if (localOnly) return;
 
     // Persist to Supabase
-    supabase
-      .from('routines')
-      .upsert(sanitized)
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Routines Save Error]:', error.message);
-        }
-      });
+    console.log("ROUTINE_UPSERT_START (DB)", { count: sanitized.length });
+    try {
+      await traceAuth('routines');
+      const normalized = normalizeRoutines(sanitized);
+      const { data, error } = await supabase
+        .from('routines')
+        .upsert(normalized)
+        .select();
+
+      console.log("ROUTINE_UPSERT_RESULT (DB)", { data, error });
+      if (error) {
+        console.error('[Supabase Routines Save Error]:', error.message);
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("ROUTINE_UPSERT_FATAL (DB)", err);
+      throw err;
+    }
   }
 
-  updateRoutine(id: string, updatedFields: Partial<Routine>): Routine | null {
+  async updateRoutine(id: string, updatedFields: Partial<Routine>): Promise<Routine | null> {
     const routines = this.getRoutines();
     const index = routines.findIndex(r => r.id === ensureValidUUID(id));
     if (index === -1) return null;
@@ -1722,7 +1678,7 @@ class DatabaseService {
       updated_at: new Date().toISOString()
     };
     routines[index] = updated;
-    this.saveRoutines(routines);
+    await this.saveRoutines(routines);
     return updated;
   }
 
@@ -1730,72 +1686,22 @@ class DatabaseService {
     const entries = this.getStorageItem<RoutineEntry[]>('gsss_routine_entries', useDefaultFallback ? DEFAULT_ROUTINE_ENTRIES : []);
     const masters = this.getStorageItem<PeriodMaster[]>('gsss_period_masters', useDefaultFallback ? DEFAULT_PERIODS : []);
     
-    // Obtain active routines to ensure we only return entries for active timetable groups
-    const routines = this.getRoutines(useDefaultFallback);
-    const activeRoutineIds = new Set(routines.map(r => r.id));
-
-    // Filter to only entries belonging to active routines
-    const filteredEntries = entries.filter(ent => activeRoutineIds.has(ensureValidUUID(ent.routine_id)));
-    
-    let changed = entries.length !== filteredEntries.length;
-    const mapped = filteredEntries.map(ent => {
+    return entries.map(ent => {
       const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
-      let entId = ent.id;
-      if (!isUuid) {
-        entId = generateUUID();
-        changed = true;
-      }
+      const entId = isUuid ? ent.id : generateUUID();
       const routine_id = ensureValidUUID(ent.routine_id);
-      if (routine_id !== ent.routine_id) {
-        changed = true;
-      }
       
       const pm = masters.find(m => m.name === ent.period);
-      if (pm) {
-        return {
-          ...ent,
-          id: entId,
-          routine_id,
-          time_range: pm.time_range
-        };
-      }
       return {
         ...ent,
         id: entId,
-        routine_id
+        routine_id,
+        time_range: pm ? pm.time_range : ent.time_range
       };
     });
-
-    if (changed) {
-      // Save mapped/filtered entries back to local storage
-      const localDataToSave = mapped.map(ent => ({
-        id: ent.id,
-        routine_id: ent.routine_id,
-        day: ent.day,
-        period: ent.period,
-        subject: ent.subject,
-        teacher: ent.teacher || null,
-        teacher_id: ent.teacher_id || null,
-        time_range: ent.time_range || null,
-        shared_lecture_id: ent.shared_lecture_id || null
-      }));
-      this.setStorageItem('gsss_routine_entries', localDataToSave);
-
-      // Also sync back to Supabase
-      supabase
-        .from('routine_entries')
-        .upsert(localDataToSave)
-        .then(({ error }) => {
-          if (error) {
-            console.warn('[Supabase Routine Entries Sync Error Caught]:', error.message);
-          }
-        });
-    }
-
-    return mapped;
   }
 
-  saveRoutineEntries(entries: RoutineEntry[], localOnly = false): void {
+  async saveRoutineEntries(entries: RoutineEntry[], localOnly = false): Promise<void> {
     const sanitized = entries.map(ent => {
       const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(ent.id);
       return {
@@ -1813,14 +1719,23 @@ class DatabaseService {
     if (localOnly) return;
 
     // Persist to Supabase
-    supabase
-      .from('routine_entries')
-      .upsert(sanitized)
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Supabase Routine Entries Save Error]:', error.message);
-        }
-      });
+    console.log("ROUTINE_ENTRY_UPSERT_START (DB)", { count: sanitized.length });
+    try {
+      await traceAuth('routine_entries');
+      const { data, error } = await supabase
+        .from('routine_entries')
+        .upsert(sanitized)
+        .select();
+
+      console.log("ROUTINE_ENTRY_UPSERT_RESULT (DB)", { data, error });
+      if (error) {
+        console.error('[Supabase Routine Entries Save Error]:', error.message);
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("ROUTINE_ENTRY_UPSERT_FATAL (DB)", err);
+      throw err;
+    }
   }
 
   getRoutineEntriesByRoutine(routineId: string): RoutineEntry[] {
@@ -1828,7 +1743,7 @@ class DatabaseService {
     return this.getRoutineEntries().filter(e => e.routine_id === targetRoutineId);
   }
 
-  createRoutineEntry(entryData: Omit<RoutineEntry, 'id'>): RoutineEntry {
+  async createRoutineEntry(entryData: Omit<RoutineEntry, 'id'>): Promise<RoutineEntry> {
     const entries = this.getRoutineEntries();
     const id = generateUUID();
     const routine_id = ensureValidUUID(entryData.routine_id);
@@ -1838,11 +1753,11 @@ class DatabaseService {
       routine_id
     };
     entries.push(newEntry);
-    this.saveRoutineEntries(entries);
+    await this.saveRoutineEntries(entries);
     return newEntry;
   }
 
-  updateRoutineEntry(id: string, updatedFields: Partial<RoutineEntry>): RoutineEntry | null {
+  async updateRoutineEntry(id: string, updatedFields: Partial<RoutineEntry>): Promise<RoutineEntry | null> {
     const entries = this.getRoutineEntries();
     const targetId = id;
     const index = entries.findIndex(e => e.id === targetId);
@@ -1857,7 +1772,7 @@ class DatabaseService {
       updated.routine_id = ensureValidUUID(updatedFields.routine_id);
     }
     entries[index] = updated;
-    this.saveRoutineEntries(entries);
+    await this.saveRoutineEntries(entries);
     return updated;
   }
 
@@ -1871,10 +1786,16 @@ class DatabaseService {
     const removedCount = initialCount - filtered.length;
 
     try {
-      const { error } = await supabase
+      console.log("ROUTINE_ENTRY_DELETE_START (DB)", { id: targetId });
+      await traceAuth('routine_entries');
+      const { data, error } = await supabase
         .from('routine_entries')
         .delete()
-        .eq('id', targetId);
+        .eq('id', targetId)
+        .select();
+
+      console.log("ROUTINE_ENTRY_DELETE_RESULT (DB)");
+      console.log({ data, error });
 
       if (error) {
         console.error('[Supabase Routine Entries Delete Error]:', error.message);
@@ -1885,7 +1806,7 @@ class DatabaseService {
       console.error('[ROUTINE ENTRY DELETE] Failed to delete from Supabase:', err.message || err);
     }
 
-    this.saveRoutineEntries(filtered, true); // save locally only
+    await this.saveRoutineEntries(filtered, true); // save locally only
     console.log('[LOCAL DELETE COUNT] Local routine entries deleted:', removedCount);
     window.dispatchEvent(new CustomEvent('gsss-data-synced'));
   }
@@ -1899,10 +1820,16 @@ class DatabaseService {
     const removedCount = initialCount - filtered.length;
 
     try {
-      const { error } = await supabase
+      console.log("ROUTINE_ENTRIES_BULK_DELETE_START (DB)", { ids });
+      await traceAuth('routine_entries');
+      const { data, error } = await supabase
         .from('routine_entries')
         .delete()
-        .in('id', ids);
+        .in('id', ids)
+        .select();
+
+      console.log("ROUTINE_ENTRIES_BULK_DELETE_RESULT (DB)");
+      console.log({ data, error });
 
       if (error) {
         console.error('[Supabase Routine Entries Bulk Delete Error]:', error.message);
@@ -1913,7 +1840,7 @@ class DatabaseService {
       console.error('[CASCADE DELETE] Failed to delete from Supabase:', err.message || err);
     }
 
-    this.saveRoutineEntries(filtered, true); // save locally only
+    await this.saveRoutineEntries(filtered, true); // save locally only
     console.log('[LOCAL DELETE COUNT] Local bulk routine entries deleted:', removedCount);
     window.dispatchEvent(new CustomEvent('gsss-data-synced'));
   }

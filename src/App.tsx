@@ -283,7 +283,7 @@ export default function App() {
 
           if (active) {
             if (remoteGroups && remoteGroups.length > 0) {
-              dbService.saveTimetableGroups(remoteGroups, true);
+              await dbService.saveTimetableGroups(remoteGroups, true);
               console.log('[TIMETABLE GROUPS LOCAL COUNT]', dbService.getTimetableGroups().length);
               console.log('[SYNC COMPLETE]\n[timetable_groups]');
             } else {
@@ -309,13 +309,13 @@ export default function App() {
           if (active) {
             if (remoteRoutines && remoteRoutines.length > 0) {
               // Remote has records, sync to local cache
-              dbService.saveRoutines(remoteRoutines, true);
+              await dbService.saveRoutines(remoteRoutines, true);
               console.log('[ROUTINES CACHE UPDATED]');
               console.log('[ROUTINES LOCAL COUNT]', dbService.getRoutines().length);
               console.log('[SYNC COMPLETE]\n[routines]');
             } else {
               console.log('[SYNC EMPTY REMOTE]\n[routines]');
-              dbService.saveRoutines([], true);
+              await dbService.saveRoutines([], true);
               console.log('[CACHE CLEARED]\n[routines]');
               console.log('[SYNC COMPLETE]\n[routines]');
             }
@@ -332,12 +332,12 @@ export default function App() {
 
           if (active) {
             if (remoteEntries && remoteEntries.length > 0) {
-              dbService.saveRoutineEntries(remoteEntries, true);
+              await dbService.saveRoutineEntries(remoteEntries, true);
               console.log('[ROUTINE ENTRIES LOCAL COUNT]', dbService.getRoutineEntries().length);
               console.log('[SYNC COMPLETE]\n[routine_entries]');
             } else {
               console.log('[SYNC EMPTY REMOTE]\n[routine_entries]');
-              dbService.saveRoutineEntries([], true);
+              await dbService.saveRoutineEntries([], true);
               console.log('[CACHE CLEARED]\n[routine_entries]');
               console.log('[SYNC COMPLETE]\n[routine_entries]');
             }

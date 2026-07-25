@@ -131,6 +131,20 @@ interface AdminDashboardProps {
 
 type AdminTab = 'overview' | 'settings' | 'modules' | 'notices' | 'media' | 'faculty' | 'academic' | 'events' | 'health';
 
+interface NavGroupItem {
+  id: AdminTab;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number | string;
+}
+
+interface NavGroup {
+  id: 'school' | 'academic' | 'content' | 'system';
+  title: string;
+  icon: React.ReactNode;
+  items: NavGroupItem[];
+}
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   onLogout,
   onSettingsChanged
@@ -700,21 +714,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingFacultyId(null);
   };
 
-  // Sidebar Tabs Config
-  const sidebarTabs = [
-    { id: 'overview', label: 'System Overview', icon: <Activity className="w-4 h-4" /> },
-    { id: 'settings', label: 'School Profile Settings', icon: <Settings className="w-4 h-4" /> },
-    { id: 'academic', label: 'Academic Desk Manager', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'modules', label: 'Homepage Modules', icon: <Layers className="w-4 h-4" /> },
-    { id: 'faculty', label: 'Faculty & Staff', icon: <GraduationCap className="w-4 h-4" /> },
-    { id: 'notices', label: 'Manage Notices', icon: <Calendar className="w-4 h-4" /> },
-    { id: 'events', label: 'Events Management', icon: <Calendar className="w-4 h-4 text-orange-600" /> },
-    { id: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" /> },
-    { id: 'health', label: 'Database Health', icon: <ShieldCheck className="w-4 h-4" /> },
-  ] as const;
+  // Sidebar Navigation Groups
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    school: true,
+    academic: true,
+    content: true,
+    system: true
+  });
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  };
+
+  const navGroups: NavGroup[] = [
+    {
+      id: 'school',
+      title: 'School Management',
+      icon: <Settings className="w-4 h-4 text-orange-500" />,
+      items: [
+        { id: 'settings', label: 'School Profile', icon: <Settings className="w-4 h-4" /> },
+        { id: 'modules', label: 'Homepage Modules', icon: <Layers className="w-4 h-4" />, badge: modules.filter(m => m.is_visible).length },
+        { id: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" />, badge: dbService.getMediaItems().length }
+      ]
+    },
+    {
+      id: 'academic',
+      title: 'Academic Management',
+      icon: <BookOpen className="w-4 h-4 text-sky-500" />,
+      items: [
+        { id: 'academic', label: 'Class Routine & Exams', icon: <BookOpen className="w-4 h-4" />, badge: dbService.getRoutines().length }
+      ]
+    },
+    {
+      id: 'content',
+      title: 'Content Management',
+      icon: <GraduationCap className="w-4 h-4 text-purple-500" />,
+      items: [
+        { id: 'faculty', label: 'Faculty & Staff', icon: <GraduationCap className="w-4 h-4" />, badge: totalFacultyCount },
+        { id: 'notices', label: 'Circulars & Notices', icon: <Calendar className="w-4 h-4" />, badge: dbService.getNotices().length },
+        { id: 'events', label: 'Campus Events', icon: <Calendar className="w-4 h-4 text-orange-600" />, badge: dbService.getEvents().length }
+      ]
+    },
+    {
+      id: 'system',
+      title: 'System',
+      icon: <ShieldCheck className="w-4 h-4 text-emerald-500" />,
+      items: [
+        { id: 'overview', label: 'System Overview', icon: <Activity className="w-4 h-4" /> },
+        { id: 'health', label: 'Database Health', icon: <ShieldCheck className="w-4 h-4" /> }
+      ]
+    }
+  ];
+
+  useEffect(() => {
+    for (const group of navGroups) {
+      if (group.items.some(item => item.id === activeTab)) {
+        setExpandedGroups(prev => ({ ...prev, [group.id]: true }));
+        break;
+      }
+    }
+  }, [activeTab]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10" id="admin-workspace-grid">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8" id="admin-workspace-grid">
       
       {/* Reusable selector model for school logo, hero cover, or module custom image */}
       {isMediaModalOpen && mediaTarget && (
@@ -741,63 +806,218 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Admin Title Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 border border-slate-100 rounded-2xl shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 bg-white p-4 sm:p-5 border border-slate-150 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-orange-50 border border-orange-100 text-orange-600 rounded-xl">
-            <ShieldCheck className="w-8 h-8" />
+          <div className="p-2.5 bg-orange-50 border border-orange-100 text-orange-600 rounded-xl shrink-0">
+            <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight uppercase flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight uppercase flex items-center gap-2">
               ADMIN CONTROL PANEL
             </h1>
-            <p className="text-xs text-slate-505 text-slate-500 font-medium">Bihar Secondary Education Board Regulation Console</p>
+            <p className="text-[11px] text-slate-500 font-medium">Bihar Secondary Education Board Regulation Console</p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={onLogout}
-          className="flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 hover:text-red-650 hover:text-red-600 text-slate-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 cursor-pointer transition-colors"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 hover:text-red-600 text-slate-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 cursor-pointer transition-colors"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-3.5 h-3.5" />
           Terminate Session
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        {/* Navigation Sidebar (1 Col) */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-xs">
-            <span className="block text-[10px] uppercase font-mono font-bold text-slate-450 px-3 pb-3 border-b border-slate-100 mb-3 tracking-widest">
-              WORKSPACE DOMAINS
+      {/* Top Summary Cards Bar (Dashboard Summary) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5" id="dashboard-top-summary-bar">
+        {/* Card 1: School */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>School Profile</span>
+            <Settings className="w-3.5 h-3.5 text-orange-500" />
+          </div>
+          <div className="mt-2">
+            <span className="block text-xs font-black text-slate-900 truncate">{settings.school_name || 'GSSS Bihar'}</span>
+            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" /> Active Profile
             </span>
-            <nav className="space-y-1">
-              {sidebarTabs.map((tab) => {
-                const isActive = activeTab === tab.id;
+          </div>
+        </div>
+
+        {/* Card 2: Faculty */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>Faculty & Staff</span>
+            <GraduationCap className="w-3.5 h-3.5 text-purple-500" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-lg font-black text-slate-900 font-mono">{totalFacultyCount}</span>
+            <span className="text-[10px] text-slate-400 font-medium">{teachersCount} Teachers</span>
+          </div>
+        </div>
+
+        {/* Card 3: Notices */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>Notices</span>
+            <Calendar className="w-3.5 h-3.5 text-pink-500" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-lg font-black text-slate-900 font-mono">{dbService.getNotices().length}</span>
+            <span className="text-[10px] text-pink-600 font-bold">Active</span>
+          </div>
+        </div>
+
+        {/* Card 4: Events */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>Events</span>
+            <Calendar className="w-3.5 h-3.5 text-orange-600" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-lg font-black text-slate-900 font-mono">{dbService.getEvents().length}</span>
+            <span className="text-[10px] text-orange-600 font-bold">Scheduled</span>
+          </div>
+        </div>
+
+        {/* Card 5: Routines */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>Class Routines</span>
+            <Clock className="w-3.5 h-3.5 text-sky-500" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-lg font-black text-slate-900 font-mono">{dbService.getRoutines().length}</span>
+            <span className="text-[10px] text-sky-600 font-bold">Classes</span>
+          </div>
+        </div>
+
+        {/* Card 6: Database */}
+        <div className="bg-white border border-slate-150 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+            <span>Database</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          </div>
+          <div className="mt-2">
+            <span className="text-[11px] font-black text-slate-900 block truncate">IndexedDB + Cloud</span>
+            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse" /> Operational
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky Top Bar for Mobile Pill Navigation */}
+      <div className="lg:hidden sticky top-0 z-20 bg-white/95 backdrop-blur-md p-2 border border-slate-200 overflow-x-auto flex gap-1.5 scrollbar-none mb-4 rounded-xl shadow-2xs">
+        {navGroups.flatMap(g => g.items).map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsEditingModule(false);
+              }}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isActive 
+                  ? 'bg-orange-500 text-white shadow-2xs' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        {/* Navigation Sidebar (1 Col) - Sticky Desktop Navigation */}
+        <div className="hidden lg:block lg:col-span-1 space-y-3 lg:sticky lg:top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto pr-1">
+          <div className="bg-white border border-slate-150 rounded-2xl p-3 shadow-2xs space-y-2">
+            <div className="px-2 py-1.5 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">
+                Workspace Domains
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 font-bold">
+                4 Categories
+              </span>
+            </div>
+
+            <nav className="space-y-1.5">
+              {navGroups.map((group) => {
+                const isExpanded = expandedGroups[group.id] ?? true;
+                const hasActiveChild = group.items.some(item => item.id === activeTab);
+
                 return (
-                  <button
-                    key={tab.id}
-                    id={`admin-tab-btn-${tab.id}`}
-                    onClick={() => {
-                      setActiveTab(tab.id);
-                      setIsEditingModule(false); // Close modules editor if tabs are shifted
-                    }}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer ${
-                      isActive 
-                        ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10' 
-                        : 'text-slate-605 text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                    }`}
-                  >
-                    {tab.icon}
-                    {tab.label}
-                  </button>
+                  <div key={group.id} className="rounded-xl border border-slate-150/80 overflow-hidden bg-slate-50/40">
+                    {/* Category Header Button */}
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                        hasActiveChild ? 'text-orange-600 bg-orange-50/70 font-black' : 'text-slate-700 hover:bg-slate-100/80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 truncate">
+                        {group.icon}
+                        <span className="truncate text-[11px]">{group.title}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[9px] font-mono font-extrabold text-slate-400 bg-white px-1.5 py-0.2 rounded border border-slate-200">
+                          {group.items.length}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    {/* Category Sub-items */}
+                    {isExpanded && (
+                      <div className="p-1 space-y-0.5 bg-white border-t border-slate-100">
+                        {group.items.map((item) => {
+                          const isActive = activeTab === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              id={`admin-tab-btn-${item.id}`}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(item.id);
+                                setIsEditingModule(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold tracking-wide transition-all cursor-pointer ${
+                                isActive 
+                                  ? 'bg-orange-500 text-white font-extrabold shadow-2xs' 
+                                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 truncate">
+                                <span className={isActive ? 'text-white' : 'text-slate-400'}>{item.icon}</span>
+                                <span className="truncate text-[11.5px]">{item.label}</span>
+                              </div>
+                              {item.badge !== undefined && (
+                                <span className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-extrabold ${
+                                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {item.badge}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </nav>
           </div>
 
-          {/* Quick System Stats / Database Diagnostics */}
-          <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-3">
+          {/* Quick System Stats / Database Diagnostics (Collapsed by default) */}
+          <div className="bg-slate-50 border border-slate-150 p-3 rounded-xl space-y-2">
             <div className="flex flex-col gap-1">
               <span className="block text-[10px] uppercase font-mono font-black text-slate-700 tracking-wider">Database Diagnostics</span>
               <button
@@ -810,9 +1030,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
             {showDiagnostics && (
-              <div className="space-y-2.5 font-mono text-[11px] pt-1.5 border-t border-slate-200/60 animate-in fade-in duration-200">
+              <div className="space-y-2 font-mono text-[11px] pt-1.5 border-t border-slate-200/60 animate-in fade-in duration-200">
                 {stats.map((stat, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-slate-650 bg-white p-2.5 rounded border border-slate-150 shadow-3xs">
+                  <div key={idx} className="flex justify-between items-center text-slate-650 bg-white p-2 rounded border border-slate-150 shadow-3xs">
                     <span className="flex items-center gap-1.5 font-sans font-bold text-slate-700 uppercase tracking-wide text-[10px]">
                       {stat.icon}
                       {stat.label}

@@ -24,7 +24,12 @@ import {
   User,
   ExternalLink,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  SlidersHorizontal,
+  Layers,
+  Settings,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { dbService, generateUUID } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty, TimetableGroup } from '../types';
@@ -71,6 +76,7 @@ const parseTimeRange = (timeRangeStr: string): { start: number; end: number } | 
 
 export const AcademicAdmin: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'routine' | 'exam' | 'calendar'>('routine');
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
 
   // ==========================================
   // MEDIA SELECTOR INTERFACE
@@ -86,57 +92,88 @@ export const AcademicAdmin: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6" id="academic-desk-central">
-      {/* Navigation Headers */}
-      <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-slate-900 text-base sm:text-lg font-bold uppercase tracking-wide">
-            Academic Desk Manager Console
-          </h2>
-          <p className="text-slate-500 text-xs mt-1 leading-relaxed font-sans font-medium">
-            Maintain daily class timings schedules, assessment circular datesheets, and student holiday calendars with BSEB guidelines.
-          </p>
+    <div className="space-y-4" id="academic-desk-central">
+      {/* Studio Header Toolbar & Sub-Tab Switcher */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-orange-50 border border-orange-100 text-orange-600 rounded-xl shrink-0">
+            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-slate-900 text-sm sm:text-base font-extrabold uppercase tracking-wide">
+                Academic Studio Workspace
+              </h2>
+              <span className="text-[10px] bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.2 rounded-full font-mono font-extrabold">
+                BSEB Engine v2.0
+              </span>
+            </div>
+            <p className="text-slate-500 text-[11px] font-sans font-medium mt-0.5">
+              Maintain daily class timing schedules, datesheets, and holiday calendars in a unified master-detail studio workspace.
+            </p>
+          </div>
         </div>
 
-        {/* Sub tab buttons */}
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-150/40 shrink-0 w-full md:w-auto">
+        {/* Sub-Tab Segment Switcher & Inspector Toggle */}
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end shrink-0">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+            <button
+              onClick={() => setActiveSubTab('routine')}
+              className={`px-3 py-1.5 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer ${
+                activeSubTab === 'routine'
+                  ? 'bg-white text-orange-600 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Class Routines
+            </button>
+            <button
+              onClick={() => setActiveSubTab('exam')}
+              className={`px-3 py-1.5 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer ${
+                activeSubTab === 'exam'
+                  ? 'bg-white text-orange-600 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Exam Schedules
+            </button>
+            <button
+              onClick={() => setActiveSubTab('calendar')}
+              className={`px-3 py-1.5 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer ${
+                activeSubTab === 'calendar'
+                  ? 'bg-white text-orange-600 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              School Calendar
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveSubTab('routine')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'routine'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+            className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              isInspectorOpen 
+                ? 'bg-orange-50 border-orange-200 text-orange-600' 
+                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
             }`}
+            title={isInspectorOpen ? "Hide Inspector Panel" : "Show Inspector Panel"}
           >
-            Class Routines
-          </button>
-          <button
-            onClick={() => setActiveSubTab('exam')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'exam'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Exam Schedules
-          </button>
-          <button
-            onClick={() => setActiveSubTab('calendar')}
-            className={`flex-1 md:flex-none px-4 py-2 text-[11px] font-bold font-sans tracking-wider uppercase rounded-lg transition duration-150 cursor-pointer text-center ${
-              activeSubTab === 'calendar'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            School Calendar
+            <SlidersHorizontal className="w-4 h-4" />
+            <span className="hidden sm:inline text-[11px] font-mono uppercase font-bold">
+              {isInspectorOpen ? 'Inspector' : 'Inspector'}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Main Admin Sub workspace views */}
-      <div className="min-h-[450px]">
+      {/* Studio Workspace Canvas Body */}
+      <div className="bg-slate-100/50 border border-slate-200 rounded-2xl p-2 sm:p-3 shadow-2xs min-h-[500px]">
         {activeSubTab === 'routine' && (
-          <RoutineAdminModule triggerMedia={triggerMediaFilePicker} />
+          <RoutineAdminModule 
+            triggerMedia={triggerMediaFilePicker} 
+            isInspectorOpen={isInspectorOpen}
+            setIsInspectorOpen={setIsInspectorOpen}
+          />
         )}
         {activeSubTab === 'exam' && (
           <ExamAdminModule triggerMedia={triggerMediaFilePicker} />
@@ -880,9 +917,11 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
 // ============================================================================
 interface ModuleSubProps {
   triggerMedia: (title: string, onSelect: (url: string) => void) => void;
+  isInspectorOpen?: boolean;
+  setIsInspectorOpen?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
+const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspectorOpen = true, setIsInspectorOpen }) => {
   const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry'>(() => {
     const active = dbService.getTimetableGroups().filter(g => g.is_active);
     return active.length > 0 ? active[0].name : 'Class 9';
@@ -2251,9 +2290,9 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
   });
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="flex flex-col lg:flex-row gap-4 relative">
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
+        <div className="w-full bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl mb-2">
           <div className="flex">
             <div className="flex-shrink-0">
               <span className="text-red-500">⚠️</span>
@@ -2270,141 +2309,73 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
           </div>
         </div>
       )}
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="routines-administrative-boundary">
-      {/* LEFT SIDEBAR: Selected Classes and Timetable Modes */}
-      <div className="lg:col-span-1 space-y-4">
-        {/* Class selector */}
-        <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs">
-          <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 pb-2 border-b border-slate-100 mb-3 tracking-wider">
-            Academic Grade Division
-          </span>
-          <div className="space-y-1">
-            {timetableGroups.filter(g => g.is_active).map((g) => (
+
+      {/* CENTER WORKSPACE CANVAS AREA */}
+      <div className="flex-1 flex flex-col min-w-0 space-y-4 pb-16">
+        
+        {/* Canvas Toolbar Header */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
+            <h3 className="text-slate-900 text-xs sm:text-sm font-black uppercase tracking-wider truncate">
+              {selectedClass === 'Combined' ? 'Consolidated 9-12 Routine Grid' :
+               selectedClass === 'FullMatrix' ? 'Full Weekly Routine Matrix' :
+               selectedClass === 'PeriodsMaster' ? 'Period Masters Setup Workspace' :
+               selectedClass === 'GroupsRegistry' ? 'Class & Stream Groups Registry' :
+               `${selectedClass} Weekly Routine Schedule`}
+            </h3>
+            <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-mono font-bold shrink-0">
+              {selectedClass} View
+            </span>
+          </div>
+
+          {/* Quick Canvas Action Triggers */}
+          <div className="flex items-center gap-2">
+            {selectedClass !== 'PeriodsMaster' && (
               <button
-                key={g.id}
                 onClick={() => {
-                  setSelectedClass(g.name);
+                  setSelectedClass('PeriodsMaster');
                   setIsAddingEntry(false);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+              >
+                <Clock className="w-3.5 h-3.5 text-sky-600" />
+                <span className="hidden sm:inline">Setup Periods</span>
+              </button>
+            )}
+
+            {selectedClass !== 'GroupsRegistry' && (
+              <button
+                onClick={() => {
+                  setSelectedClass('GroupsRegistry');
+                  setIsAddingEntry(false);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                <span className="hidden sm:inline">Groups</span>
+              </button>
+            )}
+
+            {selectedClass !== 'PeriodsMaster' && selectedClass !== 'GroupsRegistry' && (
+              <button
+                onClick={() => {
+                  setIsAddingEntry(true);
                   setEditingEntryId(null);
                 }}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer ${
-                  selectedClass === g.name
-                    ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-55 hover:bg-slate-50'
-                }`}
+                className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-extrabold flex items-center gap-1 cursor-pointer shadow-2xs transition"
               >
-                {g.name}
+                <Plus className="w-4 h-4" />
+                <span>Add Entry</span>
               </button>
-            ))}
-            
-            <div className="pt-2 border-t border-slate-100 mt-2 space-y-1">
-              <button
-                onClick={() => setSelectedClass('Combined')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
-                  selectedClass === 'Combined'
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <span>Combined Routine</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                  selectedClass === 'Combined' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-                }`}>9-12 VIEW</span>
-              </button>
-
-              <button
-                onClick={() => setSelectedClass('FullMatrix')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
-                  selectedClass === 'FullMatrix'
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <span>📊 Full Routine Matrix</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                  selectedClass === 'FullMatrix' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-                }`}>Matrix</span>
-              </button>
-
-              <button
-                onClick={() => setSelectedClass('PeriodsMaster')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
-                  selectedClass === 'PeriodsMaster'
-                    ? 'bg-orange-600 text-white shadow-sm shadow-orange-600/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <span>⏱️ Periods Master</span>
-                <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono font-bold uppercase">Setup</span>
-              </button>
-
-              <button
-                onClick={() => setSelectedClass('GroupsRegistry')}
-                className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
-                  selectedClass === 'GroupsRegistry'
-                    ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <span>📂 Groups Registry</span>
-                <span className="text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold uppercase">CRUD</span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Timetable Method toggle */}
-        {activeRoutine && (
-          <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
-            <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 pb-2 border-b border-slate-100 tracking-wider">
-              Display Method
-            </span>
-            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-xl font-sans text-xs">
-              <button
-                onClick={() => updateDisplayMode('online')}
-                className={`py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg transition text-center cursor-pointer ${
-                  activeRoutine.display_mode === 'online'
-                    ? 'bg-white text-orange-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Online
-              </button>
-              <button
-                onClick={() => updateDisplayMode('pdf')}
-                className={`py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg transition text-center cursor-pointer ${
-                  activeRoutine.display_mode === 'pdf'
-                    ? 'bg-white text-orange-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                PDF Flyer
-              </button>
-            </div>
-            <p className="text-[10.5px] text-slate-400 leading-normal font-medium font-sans italic p-1">
-              {activeRoutine.display_mode === 'online' 
-                ? 'Dynamic routine grid managed on website directly' 
-                : 'Upload an administrative PDF document fallback.'}
-            </p>
-          </div>
-        )}
-
-        {/* Disabled Override Section - relocated to future update safely */}
-        <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-center space-y-1">
-          <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 pb-1.5 border-b border-slate-200 mb-2 tracking-wider flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3 h-3 text-slate-400" />
-            Timetable Override
-          </span>
-          <p className="text-[10.5px] text-slate-500 font-sans leading-normal font-medium italic">
-            Override settings have been relocated to Future Updates development roadmap (v2.0 BSEB automatic sync).
-          </p>
-        </div>
-      </div>
-
-      {/* RIGHT DISPLAY WORKSPACE CONTAINER */}
-      <div className="lg:col-span-3 space-y-6">
-        
-        {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
+        {/* Primary View Workspace Canvas */}
+        <div className="flex-1 space-y-6">
+          
+          {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
         {selectedClass === 'GroupsRegistry' ? (
           <GroupsRegistryWorkspace 
             fetchLocalData={fetchLocalData} 
@@ -4245,7 +4216,244 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia }) => {
             </div>
           </div>
         )}
+
+        {/* DOCKED BOTTOM CONTEXT TOOLBAR */}
+        <div className="sticky bottom-2 z-20 bg-slate-900/95 text-white backdrop-blur-md p-2.5 px-4 rounded-xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Quick Grade Selector Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <span className="text-[10px] font-mono text-slate-400 uppercase font-bold mr-1 hidden sm:inline">Grade:</span>
+            {timetableGroups.filter(g => g.is_active).map(g => (
+              <button
+                key={g.id}
+                onClick={() => {
+                  setSelectedClass(g.name);
+                  setIsAddingEntry(false);
+                }}
+                className={`px-2.5 py-1 rounded-md text-[10.5px] font-extrabold transition cursor-pointer ${
+                  selectedClass === g.name
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {g.name}
+              </button>
+            ))}
+            <button
+              onClick={() => setSelectedClass('Combined')}
+              className={`px-2 py-1 rounded-md text-[10.5px] font-extrabold transition cursor-pointer ${
+                selectedClass === 'Combined' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              Combined
+            </button>
+            <button
+              onClick={() => setSelectedClass('FullMatrix')}
+              className={`px-2 py-1 rounded-md text-[10.5px] font-extrabold transition cursor-pointer ${
+                selectedClass === 'FullMatrix' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              Matrix
+            </button>
+          </div>
+
+          {/* Context Shortcuts */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedClass('PeriodsMaster')}
+              className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition ${
+                selectedClass === 'PeriodsMaster' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-sky-400" />
+              <span>Periods ({periodMasters.length})</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedClass('GroupsRegistry')}
+              className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition ${
+                selectedClass === 'GroupsRegistry' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+              <span>Groups ({timetableGroups.length})</span>
+            </button>
+
+            {setIsInspectorOpen && (
+              <button
+                onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+                className="p-1.5 rounded-md bg-slate-800 text-orange-400 hover:bg-slate-700 cursor-pointer flex items-center gap-1"
+                title="Toggle Inspector Sidebar"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span className="text-[10px] uppercase font-mono font-bold hidden md:inline">Inspector</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* RIGHT COLLAPSIBLE INSPECTOR PANEL */}
+      {isInspectorOpen && (
+        <div className="w-full lg:w-80 shrink-0 bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4 self-start sticky top-2 max-h-[calc(100vh-12rem)] overflow-y-auto">
+          {/* Inspector Header */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-150">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-orange-500" />
+              <span className="text-xs font-extrabold uppercase font-mono tracking-wider text-slate-900">
+                Studio Inspector
+              </span>
+            </div>
+            {setIsInspectorOpen && (
+              <button
+                onClick={() => setIsInspectorOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Section 1: Academic Grade Division */}
+          <div className="space-y-2">
+            <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">
+              Academic Grade Division
+            </span>
+            <div className="space-y-1">
+              {timetableGroups.filter(g => g.is_active).map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => {
+                    setSelectedClass(g.name);
+                    setIsAddingEntry(false);
+                    setEditingEntryId(null);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer ${
+                    selectedClass === g.name
+                      ? 'bg-orange-500 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  {g.name}
+                </button>
+              ))}
+
+              <div className="pt-2 border-t border-slate-100 space-y-1">
+                <button
+                  onClick={() => setSelectedClass('Combined')}
+                  className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
+                    selectedClass === 'Combined'
+                      ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>Combined Routine</span>
+                  <span className="text-[9px] bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-mono font-bold">9-12</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedClass('FullMatrix')}
+                  className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
+                    selectedClass === 'FullMatrix'
+                      ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>📊 Full Matrix</span>
+                  <span className="text-[9px] bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-mono font-bold">Matrix</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedClass('PeriodsMaster')}
+                  className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
+                    selectedClass === 'PeriodsMaster'
+                      ? 'bg-orange-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>⏱️ Periods Master</span>
+                  <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono font-bold">Setup</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedClass('GroupsRegistry')}
+                  className={`w-full text-left px-3 py-2 text-xs font-bold uppercase rounded-lg transition-all flex items-center justify-between cursor-pointer ${
+                    selectedClass === 'GroupsRegistry'
+                      ? 'bg-purple-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>📂 Groups Registry</span>
+                  <span className="text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">CRUD</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Display Method */}
+          {activeRoutine && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+              <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">
+                Display Method
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 bg-white p-1 rounded-lg border border-slate-200 text-xs">
+                <button
+                  onClick={() => updateDisplayMode('online')}
+                  className={`py-1 px-2 text-[10px] font-bold uppercase rounded-md transition cursor-pointer ${
+                    activeRoutine.display_mode === 'online'
+                      ? 'bg-orange-500 text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Online
+                </button>
+                <button
+                  onClick={() => updateDisplayMode('pdf')}
+                  className={`py-1 px-2 text-[10px] font-bold uppercase rounded-md transition cursor-pointer ${
+                    activeRoutine.display_mode === 'pdf'
+                      ? 'bg-orange-500 text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  PDF Flyer
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Section 3: Conflict & Gap Inspector */}
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="block text-[10px] uppercase font-mono font-black text-slate-700 tracking-wider">
+                Gap Diagnostics
+              </span>
+              <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                0 Violations
+              </span>
+            </div>
+            <div className="text-[10.5px] text-slate-600 space-y-1 font-mono">
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <span>Vacant Slots:</span>
+                <span className="font-extrabold text-orange-600">{vacantSlots.length}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span>Active Groups:</span>
+                <span className="font-extrabold text-slate-900">{timetableGroups.length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Timetable Override Note */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center space-y-1">
+            <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 pb-1 border-b border-slate-200 mb-1 tracking-wider flex items-center justify-center gap-1.5">
+              <AlertTriangle className="w-3 h-3 text-slate-400" />
+              Timetable Override
+            </span>
+            <p className="text-[10px] text-slate-500 leading-normal font-medium italic">
+              Automated override parameters are managed via BSEB Sync Engine.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -157,7 +157,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
   };
 
   return (
-    <div className="space-y-6" id="consolidated-routine-matrix-layer">
+    <div className="space-y-4 min-w-0 w-full" id="consolidated-routine-matrix-layer">
       {/* MATRIX CONTROL HEADER */}
       <div className="bg-gradient-to-r from-orange-500/5 to-amber-500/5 border border-orange-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print shadow-3xs animate-in fade-in duration-300">
         <div className="space-y-1">
@@ -217,7 +217,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
       {/* MATRIX TABLE DISPLAY CONTAINER */}
       <div 
         id="print-area-matrix" 
-        className="bg-white border border-slate-200 rounded-2xl overflow-hidden p-6 shadow-3xs space-y-5"
+        className="bg-white border border-slate-200 rounded-xl overflow-hidden p-4 sm:p-5 shadow-2xs space-y-4 min-w-0 w-full"
       >
         {/* BRANDING HEADER */}
         <div className="border-b-2 border-slate-950 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
@@ -253,7 +253,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
         </div>
 
         {/* COMPACT ROUTINE HIGH COMPARATIVE MATRIX */}
-        <div className="overflow-x-auto">
+        <div className="w-full min-w-0 overflow-x-auto border border-slate-200 rounded-xl">
           <table className="w-full border-collapse border border-slate-300 rounded-xl overflow-hidden">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-300 text-slate-700 font-mono text-[10px] uppercase font-black tracking-wider text-left">

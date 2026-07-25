@@ -779,7 +779,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [activeTab]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8" id="admin-workspace-grid">
+    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 min-w-0" id="admin-workspace-grid">
       
       {/* Reusable selector model for school logo, hero cover, or module custom image */}
       {isMediaModalOpen && mediaTarget && (
@@ -1046,7 +1046,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Content Workspace (3 Cols) */}
-        <div className="lg:col-span-3 min-h-[500px]" id="admin-content-workspace">
+        <div className="lg:col-span-3 min-w-0 w-full min-h-[500px]" id="admin-content-workspace">
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (

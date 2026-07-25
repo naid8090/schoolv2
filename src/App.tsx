@@ -1581,7 +1581,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-600">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-600 overflow-x-hidden">
       
       {/* 1. STICKY DYNAMIC HEADER NAV */}
       <Navbar
@@ -1594,7 +1594,7 @@ export default function App() {
       />
 
       {/* 2. PRIMARY VIEWPORT SWITCHBOARD */}
-      <main className="flex-grow">
+      <main className="flex-grow min-w-0 w-full">
         {!appInitializationComplete ? (
           showSkeletons ? renderSkeletonContent() : (
             <div className="min-h-[400px]"></div>
@@ -1689,7 +1689,7 @@ export default function App() {
 
             {/* VIEW F: ADMINISTRATION DESK PANEL */}
             {currentView === 'admin' && (
-              <div className="pb-16" id="admin-view-canvas">
+              <div className="pb-16 min-w-0 w-full" id="admin-view-canvas">
                 {isVerifyingAuth ? (
                   <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>

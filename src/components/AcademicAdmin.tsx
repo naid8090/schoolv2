@@ -92,7 +92,7 @@ export const AcademicAdmin: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4" id="academic-desk-central">
+    <div className="space-y-4 min-w-0 w-full" id="academic-desk-central">
       {/* Studio Header Toolbar & Sub-Tab Switcher */}
       <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0">
         <div className="flex items-center gap-3">
@@ -167,7 +167,7 @@ export const AcademicAdmin: React.FC = () => {
       </div>
 
       {/* Studio Workspace Canvas Body */}
-      <div className="bg-slate-100/50 border border-slate-200 rounded-2xl p-2 sm:p-3 shadow-2xs min-h-[500px]">
+      <div className="min-w-0 w-full min-h-[500px]">
         {activeSubTab === 'routine' && (
           <RoutineAdminModule 
             triggerMedia={triggerMediaFilePicker} 
@@ -2290,7 +2290,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
   });
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 relative">
+    <div className="flex flex-col lg:flex-row gap-3 min-w-0 w-full relative">
       {error && (
         <div className="w-full bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl mb-2">
           <div className="flex">
@@ -2373,7 +2373,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
         </div>
 
         {/* Primary View Workspace Canvas */}
-        <div className="flex-1 space-y-6">
+        <div className="flex-1 min-w-0 w-full space-y-4">
           
           {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
         {selectedClass === 'GroupsRegistry' ? (
@@ -2391,7 +2391,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
         ) : selectedClass === 'FullMatrix' ? (
           <ConsolidatedRoutineMatrix isAdmin={true} />
         ) : selectedClass === 'Combined' ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs space-y-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4 min-w-0 w-full animate-in fade-in duration-200">
             <div>
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
@@ -2404,7 +2404,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
               </p>
             </div>
 
-            <div className="overflow-x-auto border border-slate-150 rounded-xl">
+            <div className="w-full min-w-0 overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
@@ -4294,7 +4294,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
 
       {/* RIGHT COLLAPSIBLE INSPECTOR PANEL */}
       {isInspectorOpen && (
-        <div className="w-full lg:w-80 shrink-0 bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4 self-start sticky top-2 max-h-[calc(100vh-12rem)] overflow-y-auto">
+        <div className="fixed inset-x-0 bottom-0 z-50 lg:static lg:z-auto w-full lg:w-72 xl:w-80 shrink-0 bg-white border border-slate-200 rounded-t-2xl lg:rounded-xl p-3.5 sm:p-4 shadow-2xl lg:shadow-2xs space-y-4 max-h-[85vh] lg:max-h-[calc(100vh-6rem)] overflow-y-auto self-start lg:sticky lg:top-2">
           {/* Inspector Header */}
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-150">
             <div className="flex items-center gap-2">

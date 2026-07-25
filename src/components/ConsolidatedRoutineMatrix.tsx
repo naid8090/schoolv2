@@ -253,7 +253,7 @@ export const ConsolidatedRoutineMatrix: React.FC<ConsolidatedRoutineMatrixProps>
         </div>
 
         {/* COMPACT ROUTINE HIGH COMPARATIVE MATRIX */}
-        <div className="w-full min-w-0 overflow-x-auto border border-slate-200 rounded-xl">
+        <div className="w-full min-w-0 max-h-[calc(100vh-18rem)] min-h-[350px] overflow-auto scrollbar-thin border border-slate-200 rounded-xl">
           <table className="w-full border-collapse border border-slate-300 rounded-xl overflow-hidden">
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-300 text-slate-700 font-mono text-[10px] uppercase font-black tracking-wider text-left">

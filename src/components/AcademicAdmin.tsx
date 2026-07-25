@@ -209,6 +209,7 @@ const PeriodsMasterWorkspace: React.FC<{
   const [name, setName] = useState('');
   const [timeRange, setTimeRange] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -320,6 +321,7 @@ const PeriodsMasterWorkspace: React.FC<{
       setTimeRange('');
       setError(null);
       setWarning(null);
+      setIsFormOpen(false);
       fetchLocalData();
     } catch (err: any) {
       setError(err.message || 'An error occurred while saving the period.');
@@ -331,6 +333,7 @@ const PeriodsMasterWorkspace: React.FC<{
     setName(pm.name);
     setTimeRange(pm.time_range);
     setError(null);
+    setIsFormOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -342,10 +345,8 @@ const PeriodsMasterWorkspace: React.FC<{
     const deletedPm = periodMasters.find(pm => pm.id === id);
     
     try {
-      // Call the dedicated dbService delete method
       await dbService.deletePeriodMaster(id);
       
-      // Cascading clean up of associated routine entries to prevent empty/orphaned placeholders
       if (deletedPm) {
         const allEntries = dbService.getRoutineEntries();
         const entriesToRemove = allEntries.filter(
@@ -353,23 +354,15 @@ const PeriodsMasterWorkspace: React.FC<{
         );
         const idsToRemove = entriesToRemove.map(e => e.id);
         
-        console.log('[CASCADE DELETE] Period Master cascade delete started for period:', deletedPm.name);
-        console.log('[CASCADE DELETE] Found routine entries to remove:', idsToRemove);
-
         if (idsToRemove.length > 0) {
-          // Delete those IDs remotely and update local cache
           try {
             await dbService.deleteRoutineEntries(idsToRemove);
-            console.log('[CASCADE DELETE] Remote cascade delete successful.');
           } catch (err) {
             console.error('[CASCADE DELETE] Remote cascade delete failed:', err);
           }
-        } else {
-          console.log('[CASCADE DELETE] No routine entries found using this period. No remote deletes needed.');
         }
       }
       
-      // Refresh local lists and dispatch sync event to update the UI
       fetchLocalData();
       window.dispatchEvent(new CustomEvent('gsss-data-synced'));
     } catch (err: any) {
@@ -398,7 +391,8 @@ const PeriodsMasterWorkspace: React.FC<{
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs space-y-6 animate-in fade-in duration-200" id="periods-master-setup">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-3xs space-y-5 animate-in fade-in duration-200" id="periods-master-setup">
+      {/* TOOLBAR HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -411,159 +405,197 @@ const PeriodsMasterWorkspace: React.FC<{
             Configure system-wide academic timetable hour frames and lecture sequences below.
           </p>
         </div>
-        <button
-          onClick={handleResetDefaults}
-          className="text-slate-550 hover:text-slate-900 border border-slate-200 hover:border-slate-350 bg-white px-3 py-1.5 rounded-lg text-[10.5px] font-mono font-bold tracking-tight uppercase flex items-center gap-1 cursor-pointer transition shadow-4xs"
-        >
-          Reset Defaults
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-center">
+          <button
+            onClick={handleResetDefaults}
+            className="text-slate-550 hover:text-slate-900 border border-slate-200 hover:border-slate-350 bg-white px-3 py-1.5 rounded-lg text-[10.5px] font-mono font-bold tracking-tight uppercase flex items-center gap-1 cursor-pointer transition shadow-4xs"
+          >
+            Reset Defaults
+          </button>
+          <button
+            onClick={() => {
+              if (isFormOpen && !editingId) {
+                setIsFormOpen(false);
+              } else {
+                setEditingId(null);
+                setName('');
+                setTimeRange('');
+                setError(null);
+                setWarning(null);
+                setIsFormOpen(true);
+              }
+            }}
+            className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[11px] font-extrabold uppercase flex items-center gap-1 cursor-pointer transition shadow-2xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{isFormOpen ? 'Close Form' : 'Add Period'}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 bg-slate-50 border border-slate-150 p-4 rounded-xl space-y-4 h-fit">
-          <span className="text-[10px] font-mono font-bold uppercase text-slate-450 tracking-wider block">
-            {editingId ? 'Modify Timing Details' : 'Create Standard Period'}
-          </span>
+      {/* COMPACT HORIZONTAL ACTION BAR */}
+      {(isFormOpen || editingId) && (
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 font-mono text-[11px] font-extrabold uppercase text-slate-700">
+            <span>{editingId ? '📝 Modify Period Master Slot' : '✨ Create Standard Period Slot'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsFormOpen(false);
+                setEditingId(null);
+                setName('');
+                setTimeRange('');
+                setError(null);
+                setWarning(null);
+              }}
+              className="text-slate-400 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-          <form onSubmit={handleAddOrUpdate} className="space-y-4 text-xs font-semibold text-slate-755 font-sans">
-            <div className="space-y-1">
-              <label className="text-[10.5px] uppercase font-mono font-semibold text-slate-550">Period Label Name</label>
+          <form onSubmit={handleAddOrUpdate} className="flex flex-wrap items-end gap-3 text-xs font-semibold text-slate-755 font-sans">
+            <div className="flex-1 min-w-[180px]">
+              <label className="text-[10px] uppercase font-mono font-bold text-slate-550 block mb-1">Period Label Name *</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. Period 1"
-                className="w-full p-2 border border-slate-205 bg-white rounded-lg focus:outline-orange-500"
+                className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-lg focus:outline-orange-500 font-bold"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10.5px] uppercase font-mono font-semibold text-slate-550">Time Range Slot</label>
+            <div className="flex-1 min-w-[220px]">
+              <label className="text-[10px] uppercase font-mono font-bold text-slate-550 block mb-1">Time Range Slot *</label>
               <input
                 type="text"
                 required
                 value={timeRange}
                 onChange={e => setTimeRange(e.target.value)}
                 placeholder="e.g. 09:00 AM - 09:45 AM"
-                className="w-full p-2 border border-slate-205 bg-white rounded-lg focus:outline-orange-500 font-mono text-[11px] font-bold"
+                className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-lg focus:outline-orange-500 font-mono text-[11px] font-bold"
               />
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-150 p-2.5 rounded-lg text-red-700 text-[10.5px] font-medium leading-relaxed">
-                {error}
-              </div>
-            )}
-
-            {warning && (
-              <div className="bg-amber-50 border border-amber-150 p-2.5 rounded-lg text-amber-800 text-[10.5px] font-medium leading-relaxed flex items-start gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
-                <span>{warning}</span>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2 border-t border-slate-200/50">
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setName('');
-                    setTimeRange('');
-                    setError(null);
-                  }}
-                  className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-750 font-bold rounded-lg cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-              )}
+            <div className="flex items-center gap-2 h-9">
               <button
                 type="submit"
-                className="w-full py-2 bg-orange-500 hover:bg-orange-600 font-bold text-white rounded-lg cursor-pointer tracking-wide shadow-3xs"
+                className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 font-bold text-white rounded-lg cursor-pointer tracking-wide shadow-xs text-xs"
               >
                 {editingId ? 'Update Slot' : 'Create Slot'}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFormOpen(false);
+                  setEditingId(null);
+                  setName('');
+                  setTimeRange('');
+                  setError(null);
+                  setWarning(null);
+                }}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-750 font-bold rounded-lg cursor-pointer text-xs"
+              >
+                Cancel
+              </button>
             </div>
           </form>
-        </div>
 
-        <div className="md:col-span-2 space-y-3">
+          {error && (
+            <div className="bg-red-50 border border-red-150 p-2.5 rounded-lg text-red-700 text-[10.5px] font-medium leading-relaxed">
+              ⚠️ {error}
+            </div>
+          )}
+
+          {warning && (
+            <div className="bg-amber-50 border border-amber-150 p-2.5 rounded-lg text-amber-800 text-[10.5px] font-medium leading-relaxed flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+              <span>{warning}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PRIMARY DATA CANVAS - FULL WIDTH TABLE */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
           <span className="text-[10px] font-mono font-bold uppercase text-slate-450 tracking-wider block">
             Saved Hours Matrix Registry ({periodMasters.length} defined)
           </span>
+        </div>
 
-          <div className="border border-slate-150 rounded-xl overflow-hidden bg-white shadow-3xs" id="period-master-table-container">
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full border-collapse text-left min-w-[550px]" id="period-master-data-table">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wide text-slate-450">
-                    <th className="py-3 px-4 w-12 text-center">No.</th>
-                    <th className="py-3 px-4">Period</th>
-                    <th className="py-3 px-4">Standard Hour Slot</th>
-                    <th className="py-3 px-4 w-28 text-center">Duration</th>
-                    <th className="py-3 px-4 text-center w-36">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750 font-medium">
-                  {periodMasters.map((pm, i) => {
-                    const parsed = parseTimeRange(pm.time_range);
-                    const durationVal = parsed ? (parsed.end - parsed.start) : null;
-                    const durationStr = durationVal !== null && durationVal > 0 
-                      ? (durationVal >= 60 
-                          ? `${Math.floor(durationVal / 60)}h ${durationVal % 60 > 0 ? `${durationVal % 60}m` : ''}` 
-                          : `${durationVal} mins`)
-                      : '—';
+        <div className="border border-slate-150 rounded-xl overflow-hidden bg-white shadow-3xs w-full" id="period-master-table-container">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full border-collapse text-left min-w-[550px]" id="period-master-data-table">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wide text-slate-450">
+                  <th className="py-3 px-4 w-12 text-center">No.</th>
+                  <th className="py-3 px-4">Period</th>
+                  <th className="py-3 px-4">Standard Hour Slot</th>
+                  <th className="py-3 px-4 w-28 text-center">Duration</th>
+                  <th className="py-3 px-4 text-center w-36">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750 font-medium">
+                {periodMasters.map((pm, i) => {
+                  const parsed = parseTimeRange(pm.time_range);
+                  const durationVal = parsed ? (parsed.end - parsed.start) : null;
+                  const durationStr = durationVal !== null && durationVal > 0 
+                    ? (durationVal >= 60 
+                        ? `${Math.floor(durationVal / 60)}h ${durationVal % 60 > 0 ? `${durationVal % 60}m` : ''}` 
+                        : `${durationVal} mins`)
+                    : '—';
 
-                    return (
-                      <tr key={pm.id} className="hover:bg-slate-50/40 transition-colors group">
-                        <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-bold text-[10.5px]">
-                          {i + 1}
-                        </td>
-                        <td className="py-3.5 px-4 font-extrabold text-slate-900 text-sm">
-                          {pm.name}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-orange-600 font-bold text-[11px] select-all">
-                          <span className="bg-orange-50/30 px-2 py-1 rounded-md border border-orange-100/50">
-                            {pm.time_range}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-150/60 text-slate-700 rounded-md font-mono font-bold text-[10px] tracking-tight">
-                            {durationStr}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              id={`edit-period-btn-${pm.id}`}
-                              onClick={() => handleEdit(pm)}
-                              className="px-3 py-2 text-[11px] bg-white border border-slate-205 hover:bg-slate-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center text-slate-700 min-h-[40px] min-w-[50px] shadow-4xs hover:border-slate-300"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              id={`delete-period-btn-${pm.id}`}
-                              onClick={() => handleDelete(pm.id)}
-                              className="px-3 py-2 text-[11px] border border-red-200/60 bg-red-50/20 text-red-650 hover:bg-red-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center min-h-[40px] min-w-[50px] shadow-4xs"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {periodMasters.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-slate-400 italic font-medium">
-                        No period master rows defined. Add some or click Reset Defaults above.
+                  return (
+                    <tr key={pm.id} className="hover:bg-slate-50/40 transition-colors group">
+                      <td className="py-3.5 px-4 text-center font-mono text-slate-400 font-bold text-[10.5px]">
+                        {i + 1}
+                      </td>
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900 text-sm">
+                        {pm.name}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-orange-600 font-bold text-[11px] select-all">
+                        <span className="bg-orange-50/30 px-2 py-1 rounded-md border border-orange-100/50">
+                          {pm.time_range}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-150/60 text-slate-700 rounded-md font-mono font-bold text-[10px] tracking-tight">
+                          {durationStr}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            id={`edit-period-btn-${pm.id}`}
+                            onClick={() => handleEdit(pm)}
+                            className="px-3 py-1.5 text-[11px] bg-white border border-slate-205 hover:bg-slate-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center text-slate-700 shadow-4xs hover:border-slate-300"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            id={`delete-period-btn-${pm.id}`}
+                            onClick={() => handleDelete(pm.id)}
+                            className="px-3 py-1.5 text-[11px] border border-red-200/60 bg-red-50/20 text-red-650 hover:bg-red-50 font-bold rounded-lg cursor-pointer transition flex items-center justify-center shadow-4xs"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+                {periodMasters.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-400 italic font-medium">
+                      No period master rows defined. Add some or click Reset Defaults above.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -586,6 +618,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
   const [isActive, setIsActive] = useState(true);
   const [displayOrder, setDisplayOrder] = useState<number>(1);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadGroups = () => {
@@ -622,6 +655,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
     setIsActive(group.is_active);
     setDisplayOrder(group.display_order);
     setError(null);
+    setIsFormOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -696,6 +730,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
       loadGroups();
       fetchLocalData();
       resetForm();
+      setIsFormOpen(false);
     } catch (err: any) {
       setError(err.message || 'An error occurred while saving the timetable group.');
     }
@@ -749,6 +784,7 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
         loadGroups();
         fetchLocalData();
         resetForm();
+        setIsFormOpen(false);
       } catch (err: any) {
         setError(err.message || 'An error occurred while deleting the timetable group.');
       }
@@ -756,7 +792,8 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
   };
 
   return (
-    <div className="bg-white border border-slate-150 rounded-2xl p-6 shadow-3xs animate-in fade-in duration-200">
+    <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs space-y-5 animate-in fade-in duration-200">
+      {/* TOOLBAR HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>
           <div className="flex items-center gap-2">
@@ -769,37 +806,65 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
             Manage your school's classes, streams, and special course sections dynamically. These groups act as the columns of your active routines.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (isFormOpen && !editingId) {
+              setIsFormOpen(false);
+              resetForm();
+            } else {
+              setEditingId(null);
+              resetForm();
+              setIsFormOpen(true);
+            }
+          }}
+          className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-extrabold uppercase flex items-center gap-1.5 cursor-pointer transition shadow-2xs self-start md:self-center"
+        >
+          <Plus className="w-4 h-4" />
+          <span>{isFormOpen ? 'Close Form' : 'Register Group'}</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-6">
-        <div className="xl:col-span-1 bg-slate-50 border border-slate-200/60 rounded-xl p-5 self-start">
-          <h4 className="text-slate-800 text-xs font-black uppercase tracking-wider mb-4">
-            {editingId ? '📝 Edit Timetable Group' : '✨ Add New Group'}
-          </h4>
+      {/* COMPACT HORIZONTAL ACTION BAR */}
+      {(isFormOpen || editingId) && (
+        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 font-mono text-[11px] font-extrabold uppercase text-slate-700">
+            <span>{editingId ? '📝 Edit Timetable Group' : '✨ Register New Timetable Group'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsFormOpen(false);
+                resetForm();
+              }}
+              className="text-slate-400 hover:text-slate-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-600 font-bold leading-relaxed">
+            <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-600 font-bold">
               ⚠️ {error}
             </div>
           )}
 
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
-                Group Name *
+          <form onSubmit={handleSave} className="flex flex-wrap items-end gap-3 text-xs">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                Group Display Name *
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Class 11 Science"
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                className="w-full px-3 py-1.5 text-xs bg-white border border-slate-250 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-bold text-slate-800"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+            <div className="w-28">
+              <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
                 Display Order
               </label>
               <input
@@ -807,12 +872,12 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
                 min="1"
                 value={displayOrder}
                 onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 1)}
-                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                className="w-full px-3 py-1.5 text-xs bg-white border border-slate-250 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono font-bold"
               />
             </div>
 
-            <div className="flex items-center pl-1 py-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase text-slate-600">
+            <div className="flex items-center h-9 px-2">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold uppercase text-slate-700">
                 <input
                   type="checkbox"
                   checked={isActive}
@@ -823,91 +888,99 @@ const GroupsRegistryWorkspace: React.FC<GroupsRegistryWorkspaceProps> = ({ fetch
               </label>
             </div>
 
-            <div className="flex gap-2.5 pt-2">
+            <div className="flex items-center gap-2 h-9">
               <button
                 type="submit"
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs uppercase cursor-pointer"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-4 rounded-lg transition text-xs uppercase cursor-pointer shadow-xs"
               >
-                Save
+                Save Group
               </button>
               <button
                 type="button"
-                onClick={resetForm}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-lg transition text-xs uppercase cursor-pointer"
+                onClick={() => {
+                  setIsFormOpen(false);
+                  resetForm();
+                }}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-1.5 px-3 rounded-lg transition text-xs uppercase cursor-pointer"
               >
                 Cancel
               </button>
             </div>
           </form>
         </div>
+      )}
 
-        <div className="xl:col-span-2 space-y-4">
-          <div className="overflow-x-auto border border-slate-150 rounded-xl">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
-                  <th className="p-3 w-16 text-center border-r border-slate-150">Order</th>
-                  <th className="p-3 border-r border-slate-150">Group Name</th>
-                  <th className="p-3 w-28 text-center border-r border-slate-150">Status</th>
-                  <th className="p-3 w-32 text-center">Actions</th>
+      {/* PRIMARY DATA CANVAS - FULL WIDTH TABLE */}
+      <div className="space-y-2">
+        <span className="text-[10px] font-mono font-bold uppercase text-slate-450 tracking-wider block">
+          Registered Class & Stream Groups ({groups.length} configured)
+        </span>
+
+        <div className="overflow-x-auto border border-slate-150 rounded-xl bg-white shadow-2xs w-full">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
+                <th className="p-3 w-16 text-center border-r border-slate-150">Order</th>
+                <th className="p-3 border-r border-slate-150">Group Name</th>
+                <th className="p-3 w-28 text-center border-r border-slate-150">Status</th>
+                <th className="p-3 w-32 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
+              {groups.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-slate-400 font-medium">
+                    No timetable groups registered. Seeding default groups...
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-150 text-xs text-slate-700">
-                {groups.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-400 font-medium">
-                      No timetable groups registered. Seeding default groups...
+              ) : (
+                groups.map((g) => (
+                  <tr key={g.id} className="hover:bg-slate-50/40">
+                    <td className="p-3 text-center border-r border-slate-150 font-mono font-bold text-slate-500">
+                      {g.display_order}
                     </td>
-                  </tr>
-                ) : (
-                  groups.map((g) => (
-                    <tr key={g.id} className="hover:bg-slate-50/40">
-                      <td className="p-3 text-center border-r border-slate-150 font-mono font-bold text-slate-500">
-                        {g.display_order}
-                      </td>
-                      <td className="p-3 border-r border-slate-150">
-                        <div className="font-extrabold text-slate-800">{g.name}</div>
-                      </td>
-                      <td className="p-3 text-center border-r border-slate-150">
+                    <td className="p-3 border-r border-slate-150">
+                      <div className="font-extrabold text-slate-800">{g.name}</div>
+                    </td>
+                    <td className="p-3 text-center border-r border-slate-150">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(g)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-sans text-[10px] font-bold uppercase transition cursor-pointer ${
+                          g.is_active
+                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : 'bg-red-50 text-red-600 hover:bg-red-100'
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${g.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        {g.is_active ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleToggleActive(g)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-sans text-[10px] font-bold uppercase transition cursor-pointer ${
-                            g.is_active
-                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                              : 'bg-red-50 text-red-600 hover:bg-red-100'
-                          }`}
+                          onClick={() => handleEditStart(g)}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-md transition cursor-pointer text-xs font-bold"
+                          title="Edit Group"
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${g.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                          {g.is_active ? 'Active' : 'Inactive'}
+                          Edit
                         </button>
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleEditStart(g)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-md transition cursor-pointer"
-                            title="Edit Group"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(g)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 p-1.5 rounded-md transition cursor-pointer"
-                            title="Delete Group"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(g)}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded-md transition cursor-pointer text-xs font-bold"
+                          title="Delete Group"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -31,7 +31,8 @@ import {
   ChevronDown,
   ChevronRight,
   Grid,
-  Upload
+  Upload,
+  Users
 } from 'lucide-react';
 import { dbService, generateUUID } from '../services/db';
 import { Routine, RoutineEntry, PeriodMaster, ExamSchedule, ExamEntry, CalendarEvent, CalendarEventType, AcademicClass, Faculty, TimetableGroup } from '../types';
@@ -998,7 +999,11 @@ interface ModuleSubProps {
 }
 
 const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspectorOpen = false, setIsInspectorOpen }) => {
-  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry' | 'Override'>(() => {
+  const [selectedClass, setSelectedClass] = useState<AcademicClass | 'Combined' | 'PeriodsMaster' | 'FullMatrix' | 'GroupsRegistry' | 'Optimizer' | 'Override'>(() => {
+    const active = dbService.getTimetableGroups().filter(g => g.is_active);
+    return active.length > 0 ? active[0].name : 'Class 9';
+  });
+  const [lastSelectedRoutineClass, setLastSelectedRoutineClass] = useState<string>(() => {
     const active = dbService.getTimetableGroups().filter(g => g.is_active);
     return active.length > 0 ? active[0].name : 'Class 9';
   });
@@ -2391,13 +2396,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
           <button
             onClick={() => {
-              if (selectedClass === 'GroupsRegistry' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix' || selectedClass === 'Override') {
+              if (['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Override'].includes(selectedClass)) {
                 const activeG = timetableGroups.filter(g => g.is_active);
-                setSelectedClass(activeG.length > 0 ? activeG[0].name : 'Class 9');
+                setSelectedClass((lastSelectedRoutineClass as any) || (activeG.length > 0 ? activeG[0].name : 'Class 9'));
               }
             }}
             className={`px-3.5 py-2 text-xs font-black tracking-wide uppercase rounded-lg transition duration-150 cursor-pointer flex items-center gap-1.5 shrink-0 ${
-              selectedClass !== 'GroupsRegistry' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'Override'
+              !['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Override'].includes(selectedClass)
                 ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold'
             }`}
@@ -2568,6 +2573,525 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
           />
         ) : selectedClass === 'FullMatrix' ? (
           <ConsolidatedRoutineMatrix isAdmin={true} />
+        ) : selectedClass === 'Override' ? (
+          false ? null : <div className="hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-1 px-2.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75 animate-duration-1000"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                    </span>
+                    Smart Companion v1.1
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium font-sans">| School Routine Audit Intelligence</span>
+                </div>
+                <h3 className="text-slate-900 font-black text-xl tracking-tight leading-none uppercase">
+                  Schedule Resource Integrity Optimizer
+                </h3>
+                <p className="text-slate-500 text-xs font-sans max-w-2xl font-medium">
+                  Real-time teacher workload balance monitors and gaps detection. Automate substitute teacher suggestions to prevent unattended school lectures.
+                </p>
+              </div>
+
+              {/* Quick Metrics */}
+              <div className="flex items-center gap-3 self-start md:self-center font-mono">
+                <div className="p-3 bg-white border border-slate-200/80 rounded-2xl shadow-3xs text-center min-w-[100px]">
+                  <span className="block text-[9.5px] uppercase text-slate-400 font-bold tracking-wider">Routine Gaps</span>
+                  <span className="text-lg font-black text-red-600">{getVacantAndGappedSlots().length}</span>
+                </div>
+                <div className="p-3 bg-white border border-slate-200/80 rounded-2xl shadow-3xs text-center min-w-[100px]">
+                  <span className="block text-[9.5px] uppercase text-slate-400 font-bold tracking-wider">Active Faculty</span>
+                  <span className="text-lg font-black text-slate-800">{faculty.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-Nav Tabs for Optimizer */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
+              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200/60 shadow-3xs w-full sm:w-auto">
+                <button
+                  onClick={() => setOptimizerTab('workload')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-md text-xs font-bold transition duration-150 uppercase tracking-wide cursor-pointer flex items-center justify-center gap-1.5 ${
+                    optimizerTab === 'workload'
+                      ? 'bg-sky-900 text-white shadow-2xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Teacher Workload Balance</span>
+                </button>
+
+                <button
+                  onClick={() => setOptimizerTab('vacant')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-md text-xs font-bold transition duration-150 uppercase tracking-wide cursor-pointer flex items-center justify-center gap-1.5 relative ${
+                    optimizerTab === 'vacant'
+                      ? 'bg-sky-900 text-white shadow-2xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Gaps & Cover Assistant</span>
+                  {getVacantAndGappedSlots().length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.2 bg-red-500 text-white text-[9px] font-mono rounded-full font-black animate-pulse">
+                      {getVacantAndGappedSlots().length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Filters based on selected tab */}
+              {optimizerTab === 'vacant' ? (
+                <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-end">
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-3xs">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase font-bold pl-2">Day:</span>
+                    <select
+                      value={analyticsDayFilter}
+                      onChange={(e) => setAnalyticsDayFilter(e.target.value)}
+                      className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
+                    >
+                      <option value="All">All Days (Mon-Sat)</option>
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-3xs">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase font-bold pl-2">Class:</span>
+                    <select
+                      value={analyticsClassFilter}
+                      onChange={(e) => setAnalyticsClassFilter(e.target.value)}
+                      className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
+                    >
+                      <option value="All">All Classes</option>
+                      {timetableGroups.filter(g => g.is_active).map(g => (
+                        <option key={g.id} value={g.name}>{g.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-end">
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-3xs">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase font-bold pl-2">Faculty Filter:</span>
+                    <select
+                      value={workloadTeacherFilter}
+                      onChange={(e) => setWorkloadTeacherFilter(e.target.value)}
+                      className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer max-w-[200px]"
+                    >
+                      <option value="All">All Faculty</option>
+                      {allTeachersFromData().map(teacher => (
+                        <option key={teacher} value={teacher}>{teacher}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tab Content A: Teacher Workload Balance */}
+            {optimizerTab === 'workload' ? (
+              <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-2xs animate-in fade-in duration-200" id="teacher-workload-table-container">
+                <div className="overflow-x-auto scrollbar-thin">
+                  <table className="w-full border-collapse min-w-[650px]" id="teacher-workload-data-table">
+                    <thead>
+                      <tr className="bg-slate-50/75 border-b border-slate-150 text-left font-mono text-[9.5px] uppercase tracking-wider text-slate-450 font-bold">
+                        <th className="py-3.5 px-4 sm:px-5 w-[200px]">Instructor</th>
+                        <th className="py-3.5 px-4">Department / Specialty</th>
+                        <th className="py-3.5 px-4 w-[90px] hidden md:table-cell">Type</th>
+                        <th className="py-3.5 px-3 text-center w-[110px]">Weekly Load</th>
+                        <th className="py-3.5 px-4 w-[180px] sm:w-[220px]">Workload Balance Guard</th>
+                        <th className="py-3.5 px-4 sm:px-5 text-right font-sans lowercase w-[160px] sm:w-[200px]">details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750">
+                      {filteredWorkloadData().length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400 italic font-medium">
+                            {workloadTeacherFilter === 'All'
+                              ? "No teachers scheduled yet across routine database."
+                              : `No workload data found for "${workloadTeacherFilter}".`}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredWorkloadData().map((t) => {
+                          let loadStatus = "Light Load";
+                          let maxLimit = 15;
+                          let progressPercent = Math.min((t.loadCount / maxLimit) * 100, 100);
+                          
+                          if (t.loadCount > 12) {
+                            loadStatus = "Heavy Load / Over-booked";
+                          } else if (t.loadCount >= 6) {
+                            loadStatus = "Optimal Workload";
+                          } else if (t.loadCount > 0) {
+                            loadStatus = "Under-committed";
+                          } else {
+                            loadStatus = "No active classes";
+                          }
+
+                          return (
+                            <tr key={t.name} className="hover:bg-slate-50/40 transition duration-100 group">
+                              <td className="py-3.5 px-4 sm:px-5 font-black text-slate-900 text-xs flex items-center gap-2.5">
+                                <span className="p-1 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] text-slate-500 font-mono font-bold select-none group-hover:bg-white transition-colors">
+                                  {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="font-sans font-extrabold text-slate-900 text-[12.5px] leading-snug truncate">{t.name}</div>
+                                  <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none block sm:inline">{t.type}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-slate-600 font-sans">
+                                {t.department}
+                              </td>
+                              <td className="py-3.5 px-4 text-[10.5px] hidden md:table-cell">
+                                <span className={`px-2 py-0.5 border text-[9px] font-mono leading-none rounded uppercase ${t.type === 'Regular' ? 'bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-150' : 'bg-slate-50 text-slate-605 border-slate-150'}`}>
+                                  {t.type}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-3 text-center">
+                                <span className="text-sm font-black font-mono text-slate-950">
+                                  {t.loadCount}
+                                </span>
+                                <span className="text-[10px] text-slate-450 font-semibold pl-1">slots</span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[10px] font-mono font-bold leading-none">
+                                    <span className={`font-semibold ${t.loadCount > 12 ? 'text-red-600' : t.loadCount >= 6 ? 'text-emerald-600' : 'text-amber-600'}`}>{loadStatus}</span>
+                                    <span className="text-slate-450">{Math.round(progressPercent)}% limit</span>
+                                  </div>
+                                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-4xs border border-slate-200/40">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-300 ${t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                      style={{ width: `${progressPercent}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 sm:px-5 text-right">
+                                <div className="flex flex-wrap gap-1 justify-end max-w-sm ml-auto">
+                                  {t.assignments.length === 0 ? (
+                                    <span className="text-slate-350 text-[10px] italic">No active slots assigned</span>
+                                  ) : (
+                                    t.assignments.map(a => (
+                                      <span key={a.id} className="text-[9.5px] bg-slate-50 border border-slate-150 rounded px-1.5 py-0.5 text-slate-600 font-mono leading-none select-none hover:bg-orange-50 hover:border-orange-200 hover:text-orange-900 transition-colors" title={`${a.subject}`}>
+                                        {a.day.substring(0,3)} {a.period.replace('Period ','P')}: {a.class_name.replace('Class ','C')}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              /* Tab Content B: Class Gaps / Vacancies Substitution Assistant */
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in duration-200">
+                {/* Vacancy Checklist List */}
+                <div className="xl:col-span-2 space-y-3">
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <h4 className="text-xs font-mono font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        Detected Routine Gaps ({filteredVac_gaps.length})
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-sans font-medium">Click on any gap to trigger the substitute advisor</span>
+                    </div>
+
+                    <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100/50">
+                      {filteredVac_gaps.length === 0 ? (
+                        <div className="text-center py-16 space-y-2 select-none">
+                          <div className="mx-auto w-10 h-10 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-green-600 font-bold">
+                            ✓
+                          </div>
+                          <p className="text-slate-850 font-black text-sm">Perfect Grid Integrity!</p>
+                          <p className="text-slate-400 text-[11px] font-sans max-w-xs mx-auto leading-relaxed">
+                            Every single day/period hour for Grade Classes (9-12) has custom scheduled lectures with assigned teachers. No vacant hours detected!
+                          </p>
+                        </div>
+                      ) : (
+                        filteredVac_gaps.map((gap) => {
+                          const isUnscheduled = gap.reason === 'unscheduled';
+                          const isSelected = quickAssignSlot && 
+                                             quickAssignSlot.className === gap.class_name && 
+                                             quickAssignSlot.day === gap.day && 
+                                             quickAssignSlot.period === gap.period;
+
+                          return (
+                            <div 
+                              key={gap.key}
+                              onClick={() => {
+                                setQuickAssignSlot({
+                                  className: gap.class_name,
+                                  day: gap.day,
+                                  period: gap.period,
+                                  timeRange: gap.time_range
+                                });
+                                setQuickForm({
+                                  subject: gap.entry?.subject || '',
+                                  teacher: gap.entry?.teacher || '',
+                                  isManual: false
+                                });
+                                setQuickConflictWarning(null);
+                                setQuickForceConflict(false);
+                                setQuickError(null);
+                              }}
+                              className={`pt-3 pb-3 px-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer transition ${
+                                isSelected 
+                                  ? 'bg-orange-500/10 border-orange-550/30 border-2 shadow-2xs' 
+                                  : 'bg-white hover:bg-slate-50 border border-transparent'
+                              }`}
+                            >
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center flex-wrap gap-1.5">
+                                  <span className="px-2.5 py-0.5 bg-slate-900 text-white rounded text-[10px] font-extrabold uppercase select-none leading-none">
+                                    {gap.class_name}
+                                  </span>
+                                  <span className="text-xs text-slate-800 font-extrabold">
+                                    {gap.day} • <span className="text-orange-600 font-extrabold font-mono">{gap.period}</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 leading-none">
+                                    {gap.time_range}
+                                  </span>
+                                </div>
+                                
+                                <p className="text-[10.5px] text-slate-500 font-sans leading-normal font-medium italic flex items-center gap-1">
+                                  {isUnscheduled ? (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                                      <span>Unpopulated hour. Absolutely no subject/lecture allocated in database matrix yet.</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-ping" />
+                                      <span>Class scheduled (<strong>{gap.entry?.subject}</strong>) but teacher left blank. No faculty assigned.</span>
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase rounded border select-none ${
+                                  isUnscheduled 
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                                    : 'bg-red-50 text-red-705 border-red-200'
+                                }`}>
+                                  {isUnscheduled ? 'Silent Gap' : 'Instructor Omission'}
+                                </span>
+                                <button className={`py-1.5 px-3 rounded-lg text-[10px] uppercase font-bold transition-all ${
+                                  isSelected
+                                    ? 'bg-orange-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-orange-500 hover:text-white cursor-pointer'
+                                }`}>
+                                  {isSelected ? 'Selected' : 'Find Substitute'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Substitution Assistant Panel */}
+                <div className="xl:col-span-1">
+                  {quickAssignSlot ? (
+                    <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs space-y-4 animate-in slide-in-from-right-3 duration-150">
+                      <div className="pb-2.5 border-b border-slate-100/80">
+                        <span className="text-[9px] font-mono font-bold bg-orange-100 text-orange-950 px-2 py-0.5 rounded uppercase select-none leading-none">
+                          Cover Optimizer ✨
+                        </span>
+                        <h4 className="text-slate-900 font-black text-sm font-sans mt-2">
+                          Assigning {quickAssignSlot.className}
+                        </h4>
+                        <p className="text-slate-450 text-[10.5.5px] font-mono font-black leading-tight mt-0.5 uppercase tracking-wide">
+                          {quickAssignSlot.day} • {quickAssignSlot.period}
+                        </p>
+                      </div>
+
+                      {/* Smart substitute recommendations */}
+                      <div className="space-y-2.5">
+                        <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 tracking-wider">
+                          Suggested Substitute Teachers (Totally Free now):
+                        </span>
+                        
+                        <div className="space-y-1 w-full max-h-44 overflow-y-auto pr-1">
+                          {getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).length === 0 ? (
+                            <div className="p-2 border border-dashed border-red-200 bg-red-50 text-red-800 text-[10.5px] rounded-lg leading-normal font-sans">
+                              Conflict Alert: Every single teacher in the facility is already busy teaching other classes during this specific period slot! Consider typing a custom temp teacher below.
+                            </div>
+                          ) : (
+                            getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).map(t => {
+                              const fModel = faculty.find(f => f.name.toLowerCase().trim() === t.name.toLowerCase().trim());
+                              const teacherSubject = fModel?.subject || '';
+                              return (
+                                <div 
+                                  key={t.name}
+                                  onClick={() => {
+                                    setQuickForm(prev => ({ 
+                                      ...prev, 
+                                      teacher: t.name, 
+                                      teacher_id: t.id,
+                                      isManual: false,
+                                      subject: teacherSubject ? teacherSubject : (prev.subject || '')
+                                    }));
+                                    setQuickConflictWarning(null);
+                                  }}
+                                  className={`p-2 border rounded-xl flex items-center justify-between text-xs cursor-pointer select-none transition duration-100 ${
+                                    quickForm.teacher === t.name 
+                                      ? 'bg-orange-50 border-orange-300' 
+                                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                <div className="space-y-0.5">
+                                  <div className="font-extrabold text-slate-800 leading-none">{t.name}</div>
+                                  <div className="text-[9px] font-mono text-slate-450">{t.department}</div>
+                                </div>
+                                <span className="text-[9px] font-mono font-black uppercase text-orange-700 bg-white px-1.5 py-0.5 rounded border border-orange-100">
+                                  Free Now ({t.loadCount}c)
+                                </span>
+                              </div>
+                            ); })
+                          )}
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleQuickAssignSubmit} className="space-y-3 text-xs font-semibold font-sans">
+                        {/* Teacher Input */}
+                        <div className="space-y-1">
+                          <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
+                          <div className="space-y-1.5">
+                            <select
+                              value={quickForm.isManual ? 'manual_option' : (quickForm.teacher_id || '')}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'manual_option') {
+                                  setQuickForm(prev => ({ ...prev, isManual: true, teacher: '', teacher_id: undefined }));
+                                } else if (val === '') {
+                                  setQuickForm(prev => ({ ...prev, isManual: false, teacher: '', teacher_id: undefined }));
+                                } else {
+                                  const matched = faculty.find(f => f.id === val);
+                                  setQuickForm(prev => ({ 
+                                    ...prev, 
+                                    isManual: false, 
+                                    teacher: matched ? matched.name : '',
+                                    teacher_id: val,
+                                    subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
+                                  }));
+                                }
+                                setQuickConflictWarning(null);
+                              }}
+                              className="w-full p-2 border border-slate-200 bg-white rounded-lg font-medium font-sans focus:outline-orange-500"
+                            >
+                              <option value="">Select recommended teacher...</option>
+                              {faculty.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.name} ({f.department || 'General'})
+                                </option>
+                              ))}
+                              <option value="manual_option">-- Type manually/custom --</option>
+                            </select>
+
+                            {quickForm.isManual && (
+                              <input
+                                type="text"
+                                value={quickForm.teacher}
+                                onChange={(e) => {
+                                  setQuickForm({ ...quickForm, teacher: e.target.value });
+                                  setQuickConflictWarning(null);
+                                }}
+                                required
+                                placeholder="Type teacher name..."
+                                className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Subject field */}
+                        <div className="space-y-1">
+                          <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
+                          <input
+                            type="text"
+                            value={quickForm.subject}
+                            onChange={(e) => setQuickForm({ ...quickForm, subject: e.target.value })}
+                            required
+                            placeholder="e.g. Chemistry II, Biology Lab"
+                            list="existing-subjects"
+                            className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
+                          />
+                        </div>
+
+                        {/* Strict blocker validation error box */}
+                        {quickError && (
+                          <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2.5 text-red-800 animate-pulse">
+                            <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
+                            <div className="flex-1 text-left">
+                              <p className="text-[11px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Strict Validation Blocker</p>
+                              <p className="text-[10.5px] leading-normal">{quickError}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Conflict Override Warn */}
+                        {quickConflictWarning && (
+                          <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg text-slate-805 space-y-1.5 font-medium border-dashed">
+                            <p className="text-[10.5px] leading-relaxed font-bold">{quickConflictWarning}</p>
+                            <label className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase text-amber-800 tracking-wider cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={quickForceConflict}
+                                onChange={(e) => setQuickForceConflict(e.target.checked)}
+                                className="rounded border-amber-300 text-amber-605 focus:ring-amber-500 mr-0.5"
+                              />
+                              Confirm override collision
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-2 border-t border-slate-100 font-black">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickAssignSlot(null);
+                            }}
+                            className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg uppercase tracking-wider text-[9.5px] cursor-pointer text-center"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={!quickForm.teacher}
+                            className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg uppercase tracking-wider text-[9.5px] shadow-sm disabled:opacity-40 cursor-pointer text-center"
+                          >
+                            Deploy Assistant!
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-dashed border-slate-350 rounded-2xl p-6 text-center text-slate-400 font-sans font-medium space-y-2 select-none h-full flex flex-col justify-center items-center min-h-[300px]">
+                      <div className="w-12 h-12 rounded-full border bg-white border-slate-150 text-slate-350 shadow-3xs flex items-center justify-center text-lg">
+                        ✨
+                      </div>
+                      <h4 className="text-slate-800 font-black text-xs uppercase tracking-wider leading-none">No Slot Highlighted</h4>
+                      <p className="text-[10.5px] max-w-[220px] leading-normal italic text-slate-450">
+                        Tap any detected gap or unassigned lecture row inside the gap checklist to analyze available substitutes and auto-assign cover.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         ) : selectedClass === 'Override' ? (
           <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs space-y-5 min-w-0 w-full animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-150">
@@ -2837,531 +3361,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
           />
         )}
       </div>
-    </div>
-
-      {/* SMART RESOURCE INTEGRITY OPTIMIZER */}
-      <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 shadow-3xs space-y-6" id="smart-resource-optimizer-container">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-1 px-2.5 bg-sky-100 text-sky-800 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75 animate-duration-1000"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-                </span>
-                Smart Companion v1.1
-              </span>
-              <span className="text-xs text-slate-400 font-medium font-sans">| School Routine Audit Intelligence</span>
-            </div>
-            <h3 className="text-slate-900 font-black text-xl tracking-tight leading-none uppercase">
-              Schedule Resource Integrity Optimizer
-            </h3>
-            <p className="text-slate-500 text-xs font-sans max-w-2xl font-medium">
-              Real-time teacher workload balance monitors and gaps detection. Automate substitute teacher suggestions to prevent unattended school lectures.
-            </p>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="flex items-center gap-3 self-start md:self-center font-mono">
-            <div className="bg-white p-3 px-4 rounded-xl border border-slate-200/75 shadow-3xs text-center min-w-[120px]">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Scheduled Load</div>
-              <div className="text-xl font-black text-sky-900">
-                {entries.length} <span className="text-xs text-slate-400 font-medium">periods</span>
-              </div>
-            </div>
-            <div className={`p-3 px-4 rounded-xl border shadow-3xs text-center min-w-[120px] ${getVacantAndGappedSlots().length > 0 ? 'bg-amber-50/50 border-amber-200 animate-pulse' : 'bg-white border-slate-200'}`}>
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Unattended Gaps</div>
-              <div className={`text-xl font-black ${getVacantAndGappedSlots().length > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
-                {getVacantAndGappedSlots().length} <span className="text-xs text-slate-400 font-medium">unassigned</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans text-xs">
-          {/* Tab Selection */}
-          <div className="flex bg-slate-200/60 p-1 rounded-xl w-fit border border-slate-250">
-            <button
-              onClick={() => setOptimizerTab('workload')}
-              className={`py-1.5 px-4 font-bold rounded-lg transition-all duration-100 uppercase text-[10.5px] cursor-pointer ${
-                optimizerTab === 'workload'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-550 hover:text-slate-900'
-              }`}
-            >
-              Faculty Workload Balance ({getTeacherWorkloadData().length})
-            </button>
-            <button
-              onClick={() => setOptimizerTab('vacant')}
-              className={`py-1.5 px-4 font-bold rounded-lg transition-all duration-100 uppercase text-[10.5px] flex items-center gap-1.5 cursor-pointer ${
-                optimizerTab === 'vacant'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-slate-550 hover:text-slate-900'
-              }`}
-            >
-              Class Gaps & Substitution Assistant
-              {getVacantAndGappedSlots().length > 0 && (
-                <span className="bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[9px] font-mono leading-none">
-                  {getVacantAndGappedSlots().length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Filtering for Vacancies tab */}
-          {optimizerTab === 'vacant' && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Day:</span>
-                <select
-                  value={analyticsDayFilter}
-                  onChange={(e) => setAnalyticsDayFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
-                >
-                  <option value="All">All Days</option>
-                  {weekDays.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Grade:</span>
-                <select
-                  value={analyticsClassFilter}
-                  onChange={(e) => setAnalyticsClassFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer"
-                >
-                  <option value="All">All Grades</option>
-                  {allClasses.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Filtering for Workload tab */}
-          {optimizerTab === 'workload' && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 pl-2">
-                <span className="text-[9px] font-mono uppercase font-bold text-slate-400">Filter Teacher:</span>
-                <select
-                  value={workloadTeacherFilter}
-                  onChange={(e) => setWorkloadTeacherFilter(e.target.value)}
-                  className="bg-transparent border-none py-1 px-2 focus:ring-0 font-extrabold text-slate-700 text-[11px] rounded uppercase cursor-pointer max-w-[200px]"
-                >
-                  <option value="All">All Faculty</option>
-                  {allTeachersFromData().map(teacher => (
-                    <option key={teacher} value={teacher}>{teacher}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Tab Content A: Teacher Workload Balance */}
-        {optimizerTab === 'workload' ? (
-          <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-2xs animate-in fade-in duration-200" id="teacher-workload-table-container">
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full border-collapse min-w-[650px]" id="teacher-workload-data-table">
-                <thead>
-                  <tr className="bg-slate-50/75 border-b border-slate-150 text-left font-mono text-[9.5px] uppercase tracking-wider text-slate-450 font-bold">
-                    <th className="py-3.5 px-4 sm:px-5 w-[200px]">Instructor</th>
-                    <th className="py-3.5 px-4">Department / Specialty</th>
-                    <th className="py-3.5 px-4 w-[90px] hidden md:table-cell">Type</th>
-                    <th className="py-3.5 px-3 text-center w-[110px]">Weekly Load</th>
-                    <th className="py-3.5 px-4 w-[180px] sm:w-[220px]">Workload Balance Guard</th>
-                    <th className="py-3.5 px-4 sm:px-5 text-right font-sans lowercase w-[160px] sm:w-[200px]">details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-sans text-slate-750">
-                  {filteredWorkloadData().length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400 italic font-medium">
-                        {workloadTeacherFilter === 'All'
-                          ? "No teachers scheduled yet across routine database."
-                          : `No workload data found for "${workloadTeacherFilter}".`}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredWorkloadData().map((t) => {
-                      let loadStatus = "Light Load";
-                      let maxLimit = 15;
-                      let progressPercent = Math.min((t.loadCount / maxLimit) * 100, 100);
-                      
-                      if (t.loadCount > 12) {
-                        loadStatus = "Heavy Load / Over-booked";
-                      } else if (t.loadCount >= 6) {
-                        loadStatus = "Optimal Workload";
-                      } else if (t.loadCount > 0) {
-                        loadStatus = "Under-committed";
-                      } else {
-                        loadStatus = "No active classes";
-                      }
-
-                      return (
-                        <tr key={t.name} className="hover:bg-slate-50/40 transition duration-100 group">
-                          <td className="py-3.5 px-4 sm:px-5 font-black text-slate-900 text-xs flex items-center gap-2.5">
-                            <span className="p-1 px-2 rounded-full bg-slate-100 border border-slate-200 text-[10px] text-slate-500 font-mono font-bold select-none group-hover:bg-white transition-colors">
-                              {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="font-sans font-extrabold text-slate-900 text-[12.5px] leading-snug truncate">{t.name}</div>
-                              <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none block sm:inline">{t.type}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-slate-600 font-sans">
-                            {t.department}
-                          </td>
-                          <td className="py-3.5 px-4 text-[10.5px] hidden md:table-cell">
-                            <span className={`px-2 py-0.5 border text-[9px] font-mono leading-none rounded uppercase ${t.type === 'Regular' ? 'bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-150' : 'bg-slate-50 text-slate-605 border-slate-150'}`}>
-                              {t.type}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-3 text-center">
-                            <span className="text-sm font-black font-mono text-slate-950">
-                              {t.loadCount}
-                            </span>
-                            <span className="text-[10px] text-slate-450 font-semibold pl-1">slots</span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between text-[10px] font-mono font-bold leading-none">
-                                <span className={`font-semibold ${t.loadCount > 12 ? 'text-red-600' : t.loadCount >= 6 ? 'text-emerald-600' : 'text-amber-600'}`}>{loadStatus}</span>
-                                <span className="text-slate-450">{Math.round(progressPercent)}% limit</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-4xs border border-slate-200/40">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                                  style={{ width: `${progressPercent}%` }}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 sm:px-5 text-right">
-                            <div className="flex flex-wrap gap-1 justify-end max-w-sm ml-auto">
-                              {t.assignments.length === 0 ? (
-                                <span className="text-slate-350 text-[10px] italic">No active slots assigned</span>
-                              ) : (
-                                t.assignments.map(a => (
-                                  <span key={a.id} className="text-[9.5px] bg-slate-50 border border-slate-150 rounded px-1.5 py-0.5 text-slate-600 font-mono leading-none select-none hover:bg-orange-50 hover:border-orange-200 hover:text-orange-900 transition-colors" title={`${a.subject}`}>
-                                    {a.day.substring(0,3)} {a.period.replace('Period ','P')}: {a.class_name.replace('Class ','C')}
-                                  </span>
-                                ))
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          /* Tab Content B: Class Gaps / Vacancies Substitution Assistant */
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in duration-200">
-            {/* Vacancy Checklist List */}
-            <div className="xl:col-span-2 space-y-3">
-              <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-3xs space-y-3">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h4 className="text-xs font-mono font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    Detected Routine Gaps ({filteredVac_gaps.length})
-                  </h4>
-                  <span className="text-[10px] text-slate-400 font-sans font-medium">Click on any gap to trigger the substitute advisor</span>
-                </div>
-
-                <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100/50">
-                  {filteredVac_gaps.length === 0 ? (
-                    <div className="text-center py-16 space-y-2 select-none">
-                      <div className="mx-auto w-10 h-10 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-green-600 font-bold">
-                        ✓
-                      </div>
-                      <p className="text-slate-850 font-black text-sm">Perfect Grid Integrity!</p>
-                      <p className="text-slate-400 text-[11px] font-sans max-w-xs mx-auto leading-relaxed">
-                        Every single day/period hour for Grade Classes (9-12) has custom scheduled lectures with assigned teachers. No vacant hours detected!
-                      </p>
-                    </div>
-                  ) : (
-                    filteredVac_gaps.map((gap) => {
-                      const isUnscheduled = gap.reason === 'unscheduled';
-                      const isSelected = quickAssignSlot && 
-                                         quickAssignSlot.className === gap.class_name && 
-                                         quickAssignSlot.day === gap.day && 
-                                         quickAssignSlot.period === gap.period;
-
-                      return (
-                        <div 
-                          key={gap.key}
-                          onClick={() => {
-                            setQuickAssignSlot({
-                              className: gap.class_name,
-                              day: gap.day,
-                              period: gap.period,
-                              timeRange: gap.time_range
-                            });
-                            setQuickForm({
-                              subject: gap.entry?.subject || '',
-                              teacher: gap.entry?.teacher || '',
-                              isManual: false
-                            });
-                            setQuickConflictWarning(null);
-                            setQuickForceConflict(false);
-                            setQuickError(null);
-                          }}
-                          className={`pt-3 pb-3 px-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer transition ${
-                            isSelected 
-                              ? 'bg-orange-500/10 border-orange-550/30 border-2 shadow-2xs' 
-                              : 'bg-white hover:bg-slate-50 border border-transparent'
-                          }`}
-                        >
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center flex-wrap gap-1.5">
-                              <span className="px-2.5 py-0.5 bg-slate-900 text-white rounded text-[10px] font-extrabold uppercase select-none leading-none">
-                                {gap.class_name}
-                              </span>
-                              <span className="text-xs text-slate-800 font-extrabold">
-                                {gap.day} • <span className="text-orange-600 font-extrabold font-mono">{gap.period}</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 leading-none">
-                                {gap.time_range}
-                              </span>
-                            </div>
-                            
-                            <p className="text-[10.5px] text-slate-500 font-sans leading-normal font-medium italic flex items-center gap-1">
-                              {isUnscheduled ? (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                                  <span>Unpopulated hour. Absolutely no subject/lecture allocated in database matrix yet.</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-ping" />
-                                  <span>Class scheduled (<strong>{gap.entry?.subject}</strong>) but teacher left blank. No faculty assigned.</span>
-                                </>
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                            <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase rounded border select-none ${
-                              isUnscheduled 
-                                ? 'bg-amber-50 text-amber-700 border-amber-200' 
-                                : 'bg-red-50 text-red-705 border-red-200'
-                            }`}>
-                              {isUnscheduled ? 'Silent Gap' : 'Instructor Omission'}
-                            </span>
-                            <button className={`py-1.5 px-3 rounded-lg text-[10px] uppercase font-bold transition-all ${
-                              isSelected
-                                ? 'bg-orange-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-700 hover:bg-orange-500 hover:text-white cursor-pointer'
-                            }`}>
-                              {isSelected ? 'Selected' : 'Find Substitute'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Substitution Assistant Panel */}
-            <div className="xl:col-span-1">
-              {quickAssignSlot ? (
-                <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-3xs space-y-4 animate-in slide-in-from-right-3 duration-150">
-                  <div className="pb-2.5 border-b border-slate-100/80">
-                    <span className="text-[9px] font-mono font-bold bg-orange-100 text-orange-950 px-2 py-0.5 rounded uppercase select-none leading-none">
-                      Cover Optimizer ✨
-                    </span>
-                    <h4 className="text-slate-900 font-black text-sm font-sans mt-2">
-                      Assigning {quickAssignSlot.className}
-                    </h4>
-                    <p className="text-slate-450 text-[10.5.5px] font-mono font-black leading-tight mt-0.5 uppercase tracking-wide">
-                      {quickAssignSlot.day} • {quickAssignSlot.period}
-                    </p>
-                  </div>
-
-                  {/* Smart substitute recommendations */}
-                  <div className="space-y-2.5">
-                    <span className="block text-[10px] uppercase font-mono font-extrabold text-slate-400 tracking-wider">
-                      Suggested Substitute Teachers (Totally Free now):
-                    </span>
-                    
-                    <div className="space-y-1 w-full max-h-44 overflow-y-auto pr-1">
-                      {getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).length === 0 ? (
-                        <div className="p-2 border border-dashed border-red-200 bg-red-50 text-red-800 text-[10.5px] rounded-lg leading-normal font-sans">
-                          Conflict Alert: Every single teacher in the facility is already busy teaching other classes during this specific period slot! Consider typing a custom temp teacher below.
-                        </div>
-                      ) : (
-                        getAvailableTeachersForSlot(quickAssignSlot.day, quickAssignSlot.period).map(t => {
-                          const fModel = faculty.find(f => f.name.toLowerCase().trim() === t.name.toLowerCase().trim());
-                          const teacherSubject = fModel?.subject || '';
-                          return (
-                            <div 
-                              key={t.name}
-                              onClick={() => {
-                                setQuickForm(prev => ({ 
-                                  ...prev, 
-                                  teacher: t.name, 
-                                  teacher_id: t.id,
-                                  isManual: false,
-                                  subject: teacherSubject ? teacherSubject : (prev.subject || '')
-                                }));
-                                setQuickConflictWarning(null);
-                              }}
-                              className={`p-2 border rounded-xl flex items-center justify-between text-xs cursor-pointer select-none transition duration-100 ${
-                                quickForm.teacher === t.name 
-                                  ? 'bg-orange-50 border-orange-300' 
-                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                            <div className="space-y-0.5">
-                              <div className="font-extrabold text-slate-800 leading-none">{t.name}</div>
-                              <div className="text-[9px] font-mono text-slate-450">{t.department}</div>
-                            </div>
-                            <span className="text-[9px] font-mono font-black uppercase text-orange-700 bg-white px-1.5 py-0.5 rounded border border-orange-100">
-                              Free Now ({t.loadCount}c)
-                            </span>
-                          </div>
-                        ); })
-                      )}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleQuickAssignSubmit} className="space-y-3 text-xs font-semibold font-sans">
-                    {/* Teacher Input */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Assigned Teacher</label>
-                      <div className="space-y-1.5">
-                        <select
-                          value={quickForm.isManual ? 'manual_option' : (quickForm.teacher_id || '')}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'manual_option') {
-                              setQuickForm(prev => ({ ...prev, isManual: true, teacher: '', teacher_id: undefined }));
-                            } else if (val === '') {
-                              setQuickForm(prev => ({ ...prev, isManual: false, teacher: '', teacher_id: undefined }));
-                            } else {
-                              const matched = faculty.find(f => f.id === val);
-                              setQuickForm(prev => ({ 
-                                ...prev, 
-                                isManual: false, 
-                                teacher: matched ? matched.name : '',
-                                teacher_id: val,
-                                subject: (matched && matched.subject) ? matched.subject : (prev.subject || '')
-                              }));
-                            }
-                            setQuickConflictWarning(null);
-                          }}
-                          className="w-full p-2 border border-slate-200 bg-white rounded-lg font-medium font-sans focus:outline-orange-500"
-                        >
-                          <option value="">Select recommended teacher...</option>
-                          {faculty.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.name} ({f.department || 'General'})
-                            </option>
-                          ))}
-                          <option value="manual_option">-- Type manually/custom --</option>
-                        </select>
-
-                        {quickForm.isManual && (
-                          <input
-                            type="text"
-                            value={quickForm.teacher}
-                            onChange={(e) => {
-                              setQuickForm({ ...quickForm, teacher: e.target.value });
-                              setQuickConflictWarning(null);
-                            }}
-                            required
-                            placeholder="Type teacher name..."
-                            className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Subject field */}
-                    <div className="space-y-1">
-                      <label className="text-slate-550 block text-[10px] uppercase font-mono font-bold">Subject Paper</label>
-                      <input
-                        type="text"
-                        value={quickForm.subject}
-                        onChange={(e) => setQuickForm({ ...quickForm, subject: e.target.value })}
-                        required
-                        placeholder="e.g. Chemistry II, Biology Lab"
-                        list="existing-subjects"
-                        className="w-full p-2 border border-slate-200 bg-white rounded-lg focus:outline-orange-500 font-medium"
-                      />
-                    </div>
-
-                    {/* Strict blocker validation error box */}
-                    {quickError && (
-                      <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-2.5 text-red-800 animate-pulse">
-                        <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
-                        <div className="flex-1 text-left">
-                          <p className="text-[11px] leading-relaxed font-bold uppercase tracking-wider text-red-700">Strict Validation Blocker</p>
-                          <p className="text-[10.5px] leading-normal">{quickError}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Conflict Override Warn */}
-                    {quickConflictWarning && (
-                      <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg text-slate-805 space-y-1.5 font-medium border-dashed">
-                        <p className="text-[10.5px] leading-relaxed font-bold">{quickConflictWarning}</p>
-                        <label className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase text-amber-800 tracking-wider cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={quickForceConflict}
-                            onChange={(e) => setQuickForceConflict(e.target.checked)}
-                            className="rounded border-amber-300 text-amber-605 focus:ring-amber-500 mr-0.5"
-                          />
-                          Confirm override collision
-                        </label>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-2 border-t border-slate-100 font-black">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuickAssignSlot(null);
-                        }}
-                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg uppercase tracking-wider text-[9.5px] cursor-pointer text-center"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={!quickForm.teacher}
-                        className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg uppercase tracking-wider text-[9.5px] shadow-sm disabled:opacity-40 cursor-pointer text-center"
-                      >
-                        Deploy Assistant!
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              ) : (
-                <div className="bg-white border border-dashed border-slate-350 rounded-2xl p-6 text-center text-slate-400 font-sans font-medium space-y-2 select-none h-full flex flex-col justify-center items-center min-h-[300px]">
-                  <div className="w-12 h-12 rounded-full border bg-white border-slate-150 text-slate-350 shadow-3xs flex items-center justify-center text-lg">
-                    ✨
-                  </div>
-                  <h4 className="text-slate-800 font-black text-xs uppercase tracking-wider leading-none">No Slot Highlighted</h4>
-                  <p className="text-[10.5px] max-w-[220px] leading-normal italic text-slate-450">
-                    Tap any detected gap or unassigned lecture row inside the gap checklist to analyze available substitutes and auto-assign cover.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      </div>
 
         {/* DOCKED BOTTOM CONTEXT TOOLBAR */}
         <div className="sticky bottom-2 z-20 bg-slate-900/95 text-white backdrop-blur-md p-2.5 px-4 rounded-xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -3436,7 +3436,6 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
             )}
           </div>
         </div>
-      </div>
 
       {/* ON-DEMAND EDITING DRAWER (SLIDE-OVER OVERLAY) */}
       {isInspectorOpen && (

@@ -339,7 +339,6 @@ const PeriodsMasterWorkspace: React.FC<{
   };
 
   const handleDelete = async (id: string) => {
-    console.log('[ACADEMIC_ADMIN DELETE] clicked id:', id);
     if (!window.confirm("Delete this period?\nThis will also remove timetable slots using this period.")) {
       return;
     }

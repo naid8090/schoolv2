@@ -596,12 +596,6 @@ export default function App() {
         data: { user: authUser },
       } = await supabase.auth.getUser();
 
-      console.log("AUTH.USER", authUser);
-      console.log("SESSION.USER", session?.user);
-
-      console.log("ACCESS TOKEN");
-      console.log(session?.access_token);
-
       let payload: any = {};
       if (session?.access_token) {
         try {
@@ -612,14 +606,6 @@ export default function App() {
           console.error("Failed to decode JWT:", e);
         }
       }
-
-      console.log({
-        sub: payload.sub,
-        email: payload.email,
-        role: payload.role
-      });
-
-      console.log(window.location.href);
 
       const user = data.user;
       if (user) {

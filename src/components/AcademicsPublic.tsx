@@ -89,10 +89,7 @@ export const ClassRoutinePage: React.FC = () => {
   const [faculty, setFaculty] = useState<any[]>([]);
 
   const loadRoutines = () => {
-    console.log('[ACADEMICS RELOAD]');
-    console.log(dbService.getRoutines().length);
     setRoutines(dbService.getRoutines());
-    console.log('[ACADEMICS STATE UPDATED]');
     setEntries(dbService.getRoutineEntries());
     setFaculty(dbService.getFaculty());
     setTimetableGroups(dbService.getTimetableGroups());

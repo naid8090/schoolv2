@@ -1035,92 +1035,103 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
               </div>
             )}
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
-              <div>
-                <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
-                  Online Routines Slots Matrix ({selectedClass})
-                </h3>
-                <p className="text-slate-500 text-[11px] font-sans">
-                  Construct period sheets by appending lectures (Monday to Saturday sequence).
-                </p>
+            {/* SECTION: Toolbar Header - 3 Logical Zones (Single Row on Desktop) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-3xs flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 shrink-0">
+              {/* ZONE 1: Routine Title & Context */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="h-2.5 w-2.5 rounded-full bg-orange-500 shrink-0 shadow-2xs" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-slate-900 text-xs sm:text-sm font-black uppercase tracking-wide truncate">
+                      Online Routines Slots Matrix
+                    </h3>
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 rounded-md text-[10px] font-mono font-extrabold uppercase shrink-0">
+                      {selectedClass}
+                    </span>
+                  </div>
+                  <p className="text-slate-500 text-[10.5px] font-sans truncate font-medium">
+                    Construct period sheets by appending lectures (Monday to Saturday sequence).
+                  </p>
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* View Selector Switch */}
-                <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+              {/* ZONE 2: View Selector (Segmented Control) */}
+              <div className="flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 shrink-0 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => setRoutineViewMode('matrix')}
+                  className={`px-3.5 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    routineViewMode === 'matrix'
+                      ? 'bg-orange-500 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                  <span>Matrix View</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRoutineViewMode('detailed')}
+                  className={`px-3.5 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    routineViewMode === 'detailed'
+                      ? 'bg-orange-500 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <ListFilter className="w-3.5 h-3.5 shrink-0" />
+                  <span>Detailed View</span>
+                </button>
+              </div>
+
+              {/* ZONE 3: Primary Actions */}
+              {!isAddingEntry && (
+                <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
                   <button
-                    onClick={() => setRoutineViewMode('matrix')}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer ${
-                      routineViewMode === 'matrix'
-                        ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    id="trigger-duplicate-day-btn"
+                    onClick={() => {
+                      setDuplicationSourceDay('Monday');
+                      setDuplicationDestDays([]);
+                      setCopyTeachers(true);
+                      setCopySubjects(true);
+                      setCopyTimeSlots(true);
+                      setDestinationStrategy('cancel');
+                      setDuplicationConflictBypass(false);
+                      setDuplicationError(null);
+                      setDuplicationConflicts([]);
+                      setIsDuplicatingDay(true);
+                    }}
+                    className="py-1.5 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-extrabold text-[10px] uppercase rounded-xl tracking-wider shadow-4xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:border-slate-300 whitespace-nowrap"
                   >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>Matrix View</span>
+                    <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                    <span>Duplicate Day</span>
                   </button>
 
                   <button
-                    onClick={() => setRoutineViewMode('detailed')}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer ${
-                      routineViewMode === 'detailed'
-                        ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    onClick={() => {
+                      setEditingEntryId(null);
+                      const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
+                      const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
+                      setEntryForm({
+                        day: 'Monday',
+                        period: defaultPeriod,
+                        time_range: defaultTimeRange,
+                        subject: '',
+                        teacher: ''
+                      });
+                      setIsManualTeacher(false);
+                      setIsAddingEntry(true);
+                      setConflictWarning(null);
+                      setForceConflict(false);
+                      setFormError(null);
+                    }}
+                    className="py-1.5 px-3.5 bg-sky-900 hover:bg-sky-950 text-white font-extrabold text-[10px] uppercase rounded-xl tracking-wider shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all whitespace-nowrap"
                   >
-                    <ListFilter className="w-3.5 h-3.5" />
-                    <span>Detailed View</span>
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span>Append Period Lecture</span>
                   </button>
                 </div>
-
-                {!isAddingEntry && (
-                  <>
-                    <button
-                      id="trigger-duplicate-day-btn"
-                      onClick={() => {
-                        setDuplicationSourceDay('Monday');
-                        setDuplicationDestDays([]);
-                        setCopyTeachers(true);
-                        setCopySubjects(true);
-                        setCopyTimeSlots(true);
-                        setDestinationStrategy('cancel');
-                        setDuplicationConflictBypass(false);
-                        setDuplicationError(null);
-                        setDuplicationConflicts([]);
-                        setIsDuplicatingDay(true);
-                      }}
-                      className="py-2 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-4xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:border-slate-300"
-                    >
-                      <Sparkles className="w-4 h-4 text-orange-500" />
-                      Duplicate Day
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setEditingEntryId(null);
-                        const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
-                        const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
-                        setEntryForm({
-                          day: 'Monday',
-                          period: defaultPeriod,
-                          time_range: defaultTimeRange,
-                          subject: '',
-                          teacher: ''
-                        });
-                        setIsManualTeacher(false);
-                        setIsAddingEntry(true);
-                        setConflictWarning(null);
-                        setForceConflict(false);
-                        setFormError(null);
-                      }}
-                      className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Append Period Lecture
-                    </button>
-                  </>
-                )}
-              </div>
+              )}
             </div>
 
             {isAddingEntry && (

@@ -2779,7 +2779,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
                       : `No workload data found for "${workloadTeacherFilter}".`}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
                     {filteredWorkloadData().map((t) => {
                       let statusBadge = { label: "🟢 Healthy", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
                       let maxLimit = 15;
@@ -2795,89 +2795,97 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
                         statusBadge = { label: "⚪ Unassigned", cls: "bg-slate-50 text-slate-600 border-slate-200" };
                       }
 
-                      // Group assignments by day for compact visualization
+                      // Weekdays list for horizontal timeline
                       const weekDaysList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
                       return (
-                        <div key={t.name} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-3xs hover:shadow-2xs transition-all flex flex-col justify-between space-y-3">
-                          {/* Card Header */}
-                          <div>
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-mono font-black text-slate-700 shrink-0">
-                                  {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
-                                </span>
-                                <div className="min-w-0">
-                                  <h4 className="font-sans font-extrabold text-slate-900 text-sm leading-snug truncate">
-                                    {t.name}
-                                  </h4>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="text-[10px] text-slate-500 font-semibold truncate">
-                                      {t.department}
-                                    </span>
-                                    <span className="text-slate-300">•</span>
-                                    <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
-                                      {t.type}
-                                    </span>
-                                  </div>
+                        <div key={t.name} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-3xs hover:shadow-2xs transition-all space-y-3">
+                          {/* 1. Card Header: Teacher, Dept & Status Badge */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-mono font-black text-slate-700 shrink-0 shadow-3xs">
+                                {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
+                              </span>
+                              <div className="min-w-0">
+                                <h4 className="font-sans font-extrabold text-slate-900 text-sm leading-snug truncate">
+                                  {t.name}
+                                </h4>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[10.5px] text-slate-500 font-semibold truncate">
+                                    {t.department}
+                                  </span>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
+                                    {t.type}
+                                  </span>
                                 </div>
                               </div>
-
-                              <span className={`px-2 py-0.5 border text-[10px] font-extrabold rounded-full shrink-0 ${statusBadge.cls}`}>
-                                {statusBadge.label}
-                              </span>
                             </div>
 
-                            {/* Workload Progress Bar */}
-                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 space-y-1.5">
-                              <div className="flex justify-between items-center text-[10px] font-mono font-bold">
-                                <span className="text-slate-600">
-                                  <strong className="text-slate-900 text-xs font-black">{t.loadCount}</strong> / {maxLimit} hrs load
-                                </span>
-                                <span className="text-slate-400">{Math.round(progressPercent)}% limit</span>
-                              </div>
-                              <div className="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-300 ${
-                                    t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-emerald-500' : t.loadCount > 0 ? 'bg-amber-500' : 'bg-slate-300'
-                                  }`}
-                                  style={{ width: `${progressPercent}%` }}
-                                />
-                              </div>
+                            <span className={`px-2.5 py-0.5 border text-[10px] font-extrabold rounded-full shrink-0 shadow-4xs ${statusBadge.cls}`}>
+                              {statusBadge.label}
+                            </span>
+                          </div>
+
+                          {/* 2. Weekly Hours & Progress Bar */}
+                          <div className="bg-slate-50 border border-slate-150 rounded-xl p-2.5 space-y-1.5">
+                            <div className="flex justify-between items-center text-[10px] font-mono font-bold">
+                              <span className="text-slate-600">
+                                <strong className="text-slate-900 text-xs font-black">{t.loadCount}</strong> / {maxLimit} hrs load
+                              </span>
+                              <span className="text-slate-400">{Math.round(progressPercent)}% limit</span>
+                            </div>
+                            <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  t.loadCount > 12 ? 'bg-red-500' : t.loadCount >= 6 ? 'bg-emerald-500' : t.loadCount > 0 ? 'bg-amber-500' : 'bg-slate-300'
+                                }`}
+                                style={{ width: `${progressPercent}%` }}
+                              />
                             </div>
                           </div>
 
-                          {/* SECTION C: Weekly Mini Grid Visualization */}
+                          {/* 3. SECTION A: Compact Horizontal Weekly Timeline */}
                           <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                            <span className="text-[9px] font-mono font-extrabold uppercase text-slate-400 tracking-wider block">
-                              Weekly Schedule Matrix
+                            <span className="text-[9.5px] font-mono font-extrabold uppercase text-slate-400 tracking-wider block">
+                              Weekly Schedule
                             </span>
-                            <div className="grid grid-cols-3 gap-1.5 bg-slate-50/80 border border-slate-200/60 rounded-xl p-2 text-[9.5px]">
-                              {weekDaysList.map(dayName => {
-                                const dayAssignments = t.assignments.filter(a => a.day === dayName);
-                                return (
-                                  <div key={dayName} className="flex flex-col bg-white border border-slate-150 rounded-lg p-1.5 text-center min-h-[44px] justify-between">
-                                    <span className="text-[8.5px] font-mono font-black text-slate-400 uppercase tracking-tight">
-                                      {dayName.substring(0, 3)}
-                                    </span>
-                                    {dayAssignments.length === 0 ? (
-                                      <span className="text-slate-300 font-sans italic text-[9px]">—</span>
-                                    ) : (
-                                      <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
-                                        {dayAssignments.map(a => (
-                                          <span
-                                            key={a.id}
-                                            className="px-1 py-0.2 bg-orange-50 text-orange-900 border border-orange-200/80 rounded text-[8px] font-mono font-bold"
-                                            title={`${a.subject} (${a.class_name})`}
-                                          >
-                                            {a.period.replace(/period\s*/i, 'P')}:{a.class_name.replace(/class\s*/i, 'C')}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                            <div className="bg-slate-50/80 border border-slate-200/60 rounded-xl p-2.5 space-y-1 text-[10px]">
+                              {t.assignments.length === 0 ? (
+                                <div className="text-slate-400 font-sans italic text-[10.5px] py-0.5 text-center">
+                                  No active lectures assigned
+                                </div>
+                              ) : (
+                                weekDaysList.map(dayName => {
+                                  const dayAssignments = t.assignments.filter(a => a.day === dayName);
+                                  const dayAbbr = dayName.substring(0, 3);
+                                  return (
+                                    <div key={dayName} className="flex items-center gap-2 text-slate-700">
+                                      <span className="w-7 font-black text-slate-400 font-mono text-[9px] uppercase shrink-0">
+                                        {dayAbbr}
+                                      </span>
+                                      {dayAssignments.length === 0 ? (
+                                        <span className="text-slate-300 font-sans text-[10px]">—</span>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-1 items-center">
+                                          {dayAssignments.map(a => (
+                                            <span
+                                              key={a.id}
+                                              className="px-1.5 py-0.5 bg-orange-50/90 text-orange-950 border border-orange-200/80 rounded-md text-[9px] font-mono font-bold flex items-center gap-1 shadow-4xs"
+                                              title={`${a.subject} (${a.class_name})`}
+                                            >
+                                              <span>{a.period.replace(/period\s*/i, 'P')}</span>
+                                              <span className="text-orange-600/80 text-[8px] font-sans font-semibold">
+                                                {a.class_name.replace(/class\s*/i, 'C')}
+                                              </span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
                             </div>
                           </div>
                         </div>

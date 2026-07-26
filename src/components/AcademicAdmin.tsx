@@ -2802,27 +2802,27 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
                         <div key={t.name} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-3xs hover:shadow-2xs transition-all space-y-3">
                           {/* 1. Card Header: Teacher, Dept & Status Badge */}
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-mono font-black text-slate-700 shrink-0 shadow-3xs">
+                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                              <span className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-mono font-black text-slate-700 shrink-0 shadow-3xs mt-0.5">
                                 {t.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
                               </span>
-                              <div className="min-w-0">
-                                <h4 className="font-sans font-extrabold text-slate-900 text-sm leading-snug truncate">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-sans font-extrabold text-slate-900 text-sm leading-tight line-clamp-2 break-words">
                                   {t.name}
                                 </h4>
-                                <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[10.5px] text-slate-500 font-semibold truncate">
                                     {t.department}
                                   </span>
                                   <span className="text-slate-300">•</span>
-                                  <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
+                                  <span className="text-[9px] font-mono font-bold text-slate-400 uppercase shrink-0">
                                     {t.type}
                                   </span>
                                 </div>
                               </div>
                             </div>
 
-                            <span className={`px-2.5 py-0.5 border text-[10px] font-extrabold rounded-full shrink-0 shadow-4xs ${statusBadge.cls}`}>
+                            <span className={`px-2 py-0.5 border text-[10px] font-extrabold rounded-full shrink-0 whitespace-nowrap shadow-4xs ${statusBadge.cls}`}>
                               {statusBadge.label}
                             </span>
                           </div>

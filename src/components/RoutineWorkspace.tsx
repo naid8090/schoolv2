@@ -236,9 +236,9 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
   setIsInspectorOpen
 }) => {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col flex-1 min-h-0 space-y-4 h-full" id="routine-workspace-container">
       {/* SECTION 1: Class Selector / Grade Selector Pills */}
-      <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+      <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
         <span className="text-[10px] font-mono font-bold uppercase text-slate-400 px-2 shrink-0">Grade:</span>
         {timetableGroups.filter(g => g.is_active).map((g) => (
           <button
@@ -275,8 +275,8 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
 
       {/* SECTION 2: Routine Canvas (Combined or Class View) */}
       {selectedClass === 'Combined' ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4 min-w-0 w-full animate-in fade-in duration-200">
-          <div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4 min-w-0 w-full animate-in fade-in duration-200 flex flex-col flex-1 min-h-0 max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-320px)]">
+          <div className="shrink-0">
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
               <h3 className="text-slate-900 text-sm font-black uppercase tracking-wider">
@@ -288,9 +288,9 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
             </p>
           </div>
 
-          <div className="w-full min-w-0 overflow-x-auto border border-slate-200 rounded-xl">
+          <div className="w-full min-w-0 overflow-auto border border-slate-200 rounded-xl flex-1 min-h-0">
             <table className="w-full border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-slate-50">
                 <tr className="bg-slate-50 text-left border-b border-slate-150 font-mono text-[9.5px] uppercase tracking-wider text-slate-500">
                   <th className="p-3 w-28 border-r border-slate-150">Day</th>
                   <th className="p-3 w-32 border-r border-slate-150">Period</th>
@@ -713,7 +713,7 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
           </div>
         ) : (
           /* ONLINE TIMETABLE GRID MATRIX */
-          <div className="space-y-4">
+          <div className="flex flex-col flex-1 min-h-0 space-y-4">
             {/* Duplication Success Alert with optional Undo */}
             {duplicationSuccessAlert && duplicationSuccessAlert.targetClass === selectedClass && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start justify-between gap-3 shadow-4xs animate-in slide-in-from-top-2 duration-200">
@@ -1009,7 +1009,7 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
               </div>
             )}
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-3xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
               <div>
                 <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wide">
                   Online Routines Slots Matrix ({selectedClass})
@@ -1070,7 +1070,7 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
 
             {isAddingEntry && (
               /* ADD/EDIT ENTRY FORM PANEL */
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-2xs animate-in slide-in-from-top-3 duration-150">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-2xs animate-in slide-in-from-top-3 duration-150 shrink-0">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/50 mb-4 text-xs">
                   <span className="font-extrabold uppercase font-mono text-slate-500 text-[10px]">
                     {editingEntryId ? 'Modify Timetable Slot Details' : 'Create Timetable Slot Entry'}
@@ -1441,10 +1441,10 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
             )}
 
             {/* List of configured entries for class */}
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-              <div className="overflow-x-auto">
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs flex-1 min-h-0 flex flex-col max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-320px)]" id="timetable-container">
+              <div className="overflow-auto flex-1 min-h-0">
                 <table className="w-full border-collapse">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-slate-50">
                     <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[10px] uppercase text-slate-400 tracking-wider">
                       <th className="py-3 px-4 w-32">Day</th>
                       <th className="py-3 px-4 w-32">Period Row</th>

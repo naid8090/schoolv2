@@ -2371,7 +2371,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
   });
 
   return (
-    <div className="min-w-0 w-full space-y-4 relative">
+    <div className="min-w-0 w-full flex flex-col flex-1 min-h-0 space-y-4 relative" id="academic-desk-studio">
       {error && (
         <div className="w-full bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl mb-2">
           <div className="flex">
@@ -2396,13 +2396,13 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
           <button
             onClick={() => {
-              if (['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Override'].includes(selectedClass)) {
+              if (['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Optimizer', 'Override'].includes(selectedClass)) {
                 const activeG = timetableGroups.filter(g => g.is_active);
                 setSelectedClass((lastSelectedRoutineClass as any) || (activeG.length > 0 ? activeG[0].name : 'Class 9'));
               }
             }}
             className={`px-3.5 py-2 text-xs font-black tracking-wide uppercase rounded-lg transition duration-150 cursor-pointer flex items-center gap-1.5 shrink-0 ${
-              !['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Override'].includes(selectedClass)
+              !['GroupsRegistry', 'PeriodsMaster', 'FullMatrix', 'Optimizer', 'Override'].includes(selectedClass)
                 ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold'
             }`}
@@ -2458,6 +2458,21 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
 
           <button
             onClick={() => {
+              setSelectedClass('Optimizer');
+              setIsAddingEntry(false);
+            }}
+            className={`px-3.5 py-2 text-xs font-black tracking-wide uppercase rounded-lg transition duration-150 cursor-pointer flex items-center gap-1.5 shrink-0 ${
+              selectedClass === 'Optimizer'
+                ? 'bg-sky-700 text-white shadow-2xs font-extrabold'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Optimizer</span>
+          </button>
+
+          <button
+            onClick={() => {
               setSelectedClass('Override');
               setIsAddingEntry(false);
             }}
@@ -2492,7 +2507,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
       </div>
 
       {/* CENTER WORKSPACE CANVAS AREA */}
-      <div className="w-full min-w-0 space-y-4 pb-16">
+      <div className="w-full min-w-0 flex flex-col flex-1 min-h-0 space-y-4 pb-4">
         
         {/* Canvas Toolbar Header */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3 shrink-0">
@@ -2504,6 +2519,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
                selectedClass === 'PeriodsMaster' ? 'Period Masters Setup Workspace' :
                selectedClass === 'GroupsRegistry' ? 'Class & Stream Groups Registry' :
                selectedClass === 'Override' ? 'Timetable Display & Override Manager' :
+               selectedClass === 'Optimizer' ? 'Schedule Resource Integrity Optimizer' :
                `${selectedClass} Weekly Routine Schedule`}
             </h3>
             <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-mono font-bold shrink-0">
@@ -2539,7 +2555,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
               </button>
             )}
 
-            {selectedClass !== 'PeriodsMaster' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override' && (
+            {selectedClass !== 'PeriodsMaster' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override' && selectedClass !== 'Optimizer' && (
               <button
                 onClick={() => {
                   setIsAddingEntry(true);
@@ -2556,7 +2572,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
         </div>
 
         {/* Primary View Workspace Canvas */}
-        <div className="flex-1 min-w-0 w-full space-y-4">
+        <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col space-y-4">
           
           {/* COMBINED CONSOLIDATED ROUTINE WORKSPACE / PERIODS MASTER */}
         {selectedClass === 'GroupsRegistry' ? (
@@ -2573,8 +2589,8 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
           />
         ) : selectedClass === 'FullMatrix' ? (
           <ConsolidatedRoutineMatrix isAdmin={true} />
-        ) : selectedClass === 'Override' ? (
-          false ? null : <div className="hidden">
+        ) : selectedClass === 'Optimizer' ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 shadow-3xs space-y-6" id="smart-resource-optimizer-container">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">

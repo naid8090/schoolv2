@@ -1266,7 +1266,7 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
     const activeGroups = timetableGroups.filter(g => g.is_active);
     if (activeGroups.length > 0) {
       const isSelectedClassValid = activeGroups.some(g => g.name === selectedClass);
-      if (!isSelectedClassValid && selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override') {
+      if (!isSelectedClassValid && selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override' && selectedClass !== 'Optimizer') {
         setSelectedClass(activeGroups[0].name);
       }
     }
@@ -1289,11 +1289,11 @@ const RoutineAdminModule: React.FC<ModuleSubProps> = ({ triggerMedia, isInspecto
     }
   }, [entryForm.period, periodMasters, isManualPeriod]);
 
-  const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override') ? routines.find(r => r.class_name === selectedClass) : undefined;
+  const activeRoutine = (selectedClass !== 'Combined' && selectedClass !== 'PeriodsMaster' && selectedClass !== 'FullMatrix' && selectedClass !== 'GroupsRegistry' && selectedClass !== 'Override' && selectedClass !== 'Optimizer') ? routines.find(r => r.class_name === selectedClass) : undefined;
   const classEntries = activeRoutine ? entries.filter(e => e.routine_id === activeRoutine?.id) : [];
 
   const initClassRoutineIfMissing = async () => {
-    if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix' || selectedClass === 'GroupsRegistry' || selectedClass === 'Override') return;
+    if (selectedClass === 'Combined' || selectedClass === 'PeriodsMaster' || selectedClass === 'FullMatrix' || selectedClass === 'GroupsRegistry' || selectedClass === 'Override' || selectedClass === 'Optimizer') return;
     const list = dbService.getRoutines();
     let current = list.find(r => r.class_name === selectedClass);
     if (!current) {

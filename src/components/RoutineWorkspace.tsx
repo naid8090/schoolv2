@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   BookOpen,
   Plus,
@@ -14,12 +14,15 @@ import {
   Trash2,
   AlertTriangle,
   User,
+  Users,
   X,
   RefreshCw,
   Sparkles,
   Save,
   Edit,
-  SlidersHorizontal
+  SlidersHorizontal,
+  LayoutGrid,
+  ListFilter
 } from 'lucide-react';
 import {
   Routine,
@@ -235,6 +238,29 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
 
   setIsInspectorOpen
 }) => {
+  const [routineViewMode, setRoutineViewMode] = useState<'matrix' | 'detailed'>('matrix');
+
+  const displayPeriods = useMemo(() => {
+    const base = periodMasters && periodMasters.length > 0
+      ? periodMasters.map(pm => pm.name)
+      : (standardPeriods || ['Period 1', 'Period 2', 'Period 3', 'Period 4', 'Period 5', 'Period 6', 'Period 7', 'Period 8']);
+    
+    const customInEntries = classEntries
+      .map(e => e.period)
+      .filter(p => p && !base.some(b => b.toLowerCase().trim() === p.toLowerCase().trim()));
+      
+    const uniqueCustom = Array.from(new Set(customInEntries));
+    return [...base, ...uniqueCustom];
+  }, [periodMasters, standardPeriods, classEntries]);
+
+  const getPeriodAbbr = (pName: string) => {
+    const trimmed = pName.trim();
+    if (/^period\s*\d+$/i.test(trimmed)) {
+      return trimmed.replace(/^period\s*/i, 'P');
+    }
+    return trimmed;
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0 space-y-4 h-full" id="routine-workspace-container">
       {/* SECTION 1: Class Selector / Grade Selector Pills */}
@@ -1019,53 +1045,82 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
                 </p>
               </div>
 
-              {!isAddingEntry && (
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View Selector Switch */}
+                <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
                   <button
-                    id="trigger-duplicate-day-btn"
-                    onClick={() => {
-                      setDuplicationSourceDay('Monday');
-                      setDuplicationDestDays([]);
-                      setCopyTeachers(true);
-                      setCopySubjects(true);
-                      setCopyTimeSlots(true);
-                      setDestinationStrategy('cancel');
-                      setDuplicationConflictBypass(false);
-                      setDuplicationError(null);
-                      setDuplicationConflicts([]);
-                      setIsDuplicatingDay(true);
-                    }}
-                    className="py-2 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-4xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:border-slate-300"
+                    onClick={() => setRoutineViewMode('matrix')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer ${
+                      routineViewMode === 'matrix'
+                        ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
                   >
-                    <Sparkles className="w-4 h-4 text-orange-500" />
-                    Duplicate Day
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Matrix View</span>
                   </button>
 
                   <button
-                    onClick={() => {
-                      setEditingEntryId(null);
-                      const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
-                      const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
-                      setEntryForm({
-                        day: 'Monday',
-                        period: defaultPeriod,
-                        time_range: defaultTimeRange,
-                        subject: '',
-                        teacher: ''
-                      });
-                      setIsManualTeacher(false);
-                      setIsAddingEntry(true);
-                      setConflictWarning(null);
-                      setForceConflict(false);
-                      setFormError(null);
-                    }}
-                    className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
+                    onClick={() => setRoutineViewMode('detailed')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 transition-all cursor-pointer ${
+                      routineViewMode === 'detailed'
+                        ? 'bg-orange-500 text-white shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
                   >
-                    <Plus className="w-4 h-4" />
-                    Append Period Lecture
+                    <ListFilter className="w-3.5 h-3.5" />
+                    <span>Detailed View</span>
                   </button>
                 </div>
-              )}
+
+                {!isAddingEntry && (
+                  <>
+                    <button
+                      id="trigger-duplicate-day-btn"
+                      onClick={() => {
+                        setDuplicationSourceDay('Monday');
+                        setDuplicationDestDays([]);
+                        setCopyTeachers(true);
+                        setCopySubjects(true);
+                        setCopyTimeSlots(true);
+                        setDestinationStrategy('cancel');
+                        setDuplicationConflictBypass(false);
+                        setDuplicationError(null);
+                        setDuplicationConflicts([]);
+                        setIsDuplicatingDay(true);
+                      }}
+                      className="py-2 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-4xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all hover:border-slate-300"
+                    >
+                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      Duplicate Day
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingEntryId(null);
+                        const defaultPeriod = periodMasters.length > 0 ? periodMasters[0].name : 'Period 1';
+                        const defaultTimeRange = periodMasters.length > 0 ? periodMasters[0].time_range : '09:00 AM - 09:45 AM';
+                        setEntryForm({
+                          day: 'Monday',
+                          period: defaultPeriod,
+                          time_range: defaultTimeRange,
+                          subject: '',
+                          teacher: ''
+                        });
+                        setIsManualTeacher(false);
+                        setIsAddingEntry(true);
+                        setConflictWarning(null);
+                        setForceConflict(false);
+                        setFormError(null);
+                      }}
+                      className="py-2 px-4 bg-sky-900 hover:bg-sky-950 text-white font-bold text-[10px] uppercase rounded-xl tracking-wider shadow-sm flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Append Period Lecture
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {isAddingEntry && (
@@ -1440,137 +1495,254 @@ export const RoutineWorkspace: React.FC<RoutineWorkspaceProps> = ({
               </div>
             )}
 
-            {/* List of configured entries for class */}
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs flex-1 min-h-0 flex flex-col max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-320px)]" id="timetable-container">
-              <div className="overflow-auto flex-1 min-h-0">
-                <table className="w-full border-collapse">
-                  <thead className="sticky top-0 z-10 bg-slate-50">
-                    <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[10px] uppercase text-slate-400 tracking-wider">
-                      <th className="py-3 px-4 w-32">Day</th>
-                      <th className="py-3 px-4 w-32">Period Row</th>
-                      <th className="py-3 px-4 w-44">Time Frame</th>
-                      <th className="py-3 px-4">Subject</th>
-                      <th className="py-3 px-4">Teacher</th>
-                      <th className="py-3 px-4 w-32 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
-                    {classEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-10 text-slate-400 italic">
-                          No slot matrix entries mapped for {selectedClass}. Append some rows above.
-                        </td>
+            {/* Timetable Presentation Views (Matrix View vs Detailed View) */}
+            {routineViewMode === 'matrix' ? (
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs flex-1 min-h-0 flex flex-col max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-320px)]" id="matrix-timetable-container">
+                <div className="overflow-auto flex-1 min-h-0">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur-xs border-b border-slate-200">
+                      <tr className="font-mono text-[10px] uppercase text-slate-500 tracking-wider">
+                        <th className="py-2.5 px-3 w-28 bg-slate-100 border-r border-slate-200 text-slate-700 font-extrabold sticky left-0 z-20 shadow-2xs">
+                          Day
+                        </th>
+                        {displayPeriods.map((periodName) => {
+                          const pm = periodMasters.find(p => p.name.toLowerCase().trim() === periodName.toLowerCase().trim());
+                          return (
+                            <th key={periodName} className="py-2.5 px-2 text-center border-r border-slate-200 min-w-[115px] font-extrabold">
+                              <div className="text-orange-600 text-xs font-black">{getPeriodAbbr(periodName)}</div>
+                              <div className="text-[9px] text-slate-400 font-normal font-sans tracking-tight">
+                                {pm ? pm.time_range : (getPeriodTimeCombined(periodName) || 'Standard')}
+                              </div>
+                            </th>
+                          );
+                        })}
                       </tr>
-                    ) : (
-                      classEntries
-                        .sort((a,b) => {
-                          const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                          const dayDiff = days.indexOf(a.day) - days.indexOf(b.day);
-                          if (dayDiff !== 0) return dayDiff;
-                          return a.period.localeCompare(b.period);
-                        })
-                        .map((ent) => (
-                          <tr key={ent.id} className="hover:bg-slate-50/50 transition duration-150">
-                            <td className="py-3 px-4 font-bold text-slate-900">{ent.day}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-orange-600">{ent.period}</td>
-                            <td className="py-3 px-4 font-mono font-medium text-slate-500">{ent.time_range}</td>
-                            <td className="py-3 px-4 font-bold text-slate-800">{ent.subject}</td>
-                            <td className="py-3 px-4 text-slate-600 font-medium">
-                              {(() => {
-                                if (ent.teacher_id) {
-                                  const f = faculty.find(fac => fac.id === ent.teacher_id);
-                                  if (f) return f.name;
-                                }
-                                return ent.teacher;
-                              })() ? (
-                                <span className="flex items-center gap-1">
-                                  <User className="w-3.5 h-3.5 text-slate-400" />
-                                  {(() => {
-                                    if (ent.teacher_id) {
-                                      const f = faculty.find(fac => fac.id === ent.teacher_id);
-                                      if (f) return f.name;
-                                    }
-                                    return ent.teacher;
-                                  })()}
-                                </span>
-                              ) : '—'}
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              {deletingId === ent.id ? (
-                                <div className="flex flex-col items-center gap-1.5 animate-in fade-in duration-100 p-1">
-                                  {ent.shared_lecture_id && (
-                                    <div className="flex flex-col items-start gap-1 bg-orange-50/50 p-1.5 rounded border border-orange-100 mb-1">
-                                      <span className="text-[8px] font-bold text-orange-600 uppercase">Shared Lecture Scope:</span>
-                                      <div className="flex items-center gap-2 text-[9px] font-semibold text-slate-700">
-                                        <label className="flex items-center gap-1 cursor-pointer">
-                                          <input
-                                            type="radio"
-                                            name={`deleteOpt-${ent.id}`}
-                                            value="all"
-                                            checked={deleteSharedOption === 'all'}
-                                            onChange={() => setDeleteSharedOption('all')}
-                                            className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
-                                          />
-                                          All Groups
-                                        </label>
-                                        <label className="flex items-center gap-1 cursor-pointer">
-                                          <input
-                                            type="radio"
-                                            name={`deleteOpt-${ent.id}`}
-                                            value="single"
-                                            checked={deleteSharedOption === 'single'}
-                                            onChange={() => setDeleteSharedOption('single')}
-                                            className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
-                                          />
-                                          Only This
-                                        </label>
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => handleDeleteEntryInline(ent.id, ent.shared_lecture_id)}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
-                                    >
-                                      Confirm
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingId(null)}
-                                      className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleEditClick(ent)}
-                                    className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 text-slate-500 hover:text-orange-600 hover:border-orange-500/20 cursor-pointer transition-colors"
-                                    title="Edit Timing Slot"
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs font-sans">
+                      {weekDays.map((day) => (
+                        <tr key={day} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 px-3 bg-slate-50/80 border-r border-slate-200 font-extrabold text-slate-800 uppercase text-[11px] font-mono tracking-wider sticky left-0 z-10 shadow-2xs">
+                            {day}
+                          </td>
+                          {displayPeriods.map((periodName) => {
+                            const entry = classEntries.find(
+                              e => e.day === day && e.period.toLowerCase().trim() === periodName.toLowerCase().trim()
+                            );
+                            
+                            let teacherName = entry ? entry.teacher : '';
+                            if (entry && entry.teacher_id) {
+                              const f = faculty.find(fac => fac.id === entry.teacher_id);
+                              if (f) teacherName = f.name;
+                            }
+
+                            return (
+                              <td
+                                key={`${day}-${periodName}`}
+                                className="p-1.5 border-r border-slate-200 align-top h-20 min-w-[115px] transition-colors hover:bg-orange-50/20"
+                              >
+                                {entry ? (
+                                  /* Occupied Slot Cell */
+                                  <div
+                                    onClick={() => handleEditClick(entry)}
+                                    className="h-full w-full bg-orange-50/60 border border-orange-200/80 hover:border-orange-400 rounded-xl p-2 flex flex-col justify-between cursor-pointer transition-all shadow-4xs hover:shadow-2xs group relative"
+                                    title="Click to edit lecture"
                                   >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
+                                    <div className="space-y-1">
+                                      <div className="flex items-start justify-between gap-1">
+                                        <span className="font-extrabold text-slate-900 text-[11px] leading-tight line-clamp-2">
+                                          {entry.subject}
+                                        </span>
+                                        {entry.shared_lecture_id && (
+                                          <span
+                                            className="px-1 py-0.5 bg-purple-100 text-purple-800 rounded text-[8px] font-black uppercase shrink-0 border border-purple-200 flex items-center gap-0.5"
+                                            title="Shared Lecture"
+                                          >
+                                            <Users className="w-2.5 h-2.5" />
+                                          </span>
+                                        )}
+                                      </div>
+                                      {teacherName && (
+                                        <div className="flex items-center gap-1 text-[10px] text-slate-600 font-medium">
+                                          <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                          <span className="truncate">{teacherName}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 font-mono">
+                                      <span className="text-[8px] uppercase tracking-wider text-orange-600 font-bold">Occupied</span>
+                                      <Edit className="w-3 h-3 opacity-0 group-hover:opacity-100 text-orange-600 transition-opacity" />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* Empty Slot Cell */
                                   <button
                                     onClick={() => {
-                                      setDeletingId(ent.id);
-                                      setDeleteSharedOption('all');
+                                      setEditingEntryId(null);
+                                      const matchedPM = periodMasters.find(pm => pm.name.toLowerCase().trim() === periodName.toLowerCase().trim());
+                                      const timeRange = matchedPM ? matchedPM.time_range : '09:00 AM - 09:45 AM';
+                                      setEntryForm({
+                                        day,
+                                        period: periodName,
+                                        time_range: timeRange,
+                                        subject: '',
+                                        teacher: ''
+                                      });
+                                      setIsManualTeacher(false);
+                                      setIsManualPeriod(false);
+                                      setIsAddingEntry(true);
+                                      setConflictWarning(null);
+                                      setForceConflict(false);
+                                      setFormError(null);
                                     }}
-                                    className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 hover:border-red-500/20 text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
-                                    title="Delete Period Slot"
+                                    className="h-full w-full border border-dashed border-slate-200 hover:border-orange-300 bg-slate-50/40 hover:bg-orange-50/30 rounded-xl p-2 flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-orange-600 transition-all cursor-pointer group"
+                                    title={`Add period entry for ${day} ${periodName}`}
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Plus className="w-4 h-4 text-slate-300 group-hover:text-orange-500 group-hover:scale-110 transition-all" />
+                                    <span className="text-[9px] font-extrabold uppercase font-mono tracking-wider opacity-60 group-hover:opacity-100">+ Add</span>
                                   </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* List of configured entries for class (Detailed View) */
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs flex-1 min-h-0 flex flex-col max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-320px)]" id="timetable-container">
+                <div className="overflow-auto flex-1 min-h-0">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 z-10 bg-slate-50">
+                      <tr className="bg-slate-50 text-left border-b border-slate-100 font-mono text-[10px] uppercase text-slate-400 tracking-wider">
+                        <th className="py-3 px-4 w-32">Day</th>
+                        <th className="py-3 px-4 w-32">Period Row</th>
+                        <th className="py-3 px-4 w-44">Time Frame</th>
+                        <th className="py-3 px-4">Subject</th>
+                        <th className="py-3 px-4">Teacher</th>
+                        <th className="py-3 px-4 w-32 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-sans">
+                      {classEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-10 text-slate-400 italic">
+                            No slot matrix entries mapped for {selectedClass}. Append some rows above.
+                          </td>
+                        </tr>
+                      ) : (
+                        classEntries
+                          .sort((a,b) => {
+                            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            const dayDiff = days.indexOf(a.day) - days.indexOf(b.day);
+                            if (dayDiff !== 0) return dayDiff;
+                            return a.period.localeCompare(b.period);
+                          })
+                          .map((ent) => (
+                            <tr key={ent.id} className="hover:bg-slate-50/50 transition duration-150">
+                              <td className="py-3 px-4 font-bold text-slate-900">{ent.day}</td>
+                              <td className="py-3 px-4 font-mono font-bold text-orange-600">{ent.period}</td>
+                              <td className="py-3 px-4 font-mono font-medium text-slate-500">{ent.time_range}</td>
+                              <td className="py-3 px-4 font-bold text-slate-800">{ent.subject}</td>
+                              <td className="py-3 px-4 text-slate-600 font-medium">
+                                {(() => {
+                                  if (ent.teacher_id) {
+                                    const f = faculty.find(fac => fac.id === ent.teacher_id);
+                                    if (f) return f.name;
+                                  }
+                                  return ent.teacher;
+                                })() ? (
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3.5 h-3.5 text-slate-400" />
+                                    {(() => {
+                                      if (ent.teacher_id) {
+                                        const f = faculty.find(fac => fac.id === ent.teacher_id);
+                                        if (f) return f.name;
+                                      }
+                                      return ent.teacher;
+                                    })()}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                {deletingId === ent.id ? (
+                                  <div className="flex flex-col items-center gap-1.5 animate-in fade-in duration-100 p-1">
+                                    {ent.shared_lecture_id && (
+                                      <div className="flex flex-col items-start gap-1 bg-orange-50/50 p-1.5 rounded border border-orange-100 mb-1">
+                                        <span className="text-[8px] font-bold text-orange-600 uppercase">Shared Lecture Scope:</span>
+                                        <div className="flex items-center gap-2 text-[9px] font-semibold text-slate-700">
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`deleteOpt-${ent.id}`}
+                                              value="all"
+                                              checked={deleteSharedOption === 'all'}
+                                              onChange={() => setDeleteSharedOption('all')}
+                                              className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
+                                            />
+                                            All Groups
+                                          </label>
+                                          <label className="flex items-center gap-1 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`deleteOpt-${ent.id}`}
+                                              value="single"
+                                              checked={deleteSharedOption === 'single'}
+                                              onChange={() => setDeleteSharedOption('single')}
+                                              className="h-2.5 w-2.5 text-orange-500 focus:ring-0"
+                                            />
+                                            Only This
+                                          </label>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleDeleteEntryInline(ent.id, ent.shared_lecture_id)}
+                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] rounded uppercase cursor-pointer"
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        onClick={() => setDeletingId(null)}
+                                        className="px-2 py-1 bg-slate-200 text-slate-700 font-bold text-[9px] rounded uppercase cursor-pointer hover:bg-slate-300"
+                                      >
+                                        No
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      onClick={() => handleEditClick(ent)}
+                                      className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 text-slate-500 hover:text-orange-600 hover:border-orange-500/20 cursor-pointer transition-colors"
+                                      title="Edit Timing Slot"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setDeletingId(ent.id);
+                                        setDeleteSharedOption('all');
+                                      }}
+                                      className="p-1.5 rounded-lg bg-slate-50 border border-slate-150 hover:border-red-500/20 text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
+                                      title="Delete Period Slot"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )
       )}
